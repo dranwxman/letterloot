@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+
 const LETTER_VALUES = {};
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((l, i) => { LETTER_VALUES[l] = i + 1; });
 
@@ -112,207 +113,41 @@ async function validateWordWithAI(word) {
   } catch { return word.length >= 3; }
 }
 
-// ── Music Engine ───────────────────────────────────────────────
-// Full 120+ second arrangement using Web Audio API
-// Light, upbeat, full-scale with melody + harmony + bass
-// Tempo: 100bpm — lively but not frantic
-
-const BPM = 100;
-const BEAT = 60 / BPM; // seconds per beat
-
-// Note frequency lookup
-const NOTE = {
-  C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
-  C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
-  C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77,
-  C6:1046.50,
-  Fs4:369.99, Gs4:415.30, Bb4:466.16, Fs3:185.00, Bb3:233.08,
-};
-
-// Instrument voices using Web Audio synthesis
-function makeVoice(ctx, type, freq, start, dur, vol, attack=0.02, release=0.15) {
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  const filter = ctx.createBiquadFilter();
-  filter.type = "lowpass";
-  filter.frequency.value = type === "bass" ? 400 : type === "pad" ? 1200 : 3000;
-  osc.type = type === "bass" ? "triangle" : type === "pad" ? "sine" : "triangle";
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(0, start);
-  gain.gain.linearRampToValueAtTime(vol, start + attack);
-  gain.gain.setValueAtTime(vol, start + dur - release);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
-  osc.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
-  osc.start(start); osc.stop(start + dur + 0.05);
+// ── Original Guitar Music (Karplus-Strong string synthesis) ───
+function createGuitar(ctx) {
+  function pluck(freq, time, duration = 2.0, gain = 0.35) {
+    const bufferSize = Math.round(ctx.sampleRate / freq);
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer; source.loop = true;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass"; filter.frequency.value = 2800;
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(gain, time);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+    const delay = ctx.createDelay(); delay.delayTime.value = 0.025;
+    const fb = ctx.createGain(); fb.gain.value = 0.25;
+    source.connect(filter); filter.connect(gainNode);
+    gainNode.connect(delay); delay.connect(fb); fb.connect(delay);
+    gainNode.connect(ctx.destination); delay.connect(ctx.destination);
+    source.start(time); source.stop(time + duration + 0.5);
+  }
+  return { pluck };
 }
-
-// Full arrangement: melody, harmony, bass, chords — 128 beats = ~76 seconds * 2 sections = ~152 seconds
-function scheduleMusic(ctx, startTime) {
-  const t = startTime;
-  const b = BEAT;
-
-  // ── SECTION A (bars 1–8, beats 0–31) ── G major, upbeat, melodic
-  const melodyA = [
-    // Bar 1
-    [NOTE.G4,0,0.9,0.22],[NOTE.A4,1,0.9,0.22],[NOTE.B4,2,0.9,0.22],[NOTE.C5,3,0.9,0.22],
-    // Bar 2
-    [NOTE.D5,4,1.8,0.25],[NOTE.B4,6,0.9,0.20],[NOTE.G4,7,0.9,0.20],
-    // Bar 3
-    [NOTE.A4,8,0.9,0.22],[NOTE.B4,9,0.9,0.22],[NOTE.C5,10,0.9,0.22],[NOTE.B4,11,0.9,0.20],
-    // Bar 4
-    [NOTE.A4,12,1.8,0.24],[NOTE.G4,14,0.9,0.20],[NOTE.A4,15,0.9,0.20],
-    // Bar 5
-    [NOTE.B4,16,0.9,0.22],[NOTE.C5,17,0.9,0.22],[NOTE.D5,18,0.9,0.24],[NOTE.E5,19,0.9,0.24],
-    // Bar 6
-    [NOTE.D5,20,1.8,0.26],[NOTE.C5,22,0.9,0.22],[NOTE.B4,23,0.9,0.20],
-    // Bar 7
-    [NOTE.C5,24,0.9,0.22],[NOTE.B4,25,0.9,0.20],[NOTE.A4,26,0.9,0.20],[NOTE.G4,27,0.9,0.20],
-    // Bar 8
-    [NOTE.G4,28,3.8,0.28],
-  ];
-
-  const harmonyA = [
-    [NOTE.E4,0,1.8,0.12],[NOTE.Fs4,2,1.8,0.12],
-    [NOTE.G4,4,3.8,0.12],
-    [NOTE.D4,8,1.8,0.12],[NOTE.E4,10,1.8,0.12],
-    [NOTE.Fs4,12,3.8,0.12],
-    [NOTE.G4,16,1.8,0.12],[NOTE.A4,18,1.8,0.12],
-    [NOTE.B4,20,3.8,0.12],
-    [NOTE.E4,24,1.8,0.12],[NOTE.D4,26,1.8,0.12],
-    [NOTE.D4,28,3.8,0.12],
-  ];
-
-  const bassA = [
-    [NOTE.G3,0,1.8,0.28],[NOTE.G3,2,1.8,0.25],
-    [NOTE.D3,4,1.8,0.28],[NOTE.D3,6,1.8,0.25],
-    [NOTE.A3,8,1.8,0.28],[NOTE.A3,10,1.8,0.25],
-    [NOTE.D3,12,1.8,0.28],[NOTE.D3,14,1.8,0.25],
-    [NOTE.G3,16,1.8,0.28],[NOTE.G3,18,1.8,0.25],
-    [NOTE.B3,20,1.8,0.28],[NOTE.B3,22,1.8,0.25],
-    [NOTE.C4,24,1.8,0.28],[NOTE.A3,26,1.8,0.25],
-    [NOTE.G3,28,3.8,0.30],
-  ];
-
-  // ── SECTION B (beats 32–63) ── C major, warmer, slightly fuller
-  const melodyB = [
-    // Bar 9
-    [NOTE.E5,32,0.9,0.24],[NOTE.D5,33,0.9,0.22],[NOTE.C5,34,0.9,0.22],[NOTE.B4,35,0.9,0.20],
-    // Bar 10
-    [NOTE.C5,36,1.8,0.24],[NOTE.E5,38,0.9,0.22],[NOTE.G5,39,0.9,0.26],
-    // Bar 11
-    [NOTE.A5,40,1.8,0.26],[NOTE.G5,42,0.9,0.24],[NOTE.E5,43,0.9,0.22],
-    // Bar 12
-    [NOTE.D5,44,1.8,0.24],[NOTE.C5,46,0.9,0.22],[NOTE.D5,47,0.9,0.22],
-    // Bar 13
-    [NOTE.E5,48,0.9,0.24],[NOTE.F5,49,0.9,0.24],[NOTE.E5,50,0.9,0.22],[NOTE.D5,51,0.9,0.22],
-    // Bar 14
-    [NOTE.C5,52,1.8,0.26],[NOTE.E5,54,0.9,0.24],[NOTE.C5,55,0.9,0.22],
-    // Bar 15
-    [NOTE.D5,56,0.9,0.22],[NOTE.C5,57,0.9,0.22],[NOTE.B4,58,0.9,0.22],[NOTE.A4,59,0.9,0.20],
-    // Bar 16
-    [NOTE.G4,60,3.8,0.28],
-  ];
-
-  const harmonyB = [
-    [NOTE.G4,32,1.8,0.12],[NOTE.Fs4,34,1.8,0.12],
-    [NOTE.E4,36,3.8,0.12],
-    [NOTE.C5,40,3.8,0.13],
-    [NOTE.G4,44,3.8,0.12],
-    [NOTE.C5,48,1.8,0.12],[NOTE.B4,50,1.8,0.12],
-    [NOTE.A4,52,3.8,0.12],
-    [NOTE.G4,56,1.8,0.12],[NOTE.Fs4,58,1.8,0.12],
-    [NOTE.G4,60,3.8,0.12],
-  ];
-
-  const bassB = [
-    [NOTE.C4,32,1.8,0.28],[NOTE.B3,34,1.8,0.25],
-    [NOTE.C4,36,1.8,0.28],[NOTE.G3,38,1.8,0.25],
-    [NOTE.A3,40,1.8,0.28],[NOTE.A3,42,1.8,0.25],
-    [NOTE.G3,44,1.8,0.28],[NOTE.G3,46,1.8,0.25],
-    [NOTE.C4,48,1.8,0.28],[NOTE.G3,50,1.8,0.25],
-    [NOTE.A3,52,1.8,0.28],[NOTE.F3,54,1.8,0.25],
-    [NOTE.G3,56,1.8,0.28],[NOTE.D3,58,1.8,0.25],
-    [NOTE.G3,60,3.8,0.32],
-  ];
-
-  // ── SECTION C (beats 64–95) ── D major, brighter, climbing feel
-  const melodyC = [
-    [NOTE.Fs4,64,0.9,0.22],[NOTE.G4,65,0.9,0.22],[NOTE.A4,66,0.9,0.24],[NOTE.B4,67,0.9,0.24],
-    [NOTE.C5,68,1.8,0.26],[NOTE.A4,70,0.9,0.22],[NOTE.Fs4,71,0.9,0.20],
-    [NOTE.G4,72,0.9,0.22],[NOTE.A4,73,0.9,0.24],[NOTE.B4,74,0.9,0.24],[NOTE.C5,75,0.9,0.24],
-    [NOTE.D5,76,1.8,0.28],[NOTE.C5,78,0.9,0.24],[NOTE.B4,79,0.9,0.22],
-    [NOTE.A4,80,0.9,0.22],[NOTE.B4,81,0.9,0.24],[NOTE.C5,82,0.9,0.24],[NOTE.D5,83,0.9,0.26],
-    [NOTE.E5,84,1.8,0.28],[NOTE.D5,86,0.9,0.26],[NOTE.C5,87,0.9,0.24],
-    [NOTE.B4,88,0.9,0.24],[NOTE.A4,89,0.9,0.22],[NOTE.G4,90,0.9,0.22],[NOTE.Fs4,91,0.9,0.20],
-    [NOTE.G4,92,3.8,0.28],
-  ];
-
-  const harmonyC = [
-    [NOTE.D4,64,3.8,0.12],[NOTE.Fs4,68,3.8,0.12],
-    [NOTE.G4,72,3.8,0.12],[NOTE.A4,76,3.8,0.13],
-    [NOTE.Fs4,80,3.8,0.13],[NOTE.A4,84,3.8,0.13],
-    [NOTE.D4,88,3.8,0.12],[NOTE.D4,92,3.8,0.12],
-  ];
-
-  const bassC = [
-    [NOTE.D3,64,1.8,0.28],[NOTE.D3,66,1.8,0.25],
-    [NOTE.D3,68,1.8,0.28],[NOTE.A3,70,1.8,0.25],
-    [NOTE.G3,72,1.8,0.28],[NOTE.G3,74,1.8,0.25],
-    [NOTE.A3,76,1.8,0.28],[NOTE.E3,78,1.8,0.25],
-    [NOTE.D3,80,1.8,0.28],[NOTE.D3,82,1.8,0.25],
-    [NOTE.A3,84,1.8,0.28],[NOTE.Fs3,86,1.8,0.25],
-    [NOTE.G3,88,1.8,0.28],[NOTE.D3,90,1.8,0.25],
-    [NOTE.G3,92,3.8,0.32],
-  ];
-
-  // ── SECTION D (beats 96–127) ── Back to G, full resolution, builds then settles
-  const melodyD = [
-    [NOTE.G4,96,0.9,0.22],[NOTE.B4,97,0.9,0.24],[NOTE.D5,98,0.9,0.26],[NOTE.G5,99,0.9,0.28],
-    [NOTE.G5,100,1.8,0.28],[NOTE.E5,102,0.9,0.26],[NOTE.C5,103,0.9,0.24],
-    [NOTE.D5,104,0.9,0.26],[NOTE.C5,105,0.9,0.24],[NOTE.B4,106,0.9,0.24],[NOTE.A4,107,0.9,0.22],
-    [NOTE.G4,108,1.8,0.24],[NOTE.A4,110,0.9,0.22],[NOTE.B4,111,0.9,0.24],
-    [NOTE.C5,112,0.9,0.24],[NOTE.D5,113,0.9,0.26],[NOTE.E5,114,0.9,0.26],[NOTE.D5,115,0.9,0.24],
-    [NOTE.C5,116,1.8,0.26],[NOTE.B4,118,0.9,0.24],[NOTE.A4,119,0.9,0.22],
-    [NOTE.G4,120,0.9,0.24],[NOTE.A4,121,0.9,0.22],[NOTE.B4,122,0.9,0.22],[NOTE.C5,123,0.9,0.22],
-    [NOTE.G4,124,3.8,0.28],
-  ];
-
-  const harmonyD = [
-    [NOTE.D4,96,3.8,0.13],[NOTE.C5,100,3.8,0.13],
-    [NOTE.G4,104,3.8,0.12],[NOTE.E4,108,3.8,0.12],
-    [NOTE.A4,112,3.8,0.13],[NOTE.G4,116,3.8,0.12],
-    [NOTE.E4,120,1.8,0.12],[NOTE.D4,122,1.8,0.12],
-    [NOTE.D4,124,3.8,0.12],
-  ];
-
-  const bassD = [
-    [NOTE.G3,96,1.8,0.30],[NOTE.G3,98,1.8,0.28],
-    [NOTE.C4,100,1.8,0.28],[NOTE.C4,102,1.8,0.25],
-    [NOTE.G3,104,1.8,0.28],[NOTE.D3,106,1.8,0.25],
-    [NOTE.G3,108,1.8,0.28],[NOTE.G3,110,1.8,0.25],
-    [NOTE.C4,112,1.8,0.28],[NOTE.A3,114,1.8,0.25],
-    [NOTE.G3,116,1.8,0.28],[NOTE.E3,118,1.8,0.25],
-    [NOTE.D3,120,1.8,0.28],[NOTE.D3,122,1.8,0.25],
-    [NOTE.G3,124,3.8,0.32],
-  ];
-
-  // Schedule all voices
-  const allNotes = [
-    ...melodyA, ...harmonyA, ...bassA,
-    ...melodyB, ...harmonyB, ...bassB,
-    ...melodyC, ...harmonyC, ...bassC,
-    ...melodyD, ...harmonyD, ...bassD,
-  ];
-
-  allNotes.forEach(([freq, beat, dur, vol]) => {
-    const isBass = freq < 200;
-    const isPad = vol < 0.15;
-    const voice = isBass ? "bass" : isPad ? "pad" : "melody";
-    makeVoice(ctx, voice, freq, t + beat * b, dur * b, vol);
-  });
-
-  return 128 * b; // return total duration in seconds
-}
+const MELODY = [
+  {freq:196.00,beat:0},{freq:246.94,beat:0.5},{freq:392.00,beat:1.0},{freq:329.63,beat:1.5},
+  {freq:293.66,beat:2.0},{freq:246.94,beat:2.5},{freq:392.00,beat:3.0},{freq:329.63,beat:3.5},
+  {freq:261.63,beat:4.0},{freq:329.63,beat:4.5},{freq:392.00,beat:5.0},{freq:329.63,beat:5.5},
+  {freq:261.63,beat:6.0},{freq:246.94,beat:6.5},{freq:329.63,beat:7.0},{freq:261.63,beat:7.5},
+  {freq:293.66,beat:8.0},{freq:369.99,beat:8.5},{freq:440.00,beat:9.0},{freq:369.99,beat:9.5},
+  {freq:293.66,beat:10.0},{freq:246.94,beat:10.5},{freq:369.99,beat:11.0},{freq:293.66,beat:11.5},
+  {freq:164.81,beat:12.0},{freq:246.94,beat:12.5},{freq:329.63,beat:13.0},{freq:246.94,beat:13.5},
+  {freq:196.00,beat:14.0},{freq:246.94,beat:14.5},{freq:329.63,beat:15.0},{freq:246.94,beat:15.5},
+];
+const BEAT_DUR = 0.32;
+const LOOP_DUR = 16 * BEAT_DUR;
 
 function ConfettiCanvas({ active, rainbow }) {
   const canvasRef = useRef(null);
@@ -437,22 +272,17 @@ export default function App() {
   const resetLevelTimer = useCallback(() => { levelTimeRef.current = 0; setLevelTime(0); }, []);
   useEffect(() => { startTimer(); return () => stopTimer(); }, []);
 
-  // ── Music: schedule loops ────────────────────────────────────
   const startMusic = useCallback(() => {
-    if (!audioCtxRef.current) {
-      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = audioCtxRef.current;
     if (ctx.state === "suspended") ctx.resume();
-
+    const guitar = createGuitar(ctx);
     const loop = () => {
       const now = ctx.currentTime;
-      const loopStart = Math.max(now, nextLoopRef.current);
-      const dur = scheduleMusic(ctx, loopStart);
-      nextLoopRef.current = loopStart + dur;
-      // Schedule next loop 2s before end for seamless transition
-      const msUntilNext = (nextLoopRef.current - ctx.currentTime - 2.0) * 1000;
-      musicLoopRef.current = setTimeout(loop, Math.max(msUntilNext, 500));
+      const start = Math.max(now, nextLoopRef.current);
+      MELODY.forEach(({ freq, beat }) => guitar.pluck(freq, start + beat * BEAT_DUR, 1.8, 0.35));
+      nextLoopRef.current = start + LOOP_DUR;
+      musicLoopRef.current = setTimeout(loop, (nextLoopRef.current - ctx.currentTime - 0.1) * 1000);
     };
     loop();
   }, []);
@@ -639,62 +469,13 @@ export default function App() {
       {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?"rgba(30,160,70,0.97)":"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?18:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts`:"Not a valid word!"}</div></div>}
       {validating&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>🔍</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>CHECKING…</div></div>}
 
-      {perfectDayAchieved&&(
-        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
-            <div style={{fontSize:56}}>🌈</div>
-            <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
-            <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>You completed all 5 levels<br/>without buying a single one!</div>
-            <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} achieved a Perfect Day!<br/>Day #{dayNum} · Score: {totalScore} pts</div>
-            <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nI completed all 5 levels without buying any!\nDay #${dayNum} · Score: ${totalScore} pts 🏆\nPlay at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
-            <button className="ll-btn" onClick={()=>setPerfectDayAchieved(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Continue</button>
-          </div>
-        </div>
-      )}
+      {perfectDayAchieved&&(<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}><div style={{fontSize:56}}>🌈</div><div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div><div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>You completed all 5 levels<br/>without buying a single one!</div><div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} achieved a Perfect Day!<br/>Day #{dayNum} · Score: {totalScore} pts</div><button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nI completed all 5 levels without buying any!\nDay #${dayNum} · Score: ${totalScore} pts 🏆\nPlay at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button><button className="ll-btn" onClick={()=>setPerfectDayAchieved(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Continue</button></div></div>)}
 
-      {levelComplete&&(
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
-            <div style={{fontSize:52}}>🎉</div>
-            <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
-            <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
-            <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
-            <div style={{fontSize:11,color:"#aaa",marginTop:4}}>Time: {formatTime(levelTimeRef.current)}</div>
-            <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
-            <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
-          </div>
-        </div>
-      )}
+      {levelComplete&&(<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}><div style={{fontSize:52}}>🎉</div><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div><div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div><div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div><div style={{fontSize:11,color:"#aaa",marginTop:4}}>Time: {formatTime(levelTimeRef.current)}</div><div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div><button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button></div></div>)}
 
-      {showBuyModal&&(
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
-            <div style={{fontSize:44}}>🔓</div>
-            <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
-            <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You haven't cleared all tiles yet.<br/>Spend points to unlock the next level.</div>
-            <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
-            <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
-            <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits your Perfect Day</div>
-            <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
-            <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
-          </div>
-        </div>
-      )}
+      {showBuyModal&&(<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}><div style={{fontSize:44}}>🔓</div><div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div><div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You haven't cleared all tiles yet.<br/>Spend points to unlock the next level.</div><div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div><div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div><div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits your Perfect Day</div><button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button><button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button></div></div>)}
 
-      {showNameInput&&(
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
-            <div style={{fontSize:44}}>{perfectDay?"🌈":"🏆"}</div>
-            <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div>
-            <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
-            <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · {formatTime(totalTimeRef.current)}</div>
-            <div style={{fontSize:13,color:"#ccc",marginTop:16,marginBottom:8}}>Save your score to leaderboard:</div>
-            <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
-            <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save to Leaderboard 🏆</button>
-            <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:12}}>Skip</button>
-          </div>
-        </div>
-      )}
+      {showNameInput&&(<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}><div style={{fontSize:44}}>{perfectDay?"🌈":"🏆"}</div><div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div><div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div><div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · {formatTime(totalTimeRef.current)}</div><div style={{fontSize:13,color:"#ccc",marginTop:16,marginBottom:8}}>Save your score to leaderboard:</div><input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/><button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save to Leaderboard 🏆</button><button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:12}}>Skip</button></div></div>)}
 
       <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"12px 14px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:6}}>
@@ -715,7 +496,7 @@ export default function App() {
           <div style={{fontSize:34,fontWeight:"bold",letterSpacing:5,background:"linear-gradient(90deg,#f6d365,#fda085,#f093fb,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>LetterLoot</div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:4}}>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>LEVEL {level}/5 · DAY #{dayNum}</div>
-            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,color:musicOn?"#f6d365":"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif"}}>{musicOn?"🎹 ON":"🎹 OFF"}</button>
+            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,color:musicOn?"#f6d365":"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif"}}>{musicOn?"🎸 ON":"🎸 OFF"}</button>
             {perfectDay&&<div style={{fontSize:9,color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</div>}
           </div>
         </div>
@@ -804,7 +585,6 @@ export default function App() {
           </div>
 
           {longestWordToday&&<div style={{textAlign:"center",marginTop:8,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters){longestWordAllTime&&longestWordAllTime.length>longestWordToday.length&&<span> · All-time: <span style={{color:"#f093fb"}}>{longestWordAllTime}</span></span>}</div>}
-
           <div style={{textAlign:"center",marginTop:10}}>
             <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.35)",padding:"6px 16px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
           </div>

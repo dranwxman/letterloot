@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-
 const LETTER_VALUES = {};
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((l, i) => { LETTER_VALUES[l] = i + 1; });
 
@@ -45,7 +44,6 @@ function generateLevelTiles(level, startId, rng, bonusPositions) {
     bonus: bonusPositions.includes(i) ? (Math.random() < 0.5 ? "double" : "triple") : null,
   }));
 }
-
 function calcWordScore(tileIds, tiles) {
   let score = 0;
   tileIds.forEach(id => {
@@ -114,93 +112,207 @@ async function validateWordWithAI(word) {
   } catch { return word.length >= 3; }
 }
 
-// ── Soft Piano via Web Audio ──────────────────────────────────
-// Simulates a gentle piano note: quick attack, soft decay, warm tone
-function playPianoNote(ctx, freq, startTime, duration = 3.5, volume = 0.18) {
-  // Sine + small harmonic for warmth
-  const osc1 = ctx.createOscillator();
-  const osc2 = ctx.createOscillator();
-  const osc3 = ctx.createOscillator();
-  osc1.type = "sine";
-  osc2.type = "sine";
-  osc3.type = "sine";
-  osc1.frequency.value = freq;
-  osc2.frequency.value = freq * 2;      // octave harmonic
-  osc3.frequency.value = freq * 3.01;   // soft third harmonic
+// ── Music Engine ───────────────────────────────────────────────
+// Full 120+ second arrangement using Web Audio API
+// Light, upbeat, full-scale with melody + harmony + bass
+// Tempo: 100bpm — lively but not frantic
 
-  const gainMain = ctx.createGain();
-  const gainHarm = ctx.createGain();
-  const gainHarm2 = ctx.createGain();
-  const masterGain = ctx.createGain();
+const BPM = 100;
+const BEAT = 60 / BPM; // seconds per beat
 
-  // Piano-like envelope: quick attack, long soft decay
-  gainMain.gain.setValueAtTime(0, startTime);
-  gainMain.gain.linearRampToValueAtTime(volume, startTime + 0.01);
-  gainMain.gain.exponentialRampToValueAtTime(volume * 0.3, startTime + 0.4);
-  gainMain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+// Note frequency lookup
+const NOTE = {
+  C3:130.81, D3:146.83, E3:164.81, F3:174.61, G3:196.00, A3:220.00, B3:246.94,
+  C4:261.63, D4:293.66, E4:329.63, F4:349.23, G4:392.00, A4:440.00, B4:493.88,
+  C5:523.25, D5:587.33, E5:659.25, F5:698.46, G5:783.99, A5:880.00, B5:987.77,
+  C6:1046.50,
+  Fs4:369.99, Gs4:415.30, Bb4:466.16, Fs3:185.00, Bb3:233.08,
+};
 
-  gainHarm.gain.setValueAtTime(0, startTime);
-  gainHarm.gain.linearRampToValueAtTime(volume * 0.15, startTime + 0.01);
-  gainHarm.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.6);
-
-  gainHarm2.gain.setValueAtTime(0, startTime);
-  gainHarm2.gain.linearRampToValueAtTime(volume * 0.06, startTime + 0.01);
-  gainHarm2.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.3);
-
-  // Gentle low-pass for warmth
+// Instrument voices using Web Audio synthesis
+function makeVoice(ctx, type, freq, start, dur, vol, attack=0.02, release=0.15) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
   const filter = ctx.createBiquadFilter();
   filter.type = "lowpass";
-  filter.frequency.value = 1800;
-  filter.Q.value = 0.5;
-
-  // Soft reverb via convolver simulation with delay
-  const delay = ctx.createDelay();
-  delay.delayTime.value = 0.22;
-  const delayGain = ctx.createGain();
-  delayGain.gain.value = 0.12;
-
-  osc1.connect(gainMain); gainMain.connect(filter);
-  osc2.connect(gainHarm); gainHarm.connect(filter);
-  osc3.connect(gainHarm2); gainHarm2.connect(filter);
-  filter.connect(masterGain);
-  masterGain.connect(delay);
-  delay.connect(delayGain);
-  delayGain.connect(masterGain);
-  masterGain.connect(ctx.destination);
-
-  osc1.start(startTime); osc1.stop(startTime + duration + 0.5);
-  osc2.start(startTime); osc2.stop(startTime + duration + 0.5);
-  osc3.start(startTime); osc3.stop(startTime + duration + 0.5);
+  filter.frequency.value = type === "bass" ? 400 : type === "pad" ? 1200 : 3000;
+  osc.type = type === "bass" ? "triangle" : type === "pad" ? "sine" : "triangle";
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0, start);
+  gain.gain.linearRampToValueAtTime(vol, start + attack);
+  gain.gain.setValueAtTime(vol, start + dur - release);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+  osc.connect(filter); filter.connect(gain); gain.connect(ctx.destination);
+  osc.start(start); osc.stop(start + dur + 0.05);
 }
 
-// Slow, calm piano melody in C major — 4 bars, meditative pace
-// Each beat = 0.9 seconds (~67bpm) — very relaxed
-const BEAT = 0.9;
-const PIANO_MELODY = [
-  // Bar 1 — gentle descending C major
-  { freq: 523.25, beat: 0,    dur: 3.2 },   // C5
-  { freq: 392.00, beat: 2,    dur: 2.8 },   // G4
-  { freq: 329.63, beat: 4,    dur: 2.8 },   // E4
-  { freq: 261.63, beat: 6,    dur: 3.5 },   // C4
-  // Bar 2 — soft walk up
-  { freq: 293.66, beat: 8,    dur: 2.8 },   // D4
-  { freq: 349.23, beat: 10,   dur: 2.8 },   // F4
-  { freq: 440.00, beat: 12,   dur: 3.2 },   // A4
-  { freq: 392.00, beat: 14,   dur: 3.5 },   // G4
-  // Bar 3 — dreamy arpeggios
-  { freq: 261.63, beat: 16,   dur: 2.5 },   // C4
-  { freq: 329.63, beat: 17.5, dur: 2.5 },   // E4
-  { freq: 392.00, beat: 19,   dur: 2.5 },   // G4
-  { freq: 523.25, beat: 20.5, dur: 3.2 },   // C5
-  { freq: 392.00, beat: 22,   dur: 2.5 },   // G4
-  { freq: 329.63, beat: 23.5, dur: 2.8 },   // E4
-  // Bar 4 — peaceful resolution
-  { freq: 246.94, beat: 25,   dur: 3.0 },   // B3
-  { freq: 261.63, beat: 27,   dur: 3.0 },   // C4
-  { freq: 293.66, beat: 29,   dur: 2.8 },   // D4
-  { freq: 261.63, beat: 31,   dur: 5.0 },   // C4 — long hold
-];
-const LOOP_DURATION = 34 * BEAT; // full loop length in seconds
+// Full arrangement: melody, harmony, bass, chords — 128 beats = ~76 seconds * 2 sections = ~152 seconds
+function scheduleMusic(ctx, startTime) {
+  const t = startTime;
+  const b = BEAT;
+
+  // ── SECTION A (bars 1–8, beats 0–31) ── G major, upbeat, melodic
+  const melodyA = [
+    // Bar 1
+    [NOTE.G4,0,0.9,0.22],[NOTE.A4,1,0.9,0.22],[NOTE.B4,2,0.9,0.22],[NOTE.C5,3,0.9,0.22],
+    // Bar 2
+    [NOTE.D5,4,1.8,0.25],[NOTE.B4,6,0.9,0.20],[NOTE.G4,7,0.9,0.20],
+    // Bar 3
+    [NOTE.A4,8,0.9,0.22],[NOTE.B4,9,0.9,0.22],[NOTE.C5,10,0.9,0.22],[NOTE.B4,11,0.9,0.20],
+    // Bar 4
+    [NOTE.A4,12,1.8,0.24],[NOTE.G4,14,0.9,0.20],[NOTE.A4,15,0.9,0.20],
+    // Bar 5
+    [NOTE.B4,16,0.9,0.22],[NOTE.C5,17,0.9,0.22],[NOTE.D5,18,0.9,0.24],[NOTE.E5,19,0.9,0.24],
+    // Bar 6
+    [NOTE.D5,20,1.8,0.26],[NOTE.C5,22,0.9,0.22],[NOTE.B4,23,0.9,0.20],
+    // Bar 7
+    [NOTE.C5,24,0.9,0.22],[NOTE.B4,25,0.9,0.20],[NOTE.A4,26,0.9,0.20],[NOTE.G4,27,0.9,0.20],
+    // Bar 8
+    [NOTE.G4,28,3.8,0.28],
+  ];
+
+  const harmonyA = [
+    [NOTE.E4,0,1.8,0.12],[NOTE.Fs4,2,1.8,0.12],
+    [NOTE.G4,4,3.8,0.12],
+    [NOTE.D4,8,1.8,0.12],[NOTE.E4,10,1.8,0.12],
+    [NOTE.Fs4,12,3.8,0.12],
+    [NOTE.G4,16,1.8,0.12],[NOTE.A4,18,1.8,0.12],
+    [NOTE.B4,20,3.8,0.12],
+    [NOTE.E4,24,1.8,0.12],[NOTE.D4,26,1.8,0.12],
+    [NOTE.D4,28,3.8,0.12],
+  ];
+
+  const bassA = [
+    [NOTE.G3,0,1.8,0.28],[NOTE.G3,2,1.8,0.25],
+    [NOTE.D3,4,1.8,0.28],[NOTE.D3,6,1.8,0.25],
+    [NOTE.A3,8,1.8,0.28],[NOTE.A3,10,1.8,0.25],
+    [NOTE.D3,12,1.8,0.28],[NOTE.D3,14,1.8,0.25],
+    [NOTE.G3,16,1.8,0.28],[NOTE.G3,18,1.8,0.25],
+    [NOTE.B3,20,1.8,0.28],[NOTE.B3,22,1.8,0.25],
+    [NOTE.C4,24,1.8,0.28],[NOTE.A3,26,1.8,0.25],
+    [NOTE.G3,28,3.8,0.30],
+  ];
+
+  // ── SECTION B (beats 32–63) ── C major, warmer, slightly fuller
+  const melodyB = [
+    // Bar 9
+    [NOTE.E5,32,0.9,0.24],[NOTE.D5,33,0.9,0.22],[NOTE.C5,34,0.9,0.22],[NOTE.B4,35,0.9,0.20],
+    // Bar 10
+    [NOTE.C5,36,1.8,0.24],[NOTE.E5,38,0.9,0.22],[NOTE.G5,39,0.9,0.26],
+    // Bar 11
+    [NOTE.A5,40,1.8,0.26],[NOTE.G5,42,0.9,0.24],[NOTE.E5,43,0.9,0.22],
+    // Bar 12
+    [NOTE.D5,44,1.8,0.24],[NOTE.C5,46,0.9,0.22],[NOTE.D5,47,0.9,0.22],
+    // Bar 13
+    [NOTE.E5,48,0.9,0.24],[NOTE.F5,49,0.9,0.24],[NOTE.E5,50,0.9,0.22],[NOTE.D5,51,0.9,0.22],
+    // Bar 14
+    [NOTE.C5,52,1.8,0.26],[NOTE.E5,54,0.9,0.24],[NOTE.C5,55,0.9,0.22],
+    // Bar 15
+    [NOTE.D5,56,0.9,0.22],[NOTE.C5,57,0.9,0.22],[NOTE.B4,58,0.9,0.22],[NOTE.A4,59,0.9,0.20],
+    // Bar 16
+    [NOTE.G4,60,3.8,0.28],
+  ];
+
+  const harmonyB = [
+    [NOTE.G4,32,1.8,0.12],[NOTE.Fs4,34,1.8,0.12],
+    [NOTE.E4,36,3.8,0.12],
+    [NOTE.C5,40,3.8,0.13],
+    [NOTE.G4,44,3.8,0.12],
+    [NOTE.C5,48,1.8,0.12],[NOTE.B4,50,1.8,0.12],
+    [NOTE.A4,52,3.8,0.12],
+    [NOTE.G4,56,1.8,0.12],[NOTE.Fs4,58,1.8,0.12],
+    [NOTE.G4,60,3.8,0.12],
+  ];
+
+  const bassB = [
+    [NOTE.C4,32,1.8,0.28],[NOTE.B3,34,1.8,0.25],
+    [NOTE.C4,36,1.8,0.28],[NOTE.G3,38,1.8,0.25],
+    [NOTE.A3,40,1.8,0.28],[NOTE.A3,42,1.8,0.25],
+    [NOTE.G3,44,1.8,0.28],[NOTE.G3,46,1.8,0.25],
+    [NOTE.C4,48,1.8,0.28],[NOTE.G3,50,1.8,0.25],
+    [NOTE.A3,52,1.8,0.28],[NOTE.F3,54,1.8,0.25],
+    [NOTE.G3,56,1.8,0.28],[NOTE.D3,58,1.8,0.25],
+    [NOTE.G3,60,3.8,0.32],
+  ];
+
+  // ── SECTION C (beats 64–95) ── D major, brighter, climbing feel
+  const melodyC = [
+    [NOTE.Fs4,64,0.9,0.22],[NOTE.G4,65,0.9,0.22],[NOTE.A4,66,0.9,0.24],[NOTE.B4,67,0.9,0.24],
+    [NOTE.C5,68,1.8,0.26],[NOTE.A4,70,0.9,0.22],[NOTE.Fs4,71,0.9,0.20],
+    [NOTE.G4,72,0.9,0.22],[NOTE.A4,73,0.9,0.24],[NOTE.B4,74,0.9,0.24],[NOTE.C5,75,0.9,0.24],
+    [NOTE.D5,76,1.8,0.28],[NOTE.C5,78,0.9,0.24],[NOTE.B4,79,0.9,0.22],
+    [NOTE.A4,80,0.9,0.22],[NOTE.B4,81,0.9,0.24],[NOTE.C5,82,0.9,0.24],[NOTE.D5,83,0.9,0.26],
+    [NOTE.E5,84,1.8,0.28],[NOTE.D5,86,0.9,0.26],[NOTE.C5,87,0.9,0.24],
+    [NOTE.B4,88,0.9,0.24],[NOTE.A4,89,0.9,0.22],[NOTE.G4,90,0.9,0.22],[NOTE.Fs4,91,0.9,0.20],
+    [NOTE.G4,92,3.8,0.28],
+  ];
+
+  const harmonyC = [
+    [NOTE.D4,64,3.8,0.12],[NOTE.Fs4,68,3.8,0.12],
+    [NOTE.G4,72,3.8,0.12],[NOTE.A4,76,3.8,0.13],
+    [NOTE.Fs4,80,3.8,0.13],[NOTE.A4,84,3.8,0.13],
+    [NOTE.D4,88,3.8,0.12],[NOTE.D4,92,3.8,0.12],
+  ];
+
+  const bassC = [
+    [NOTE.D3,64,1.8,0.28],[NOTE.D3,66,1.8,0.25],
+    [NOTE.D3,68,1.8,0.28],[NOTE.A3,70,1.8,0.25],
+    [NOTE.G3,72,1.8,0.28],[NOTE.G3,74,1.8,0.25],
+    [NOTE.A3,76,1.8,0.28],[NOTE.E3,78,1.8,0.25],
+    [NOTE.D3,80,1.8,0.28],[NOTE.D3,82,1.8,0.25],
+    [NOTE.A3,84,1.8,0.28],[NOTE.Fs3,86,1.8,0.25],
+    [NOTE.G3,88,1.8,0.28],[NOTE.D3,90,1.8,0.25],
+    [NOTE.G3,92,3.8,0.32],
+  ];
+
+  // ── SECTION D (beats 96–127) ── Back to G, full resolution, builds then settles
+  const melodyD = [
+    [NOTE.G4,96,0.9,0.22],[NOTE.B4,97,0.9,0.24],[NOTE.D5,98,0.9,0.26],[NOTE.G5,99,0.9,0.28],
+    [NOTE.G5,100,1.8,0.28],[NOTE.E5,102,0.9,0.26],[NOTE.C5,103,0.9,0.24],
+    [NOTE.D5,104,0.9,0.26],[NOTE.C5,105,0.9,0.24],[NOTE.B4,106,0.9,0.24],[NOTE.A4,107,0.9,0.22],
+    [NOTE.G4,108,1.8,0.24],[NOTE.A4,110,0.9,0.22],[NOTE.B4,111,0.9,0.24],
+    [NOTE.C5,112,0.9,0.24],[NOTE.D5,113,0.9,0.26],[NOTE.E5,114,0.9,0.26],[NOTE.D5,115,0.9,0.24],
+    [NOTE.C5,116,1.8,0.26],[NOTE.B4,118,0.9,0.24],[NOTE.A4,119,0.9,0.22],
+    [NOTE.G4,120,0.9,0.24],[NOTE.A4,121,0.9,0.22],[NOTE.B4,122,0.9,0.22],[NOTE.C5,123,0.9,0.22],
+    [NOTE.G4,124,3.8,0.28],
+  ];
+
+  const harmonyD = [
+    [NOTE.D4,96,3.8,0.13],[NOTE.C5,100,3.8,0.13],
+    [NOTE.G4,104,3.8,0.12],[NOTE.E4,108,3.8,0.12],
+    [NOTE.A4,112,3.8,0.13],[NOTE.G4,116,3.8,0.12],
+    [NOTE.E4,120,1.8,0.12],[NOTE.D4,122,1.8,0.12],
+    [NOTE.D4,124,3.8,0.12],
+  ];
+
+  const bassD = [
+    [NOTE.G3,96,1.8,0.30],[NOTE.G3,98,1.8,0.28],
+    [NOTE.C4,100,1.8,0.28],[NOTE.C4,102,1.8,0.25],
+    [NOTE.G3,104,1.8,0.28],[NOTE.D3,106,1.8,0.25],
+    [NOTE.G3,108,1.8,0.28],[NOTE.G3,110,1.8,0.25],
+    [NOTE.C4,112,1.8,0.28],[NOTE.A3,114,1.8,0.25],
+    [NOTE.G3,116,1.8,0.28],[NOTE.E3,118,1.8,0.25],
+    [NOTE.D3,120,1.8,0.28],[NOTE.D3,122,1.8,0.25],
+    [NOTE.G3,124,3.8,0.32],
+  ];
+
+  // Schedule all voices
+  const allNotes = [
+    ...melodyA, ...harmonyA, ...bassA,
+    ...melodyB, ...harmonyB, ...bassB,
+    ...melodyC, ...harmonyC, ...bassC,
+    ...melodyD, ...harmonyD, ...bassD,
+  ];
+
+  allNotes.forEach(([freq, beat, dur, vol]) => {
+    const isBass = freq < 200;
+    const isPad = vol < 0.15;
+    const voice = isBass ? "bass" : isPad ? "pad" : "melody";
+    makeVoice(ctx, voice, freq, t + beat * b, dur * b, vol);
+  });
+
+  return 128 * b; // return total duration in seconds
+}
 
 function ConfettiCanvas({ active, rainbow }) {
   const canvasRef = useRef(null);
@@ -321,13 +433,11 @@ export default function App() {
       setLevelTime(levelTimeRef.current); setTotalTime(totalTimeRef.current);
     }, 1000);
   }, []);
-
   const stopTimer = useCallback(() => { clearInterval(timerRef.current); timerRef.current = null; }, []);
   const resetLevelTimer = useCallback(() => { levelTimeRef.current = 0; setLevelTime(0); }, []);
-
   useEffect(() => { startTimer(); return () => stopTimer(); }, []);
 
-  // ── Soft Piano Music ─────────────────────────────────────────
+  // ── Music: schedule loops ────────────────────────────────────
   const startMusic = useCallback(() => {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -335,31 +445,21 @@ export default function App() {
     const ctx = audioCtxRef.current;
     if (ctx.state === "suspended") ctx.resume();
 
-    const scheduleLoop = () => {
+    const loop = () => {
       const now = ctx.currentTime;
       const loopStart = Math.max(now, nextLoopRef.current);
-
-      // Schedule every note in the melody
-      PIANO_MELODY.forEach(({ freq, beat, dur }) => {
-        playPianoNote(ctx, freq, loopStart + beat * BEAT, dur, 0.18);
-      });
-
-      nextLoopRef.current = loopStart + LOOP_DURATION;
-
-      // Schedule next loop slightly before it ends for seamless looping
-      const msUntilNext = (nextLoopRef.current - ctx.currentTime - 1.0) * 1000;
-      musicLoopRef.current = setTimeout(scheduleLoop, Math.max(msUntilNext, 100));
+      const dur = scheduleMusic(ctx, loopStart);
+      nextLoopRef.current = loopStart + dur;
+      // Schedule next loop 2s before end for seamless transition
+      const msUntilNext = (nextLoopRef.current - ctx.currentTime - 2.0) * 1000;
+      musicLoopRef.current = setTimeout(loop, Math.max(msUntilNext, 500));
     };
-
-    scheduleLoop();
+    loop();
   }, []);
 
   const stopMusic = useCallback(() => {
     clearTimeout(musicLoopRef.current);
-    if (audioCtxRef.current) {
-      audioCtxRef.current.close();
-      audioCtxRef.current = null;
-    }
+    if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
     nextLoopRef.current = 0;
   }, []);
 
@@ -397,13 +497,8 @@ export default function App() {
       const ats = getAllTimeStats();
       ats.words += 1; ats.score += score;
       saveAllTimeStats(ats);
-      if (currentWord.length > (longestWordToday.length || 0)) {
-        setLongestWordToday(currentWord); awardBadge("longest_day");
-      }
-      if (currentWord.length > (longestWordAllTime.length || 0)) {
-        setLongestWordAllTime(currentWord);
-        localStorage.setItem("ll_longest", currentWord);
-      }
+      if (currentWord.length > (longestWordToday.length || 0)) { setLongestWordToday(currentWord); awardBadge("longest_day"); }
+      if (currentWord.length > (longestWordAllTime.length || 0)) { setLongestWordAllTime(currentWord); localStorage.setItem("ll_longest", currentWord); }
       const validCount = newSubmitted.filter(s => s.valid).length;
       if (validCount === 1) awardBadge("first_word");
       if (score >= 50) awardBadge("score_50");
@@ -437,10 +532,8 @@ export default function App() {
         if (level < 5) setTimeout(() => setLevelComplete(true), 1200);
         else {
           if (perfectDay) {
-            setPerfectDayAchieved(true);
-            awardBadge("perfect_day");
-            setRainbowConfetti(true);
-            setTimeout(() => setRainbowConfetti(false), 6000);
+            setPerfectDayAchieved(true); awardBadge("perfect_day");
+            setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
             setTimeout(() => setShowNameInput(true), 1000);
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
@@ -460,8 +553,7 @@ export default function App() {
     const newTiles = generateLevelTiles(newLevel, tileCountRef.current, rng, bp);
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
-    levelResetCount.current = 0;
-    resetLevelTimer(); startTimer();
+    levelResetCount.current = 0; resetLevelTimer(); startTimer();
     if (newLevel === 2) awardBadge("level_2");
     if (newLevel === 3) awardBadge("level_3");
     if (newLevel === 4) awardBadge("level_4");
@@ -480,8 +572,7 @@ export default function App() {
   const handleBuyLevel = () => {
     const cost = LEVEL_BUY_COST[level];
     if (totalRef.current < cost) return;
-    totalRef.current -= cost;
-    setTotalScore(totalRef.current);
+    totalRef.current -= cost; setTotalScore(totalRef.current);
     handleNextLevel(true);
   };
 
@@ -503,8 +594,7 @@ export default function App() {
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
     setPerfectDay(true); setPerfectDayAchieved(false); setLongestWordToday("");
     levelResetCount.current = 0;
-    stopTimer();
-    levelTimeRef.current = 0; totalTimeRef.current = 0;
+    stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
   };
 
@@ -546,9 +636,7 @@ export default function App() {
       <ConfettiCanvas active={rainbowConfetti} rainbow={true} />
 
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}><div style={{fontSize:28}}>{b.icon}</div><div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div><div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}</div></div>):null; })()}
-
       {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?"rgba(30,160,70,0.97)":"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?18:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts`:"Not a valid word!"}</div></div>}
-
       {validating&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>🔍</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>CHECKING…</div></div>}
 
       {perfectDayAchieved&&(
@@ -557,9 +645,7 @@ export default function App() {
             <div style={{fontSize:56}}>🌈</div>
             <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
             <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>You completed all 5 levels<br/>without buying a single one!</div>
-            <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
-              🏆 {playerName||"You"} achieved a Perfect Day!<br/>Day #{dayNum} · Score: {totalScore} pts
-            </div>
+            <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} achieved a Perfect Day!<br/>Day #{dayNum} · Score: {totalScore} pts</div>
             <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nI completed all 5 levels without buying any!\nDay #${dayNum} · Score: ${totalScore} pts 🏆\nPlay at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
             <button className="ll-btn" onClick={()=>setPerfectDayAchieved(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Continue</button>
           </div>

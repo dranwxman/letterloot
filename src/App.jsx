@@ -114,41 +114,93 @@ async function validateWordWithAI(word) {
   } catch { return word.length >= 3; }
 }
 
-function createGuitar(ctx) {
-  function pluck(freq, time, duration = 2.0, gain = 0.35) {
-    const bufferSize = Math.round(ctx.sampleRate / freq);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
-    const source = ctx.createBufferSource();
-    source.buffer = buffer; source.loop = true;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass"; filter.frequency.value = 2800;
-    const gainNode = ctx.createGain();
-    gainNode.gain.setValueAtTime(gain, time);
-    gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
-    const delay = ctx.createDelay(); delay.delayTime.value = 0.025;
-    const fb = ctx.createGain(); fb.gain.value = 0.25;
-    source.connect(filter); filter.connect(gainNode);
-    gainNode.connect(delay); delay.connect(fb); fb.connect(delay);
-    gainNode.connect(ctx.destination); delay.connect(ctx.destination);
-    source.start(time); source.stop(time + duration + 0.5);
-  }
-  return { pluck };
+// ── Soft Piano via Web Audio ──────────────────────────────────
+// Simulates a gentle piano note: quick attack, soft decay, warm tone
+function playPianoNote(ctx, freq, startTime, duration = 3.5, volume = 0.18) {
+  // Sine + small harmonic for warmth
+  const osc1 = ctx.createOscillator();
+  const osc2 = ctx.createOscillator();
+  const osc3 = ctx.createOscillator();
+  osc1.type = "sine";
+  osc2.type = "sine";
+  osc3.type = "sine";
+  osc1.frequency.value = freq;
+  osc2.frequency.value = freq * 2;      // octave harmonic
+  osc3.frequency.value = freq * 3.01;   // soft third harmonic
+
+  const gainMain = ctx.createGain();
+  const gainHarm = ctx.createGain();
+  const gainHarm2 = ctx.createGain();
+  const masterGain = ctx.createGain();
+
+  // Piano-like envelope: quick attack, long soft decay
+  gainMain.gain.setValueAtTime(0, startTime);
+  gainMain.gain.linearRampToValueAtTime(volume, startTime + 0.01);
+  gainMain.gain.exponentialRampToValueAtTime(volume * 0.3, startTime + 0.4);
+  gainMain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
+
+  gainHarm.gain.setValueAtTime(0, startTime);
+  gainHarm.gain.linearRampToValueAtTime(volume * 0.15, startTime + 0.01);
+  gainHarm.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.6);
+
+  gainHarm2.gain.setValueAtTime(0, startTime);
+  gainHarm2.gain.linearRampToValueAtTime(volume * 0.06, startTime + 0.01);
+  gainHarm2.gain.exponentialRampToValueAtTime(0.0001, startTime + duration * 0.3);
+
+  // Gentle low-pass for warmth
+  const filter = ctx.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 1800;
+  filter.Q.value = 0.5;
+
+  // Soft reverb via convolver simulation with delay
+  const delay = ctx.createDelay();
+  delay.delayTime.value = 0.22;
+  const delayGain = ctx.createGain();
+  delayGain.gain.value = 0.12;
+
+  osc1.connect(gainMain); gainMain.connect(filter);
+  osc2.connect(gainHarm); gainHarm.connect(filter);
+  osc3.connect(gainHarm2); gainHarm2.connect(filter);
+  filter.connect(masterGain);
+  masterGain.connect(delay);
+  delay.connect(delayGain);
+  delayGain.connect(masterGain);
+  masterGain.connect(ctx.destination);
+
+  osc1.start(startTime); osc1.stop(startTime + duration + 0.5);
+  osc2.start(startTime); osc2.stop(startTime + duration + 0.5);
+  osc3.start(startTime); osc3.stop(startTime + duration + 0.5);
 }
 
-const MELODY = [
-  {freq:196.00,beat:0},{freq:246.94,beat:0.5},{freq:392.00,beat:1.0},{freq:329.63,beat:1.5},
-  {freq:293.66,beat:2.0},{freq:246.94,beat:2.5},{freq:392.00,beat:3.0},{freq:329.63,beat:3.5},
-  {freq:261.63,beat:4.0},{freq:329.63,beat:4.5},{freq:392.00,beat:5.0},{freq:329.63,beat:5.5},
-  {freq:261.63,beat:6.0},{freq:246.94,beat:6.5},{freq:329.63,beat:7.0},{freq:261.63,beat:7.5},
-  {freq:293.66,beat:8.0},{freq:369.99,beat:8.5},{freq:440.00,beat:9.0},{freq:369.99,beat:9.5},
-  {freq:293.66,beat:10.0},{freq:246.94,beat:10.5},{freq:369.99,beat:11.0},{freq:293.66,beat:11.5},
-  {freq:164.81,beat:12.0},{freq:246.94,beat:12.5},{freq:329.63,beat:13.0},{freq:246.94,beat:13.5},
-  {freq:196.00,beat:14.0},{freq:246.94,beat:14.5},{freq:329.63,beat:15.0},{freq:246.94,beat:15.5},
+// Slow, calm piano melody in C major — 4 bars, meditative pace
+// Each beat = 0.9 seconds (~67bpm) — very relaxed
+const BEAT = 0.9;
+const PIANO_MELODY = [
+  // Bar 1 — gentle descending C major
+  { freq: 523.25, beat: 0,    dur: 3.2 },   // C5
+  { freq: 392.00, beat: 2,    dur: 2.8 },   // G4
+  { freq: 329.63, beat: 4,    dur: 2.8 },   // E4
+  { freq: 261.63, beat: 6,    dur: 3.5 },   // C4
+  // Bar 2 — soft walk up
+  { freq: 293.66, beat: 8,    dur: 2.8 },   // D4
+  { freq: 349.23, beat: 10,   dur: 2.8 },   // F4
+  { freq: 440.00, beat: 12,   dur: 3.2 },   // A4
+  { freq: 392.00, beat: 14,   dur: 3.5 },   // G4
+  // Bar 3 — dreamy arpeggios
+  { freq: 261.63, beat: 16,   dur: 2.5 },   // C4
+  { freq: 329.63, beat: 17.5, dur: 2.5 },   // E4
+  { freq: 392.00, beat: 19,   dur: 2.5 },   // G4
+  { freq: 523.25, beat: 20.5, dur: 3.2 },   // C5
+  { freq: 392.00, beat: 22,   dur: 2.5 },   // G4
+  { freq: 329.63, beat: 23.5, dur: 2.8 },   // E4
+  // Bar 4 — peaceful resolution
+  { freq: 246.94, beat: 25,   dur: 3.0 },   // B3
+  { freq: 261.63, beat: 27,   dur: 3.0 },   // C4
+  { freq: 293.66, beat: 29,   dur: 2.8 },   // D4
+  { freq: 261.63, beat: 31,   dur: 5.0 },   // C4 — long hold
 ];
-const BEAT_DUR = 0.32;
-const LOOP_DUR = 16 * BEAT_DUR;
+const LOOP_DURATION = 34 * BEAT; // full loop length in seconds
 
 function ConfettiCanvas({ active, rainbow }) {
   const canvasRef = useRef(null);
@@ -275,24 +327,40 @@ export default function App() {
 
   useEffect(() => { startTimer(); return () => stopTimer(); }, []);
 
+  // ── Soft Piano Music ─────────────────────────────────────────
   const startMusic = useCallback(() => {
-    if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
     const ctx = audioCtxRef.current;
     if (ctx.state === "suspended") ctx.resume();
-    const guitar = createGuitar(ctx);
-    const loop = () => {
+
+    const scheduleLoop = () => {
       const now = ctx.currentTime;
-      const start = Math.max(now, nextLoopRef.current);
-      MELODY.forEach(({ freq, beat }) => guitar.pluck(freq, start + beat * BEAT_DUR, 1.8, 0.35));
-      nextLoopRef.current = start + LOOP_DUR;
-      musicLoopRef.current = setTimeout(loop, (nextLoopRef.current - ctx.currentTime - 0.1) * 1000);
+      const loopStart = Math.max(now, nextLoopRef.current);
+
+      // Schedule every note in the melody
+      PIANO_MELODY.forEach(({ freq, beat, dur }) => {
+        playPianoNote(ctx, freq, loopStart + beat * BEAT, dur, 0.18);
+      });
+
+      nextLoopRef.current = loopStart + LOOP_DURATION;
+
+      // Schedule next loop slightly before it ends for seamless looping
+      const msUntilNext = (nextLoopRef.current - ctx.currentTime - 1.0) * 1000;
+      musicLoopRef.current = setTimeout(scheduleLoop, Math.max(msUntilNext, 100));
     };
-    loop();
+
+    scheduleLoop();
   }, []);
 
   const stopMusic = useCallback(() => {
     clearTimeout(musicLoopRef.current);
-    if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
+    if (audioCtxRef.current) {
+      audioCtxRef.current.close();
+      audioCtxRef.current = null;
+    }
+    nextLoopRef.current = 0;
   }, []);
 
   useEffect(() => { if (musicOn) startMusic(); else stopMusic(); return () => stopMusic(); }, [musicOn]);
@@ -561,7 +629,7 @@ export default function App() {
           <div style={{fontSize:34,fontWeight:"bold",letterSpacing:5,background:"linear-gradient(90deg,#f6d365,#fda085,#f093fb,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>LetterLoot</div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:4}}>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>LEVEL {level}/5 · DAY #{dayNum}</div>
-            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,color:musicOn?"#f6d365":"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif"}}>{musicOn?"🎸 ON":"🎸 OFF"}</button>
+            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,color:musicOn?"#f6d365":"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif"}}>{musicOn?"🎹 ON":"🎹 OFF"}</button>
             {perfectDay&&<div style={{fontSize:9,color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</div>}
           </div>
         </div>

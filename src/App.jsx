@@ -9,6 +9,10 @@ const SCORE_MAP = {
 };
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach(l => { LETTER_VALUES[l] = SCORE_MAP[l] || 5; });
 
+// ── Merriam-Webster API Keys ───────────────────────────────────
+const MW_COLLEGIATE_KEY = "6c41ef2c-8c1d-440a-b04a-24e623cf68e1";
+const MW_MEDICAL_KEY    = "05a10875-f553-43f6-be64-6dafcdb4152e";
+
 function seededRandom(seed) {
   let s = seed;
   return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
@@ -20,6 +24,16 @@ function getDailySeed() {
 function getDayOfYear() {
   const now = new Date();
   return Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+}
+function getWeekKey() {
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  return `${monday.getFullYear()}-${monday.getMonth()+1}-${monday.getDate()}`;
+}
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -64,7 +78,7 @@ function calcWordScore(tileIds, tiles) {
 }
 
 const VOWELS = new Set(["A","E","I","O","U"]);
-const LEVEL_BUY_COST = [0, 250, 500, 750, 1000];
+const LEVEL_BUY_COST = [0, 250, 500, 750, 1000, 1000];
 
 const BADGE_DEFS = [
   { id:"first_word",   icon:"✨", label:"First Loot",     desc:"Submit your first word",          cat:"core" },
@@ -78,6 +92,7 @@ const BADGE_DEFS = [
   { id:"daily_1000",   icon:"💰", label:"Treasure Chest", desc:"1000+ total daily score",         cat:"core" },
   { id:"perfect_q",    icon:"👑", label:"Q Master",       desc:"Use the letter Q",                cat:"core" },
   { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",     desc:"Word with 4+ vowels",             cat:"core" },
+  { id:"medical_word", icon:"🩺", label:"Doctor's Orders",desc:"Use a medical dictionary word",   cat:"core" },
   { id:"level_2",      icon:"🥈", label:"Level 2",        desc:"Reach Level 2",                   cat:"level" },
   { id:"level_3",      icon:"🥇", label:"Level 3",        desc:"Reach Level 3",                   cat:"level" },
   { id:"level_4",      icon:"🎖️", label:"Level 4",        desc:"Reach Level 4",                   cat:"level" },
@@ -99,26 +114,42 @@ const BADGE_DEFS = [
   { id:"all_time_10k", icon:"👸", label:"Legend",         desc:"10,000+ all-time score",          cat:"alltime" },
 ];
 
+// ── Merriam-Webster Dictionary Validation ──────────────────────
+// Checks Collegiate first, then Medical if not found
 const wordCache = {};
-async function validateWordWithAI(word) {
+async function validateWord(word) {
   const key = word.toLowerCase();
   if (wordCache[key] !== undefined) return wordCache[key];
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514", max_tokens: 50,
-        messages: [{ role: "user", content: `Is "${word}" a real standard English dictionary word (not a proper noun, abbreviation, or slang)? Reply with only YES or NO.` }]
-      })
-    });
-    const data = await response.json();
-    const valid = (data.content?.[0]?.text || "NO").trim().toUpperCase().startsWith("YES");
-    wordCache[key] = valid;
-    return valid;
-  } catch { return word.length >= 3; }
+    // Try Collegiate dictionary first
+    const collRes = await fetch(
+      `https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`
+    );
+    const collData = await collRes.json();
+    // Valid if first result is an object with a shortdef (actual entry, not suggestion)
+    if (Array.isArray(collData) && collData.length > 0 && typeof collData[0] === "object" && collData[0].shortdef) {
+      wordCache[key] = { valid: true, source: "collegiate" };
+      return wordCache[key];
+    }
+    // Try Medical dictionary
+    const medRes = await fetch(
+      `https://www.dictionaryapi.com/api/v3/references/medical/json/${encodeURIComponent(key)}?key=${MW_MEDICAL_KEY}`
+    );
+    const medData = await medRes.json();
+    if (Array.isArray(medData) && medData.length > 0 && typeof medData[0] === "object" && medData[0].shortdef) {
+      wordCache[key] = { valid: true, source: "medical" };
+      return wordCache[key];
+    }
+    wordCache[key] = { valid: false, source: null };
+    return wordCache[key];
+  } catch {
+    // Fallback if API fails
+    wordCache[key] = { valid: word.length >= 3, source: "fallback" };
+    return wordCache[key];
+  }
 }
 
+// ── Guitar music ───────────────────────────────────────────────
 function createGuitar(ctx) {
   function pluck(freq, time, duration = 2.0, gain = 0.35) {
     const bufferSize = Math.round(ctx.sampleRate / freq);
@@ -154,6 +185,7 @@ const MELODY = [
 const BEAT_DUR = 0.32;
 const LOOP_DUR = 16 * BEAT_DUR;
 
+// ── Confetti ───────────────────────────────────────────────────
 function ConfettiCanvas({ active, rainbow }) {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
@@ -193,6 +225,7 @@ function ConfettiCanvas({ active, rainbow }) {
   return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:9999, pointerEvents:"none" }} />;
 }
 
+// ── Storage helpers ────────────────────────────────────────────
 function getLeaderboard() {
   try { return JSON.parse(localStorage.getItem("ll_leaderboard") || "[]"); } catch { return []; }
 }
@@ -206,13 +239,101 @@ function addScore(name, score, level, perfectDay) {
   const trimmed = board.slice(0, 10);
   saveLeaderboard(trimmed); return trimmed;
 }
+function getTimeLeaderboard() {
+  try { return JSON.parse(localStorage.getItem("ll_times") || '{"levels":{"1":[],"2":[],"3":[],"4":[],"5":[]},"perfect":[]}'); }
+  catch { return { levels:{"1":[],"2":[],"3":[],"4":[],"5":[]}, perfect:[] }; }
+}
+function saveTimeLeaderboard(board) {
+  try { localStorage.setItem("ll_times", JSON.stringify(board)); } catch {}
+}
+function addLevelTime(name, level, seconds) {
+  const board = getTimeLeaderboard();
+  if (!board.levels[level]) board.levels[level] = [];
+  board.levels[level].push({ name, seconds, date: new Date().toLocaleDateString() });
+  board.levels[level].sort((a, b) => a.seconds - b.seconds);
+  board.levels[level] = board.levels[level].slice(0, 5);
+  saveTimeLeaderboard(board); return board;
+}
+function addPerfectTime(name, seconds) {
+  const board = getTimeLeaderboard();
+  board.perfect.push({ name, seconds, date: new Date().toLocaleDateString() });
+  board.perfect.sort((a, b) => a.seconds - b.seconds);
+  board.perfect = board.perfect.slice(0, 10);
+  saveTimeLeaderboard(board); return board;
+}
 function getAllTimeStats() {
   try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; }
 }
 function saveAllTimeStats(stats) {
   try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {}
 }
+function getStats() {
+  try {
+    return JSON.parse(localStorage.getItem("ll_stats") || JSON.stringify({
+      daysPlayed: 0, lastPlayedDate: null,
+      perfectDaysAllTime: 0, perfectDaysWeek: {}, weekKey: "",
+      highScoreAllTime: 0, highScoreWeek: {}, highScoreToday: 0,
+      highWordAllTime: 0, highWordWeek: {}, highWordToday: 0,
+      fastestLevels: {"1":null,"2":null,"3":null,"4":null,"5":null},
+    }));
+  } catch {
+    return {
+      daysPlayed: 0, lastPlayedDate: null,
+      perfectDaysAllTime: 0, perfectDaysWeek: {}, weekKey: "",
+      highScoreAllTime: 0, highScoreWeek: {}, highScoreToday: 0,
+      highWordAllTime: 0, highWordWeek: {}, highWordToday: 0,
+      fastestLevels: {"1":null,"2":null,"3":null,"4":null,"5":null},
+    };
+  }
+}
+function saveStats(stats) {
+  try { localStorage.setItem("ll_stats", JSON.stringify(stats)); } catch {}
+}
+function updateStats(updates) {
+  const stats = getStats();
+  const todayKey = getTodayKey();
+  const weekKey = getWeekKey();
+  // New day
+  if (stats.lastPlayedDate !== todayKey) {
+    stats.daysPlayed += 1;
+    stats.lastPlayedDate = todayKey;
+    stats.highScoreToday = 0;
+    stats.highWordToday = 0;
+  }
+  // Reset week if new week
+  if (stats.weekKey !== weekKey) {
+    stats.weekKey = weekKey;
+    stats.perfectDaysWeek = {};
+    stats.highScoreWeek = {};
+    stats.highWordWeek = {};
+  }
+  if (updates.score !== undefined) {
+    if (updates.score > stats.highScoreToday) stats.highScoreToday = updates.score;
+    if (updates.score > (stats.highScoreWeek[todayKey] || 0)) stats.highScoreWeek[todayKey] = updates.score;
+    if (updates.score > stats.highScoreAllTime) stats.highScoreAllTime = updates.score;
+  }
+  if (updates.wordScore !== undefined) {
+    if (updates.wordScore > stats.highWordToday) stats.highWordToday = updates.wordScore;
+    if (updates.wordScore > (stats.highWordWeek[todayKey] || 0)) stats.highWordWeek[todayKey] = updates.wordScore;
+    if (updates.wordScore > stats.highWordAllTime) stats.highWordAllTime = updates.wordScore;
+  }
+  if (updates.perfectDay) {
+    stats.perfectDaysAllTime += 1;
+    stats.perfectDaysWeek[todayKey] = (stats.perfectDaysWeek[todayKey] || 0) + 1;
+  }
+  if (updates.levelTime !== undefined && updates.levelNum !== undefined) {
+    const lvl = String(updates.levelNum);
+    if (!stats.fastestLevels[lvl] || updates.levelTime < stats.fastestLevels[lvl]) {
+      stats.fastestLevels[lvl] = updates.levelTime;
+    }
+  }
+  saveStats(stats);
+  return stats;
+}
 
+// ══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ══════════════════════════════════════════════════════════════
 export default function App() {
   const [playerName, setPlayerName] = useState(localStorage.getItem("ll_name") || "");
   const [editingName, setEditingName] = useState(!localStorage.getItem("ll_name"));
@@ -238,8 +359,13 @@ export default function App() {
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
   const [levelComplete, setLevelComplete] = useState(false);
   const [showBuyModal, setShowBuyModal] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showStuckModal, setShowStuckModal] = useState(false);
+  const [paused, setPaused] = useState(false);
   const [musicOn, setMusicOn] = useState(false);
   const [leaderboard, setLeaderboard] = useState(getLeaderboard());
+  const [timeLeaderboard, setTimeLeaderboard] = useState(getTimeLeaderboard());
+  const [statsData, setStatsData] = useState(getStats());
   const [showNameInput, setShowNameInput] = useState(false);
   const [perfectDay, setPerfectDay] = useState(true);
   const [longestWordToday, setLongestWordToday] = useState("");
@@ -247,6 +373,8 @@ export default function App() {
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
   const [levelTime, setLevelTime] = useState(0);
   const [totalTime, setTotalTime] = useState(0);
+  const [timeSubTab, setTimeSubTab] = useState("levels");
+  const [selectedLevelView, setSelectedLevelView] = useState(1);
   const timerRef = useRef(null);
   const levelTimeRef = useRef(0);
   const totalTimeRef = useRef(0);
@@ -255,6 +383,8 @@ export default function App() {
   const audioCtxRef = useRef(null);
   const musicLoopRef = useRef(null);
   const nextLoopRef = useRef(0);
+  const clearedLevelsRef = useRef({});
+  const consecutiveInvalidRef = useRef(0);
 
   const today = new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
   const dayNum = getDayOfYear();
@@ -264,8 +394,9 @@ export default function App() {
   const currentWord = selected.map(id => tiles.find(t => t.id === id)?.letter).join("");
   const currentScore = calcWordScore(selected, tiles);
   const buyCost = LEVEL_BUY_COST[level] || 0;
-  const canBuy = level < 5 && totalRef.current >= buyCost && buyCost > 0;
+  const canBuy = totalRef.current >= buyCost && buyCost > 0;
 
+  // ── Timers ─────────────────────────────────────────────────
   const startTimer = useCallback(() => {
     if (timerRef.current) return;
     timerRef.current = setInterval(() => {
@@ -277,6 +408,20 @@ export default function App() {
   const resetLevelTimer = useCallback(() => { levelTimeRef.current = 0; setLevelTime(0); }, []);
   useEffect(() => { startTimer(); return () => stopTimer(); }, []);
 
+  // ── Pause ──────────────────────────────────────────────────
+  const handlePause = () => {
+    if (paused) {
+      setPaused(false);
+      startTimer();
+      if (musicOn) startMusic();
+    } else {
+      setPaused(true);
+      stopTimer();
+      if (musicOn) stopMusic();
+    }
+  };
+
+  // ── Music ──────────────────────────────────────────────────
   const startMusic = useCallback(() => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = audioCtxRef.current;
@@ -291,15 +436,14 @@ export default function App() {
     };
     loop();
   }, []);
-
   const stopMusic = useCallback(() => {
     clearTimeout(musicLoopRef.current);
     if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
     nextLoopRef.current = 0;
   }, []);
+  useEffect(() => { if (musicOn && !paused) startMusic(); else stopMusic(); return () => stopMusic(); }, [musicOn, paused]);
 
-  useEffect(() => { if (musicOn) startMusic(); else stopMusic(); return () => stopMusic(); }, [musicOn]);
-
+  // ── Badges ─────────────────────────────────────────────────
   const awardBadge = useCallback((id) => {
     setBadges(prev => {
       if (prev.includes(id)) return prev;
@@ -309,6 +453,7 @@ export default function App() {
     });
   }, []);
 
+  // ── Full Reset ─────────────────────────────────────────────
   const handleFullReset = useCallback(() => {
     const rng = seededRandom(getDailySeed());
     const bp = getBonusPositions(42, getBonusCount(1), rng);
@@ -318,23 +463,49 @@ export default function App() {
     setTotalScore(0); totalRef.current = 0;
     setStreak(0); setBadges([]); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
+    setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
     setPerfectDay(true); setPerfectDayAchieved(false); setLongestWordToday("");
-    levelResetCount.current = 0;
+    levelResetCount.current = 0; clearedLevelsRef.current = {};
+    consecutiveInvalidRef.current = 0;
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
   }, [startTimer, stopTimer]);
 
+  // ── Level Reset ────────────────────────────────────────────
+  const doLevelReset = useCallback(() => {
+    levelResetCount.current += 1;
+    const rng = seededRandom(getDailySeed() + level * 999);
+    const count = 42 + (level - 1) * 6;
+    const bp = getBonusPositions(count, getBonusCount(level), rng);
+    setTiles(generateLevelTiles(level, tileCountRef.current - count, rng, bp));
+    setSelected([]); resetLevelTimer();
+    setShowResetConfirm(false); setShowStuckModal(false);
+    consecutiveInvalidRef.current = 0;
+  }, [level, resetLevelTimer]);
+
+  // ── Submit ─────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (currentWord.length < 3 || validating) return;
+    if (currentWord.length < 3 || validating || paused) return;
     setValidating(true);
-    const valid = await validateWordWithAI(currentWord);
+    const result = await validateWord(currentWord);
+    const valid = result.valid;
+    const isMedical = result.source === "medical";
     const score = valid ? currentScore : 0;
     const newStreak = valid ? streak + 1 : 0;
     setStreak(newStreak);
-    setFlash({ word: currentWord, score, valid });
+    setFlash({ word: currentWord, score, valid, medical: isMedical });
     setTimeout(() => setFlash(null), 1800);
-    if (!valid) { setShake(true); setTimeout(() => setShake(false), 500); }
-    const newEntry = { word: currentWord, score, valid };
+    if (!valid) {
+      setShake(true); setTimeout(() => setShake(false), 500);
+      consecutiveInvalidRef.current += 1;
+      // After 3 consecutive invalid attempts trigger stuck modal
+      if (consecutiveInvalidRef.current >= 3 && availableTiles.length <= 8) {
+        setTimeout(() => setShowStuckModal(true), 600);
+      }
+    } else {
+      consecutiveInvalidRef.current = 0;
+    }
+    const newEntry = { word: currentWord, score, valid, medical: isMedical };
     const newSubmitted = [...submittedRef.current, newEntry];
     submittedRef.current = newSubmitted;
     setSubmitted(newSubmitted);
@@ -347,8 +518,12 @@ export default function App() {
       const ats = getAllTimeStats();
       ats.words += 1; ats.score += score;
       saveAllTimeStats(ats);
+      // Update stats
+      const updated = updateStats({ score: newTotal, wordScore: score });
+      setStatsData(updated);
       if (currentWord.length > (longestWordToday.length || 0)) { setLongestWordToday(currentWord); awardBadge("longest_day"); }
       if (currentWord.length > (longestWordAllTime.length || 0)) { setLongestWordAllTime(currentWord); localStorage.setItem("ll_longest", currentWord); }
+      if (isMedical) awardBadge("medical_word");
       const validCount = newSubmitted.filter(s => s.valid).length;
       if (validCount === 1) awardBadge("first_word");
       if (score >= 50) awardBadge("score_50");
@@ -379,11 +554,25 @@ export default function App() {
         setConfetti(true);
         setTimeout(() => setConfetti(false), 4000);
         stopTimer();
+        const clearedTime = levelTimeRef.current;
+        clearedLevelsRef.current[level] = clearedTime;
+        const updatedStats = updateStats({ levelTime: clearedTime, levelNum: level, score: totalRef.current });
+        setStatsData(updatedStats);
+        if (playerName.trim()) {
+          const updatedTimes = addLevelTime(playerName, level, clearedTime);
+          setTimeLeaderboard(updatedTimes);
+        }
         if (level < 5) setTimeout(() => setLevelComplete(true), 1200);
         else {
           if (perfectDay) {
             setPerfectDayAchieved(true); awardBadge("perfect_day");
             setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
+            const perfStats = updateStats({ perfectDay: true });
+            setStatsData(perfStats);
+            if (playerName.trim()) {
+              const updatedTimes = addPerfectTime(playerName, totalTimeRef.current);
+              setTimeLeaderboard(updatedTimes);
+            }
             setTimeout(() => setShowNameInput(true), 1000);
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
@@ -403,26 +592,33 @@ export default function App() {
     const newTiles = generateLevelTiles(newLevel, tileCountRef.current, rng, bp);
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
-    levelResetCount.current = 0; resetLevelTimer(); startTimer();
+    levelResetCount.current = 0; consecutiveInvalidRef.current = 0;
+    resetLevelTimer(); startTimer();
     if (newLevel === 2) awardBadge("level_2");
     if (newLevel === 3) awardBadge("level_3");
     if (newLevel === 4) awardBadge("level_4");
     if (newLevel === 5) awardBadge("level_5");
   };
 
-  const handleLevelReset = () => {
-    levelResetCount.current += 1;
-    const rng = seededRandom(getDailySeed() + level * 999);
+  const handleExtendLevel5 = () => {
+    if (totalRef.current < 1000) return;
+    totalRef.current -= 1000; setTotalScore(totalRef.current);
+    setPerfectDay(false);
+    const rng = seededRandom(getDailySeed() + level * 999 + Date.now());
     const count = 42 + (level - 1) * 6;
     const bp = getBonusPositions(count, getBonusCount(level), rng);
-    setTiles(generateLevelTiles(level, tileCountRef.current - count, rng, bp));
-    setSelected([]); resetLevelTimer();
+    setTiles(generateLevelTiles(level, tileCountRef.current, rng, bp));
+    tileCountRef.current += count;
+    setSelected([]); setShowStuckModal(false);
+    consecutiveInvalidRef.current = 0;
+    startTimer();
   };
 
   const handleBuyLevel = () => {
     const cost = LEVEL_BUY_COST[level];
     if (totalRef.current < cost) return;
     totalRef.current -= cost; setTotalScore(totalRef.current);
+    setShowStuckModal(false);
     handleNextLevel(true);
   };
 
@@ -430,12 +626,28 @@ export default function App() {
     if (!playerName.trim()) return;
     localStorage.setItem("ll_name", playerName);
     const board = addScore(playerName, totalRef.current, level, perfectDay);
-    setLeaderboard(board); setShowNameInput(false);
+    setLeaderboard(board);
+    if (Object.keys(clearedLevelsRef.current).length > 0) {
+      let updatedTimes = getTimeLeaderboard();
+      Object.entries(clearedLevelsRef.current).forEach(([lvl, secs]) => {
+        updatedTimes = addLevelTime(playerName, parseInt(lvl), secs);
+      });
+      if (perfectDay) updatedTimes = addPerfectTime(playerName, totalTimeRef.current);
+      setTimeLeaderboard(updatedTimes);
+    }
+    setShowNameInput(false);
   };
 
   const handleNameSave = () => {
     if (playerName.trim()) { localStorage.setItem("ll_name", playerName); setEditingName(false); }
   };
+
+  const medalFor = (i) => i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i+1}.`;
+
+  // Stats helpers
+  const weekPerfectCount = Object.values(statsData.perfectDaysWeek || {}).reduce((a,b)=>a+b,0);
+  const weekHighScore = Math.max(0, ...Object.values(statsData.highScoreWeek || {}));
+  const weekHighWord = Math.max(0, ...Object.values(statsData.highWordWeek || {}));
 
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:60, position:"relative", overflow:"hidden" }}>
@@ -460,6 +672,7 @@ export default function App() {
         .ll-tile:active{transform:scale(0.88)!important;}
         .ll-tile.sel{transform:translateY(-6px) scale(1.12);}
         .ll-tile.used{opacity:0.15;cursor:default;filter:grayscale(1);}
+        .ll-tile.paused-tile{pointer-events:none;opacity:0.5;}
         .ll-tab{border:none;cursor:pointer;transition:all 0.2s;font-family:Georgia,serif;}
         .ll-btn{transition:all 0.14s;font-family:Georgia,serif;border:none;cursor:pointer;}
         .ll-btn:active{transform:scale(0.95);}
@@ -472,79 +685,102 @@ export default function App() {
       <ConfettiCanvas active={confetti && !rainbowConfetti} rainbow={false} />
       <ConfettiCanvas active={rainbowConfetti} rainbow={true} />
 
+      {/* Badge toast */}
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}><div style={{fontSize:28}}>{b.icon}</div><div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div><div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}</div></div>):null; })()}
-      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?"rgba(30,160,70,0.97)":"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?18:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts`:"Not a valid word!"}</div></div>}
+
+      {/* Word flash */}
+      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?18:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts${flash.medical?" 🩺":""}` :"Not a valid word!"}</div></div>}
+
+      {/* Checking */}
       {validating&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>🔍</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>CHECKING…</div></div>}
 
+      {/* Paused overlay */}
+      {paused&&<div style={{position:"fixed",inset:0,zIndex:8000,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={handlePause}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"40px",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
+        <div style={{fontSize:52}}>⏸️</div>
+        <div style={{fontSize:28,fontWeight:"bold",color:"#f6d365",marginTop:8}}>PAUSED</div>
+        <div style={{fontSize:13,color:"#ccc",marginTop:8}}>Tap anywhere to resume</div>
+        <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:4}}>Timers stopped · Music paused</div>
+      </div></div>}
+
+      {/* Reset confirm */}
+      {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
+        <div style={{fontSize:40}}>🔄</div>
+        <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Try Level {level} Again?</div>
+        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Your current progress on this level will be lost.<br/>Your total score is kept.</div>
+        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:14,fontWeight:"bold"}}>Yes, Try Again</button>
+        <button className="ll-btn" onClick={()=>setShowResetConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
+      </div></div>}
+
+      {/* Stuck modal */}
+      {showStuckModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
+        <div style={{fontSize:52}}>😬</div>
+        <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
+        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You've gone as far as you can<br/>with these tiles.</div>
+        <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
+        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:13,fontWeight:"bold"}}>🔄 Try Level Again</button>
+        {level < 5 && (
+          <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>
+        )}
+        {level === 5 && (
+          <button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current < 1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>
+        )}
+        <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowNameInput(true); }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>
+          {level===5?"😬 Give Up — Save Score":"📊 End & Save Score"}
+        </button>
+      </div></div>}
+
       {/* Perfect Day Modal */}
-      {perfectDayAchieved&&(
-        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
-            <div style={{fontSize:56}}>🌈</div>
-            <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
-            <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>You completed all 5 levels<br/>without buying a single one!</div>
-            <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
-              🏆 {playerName||"You"} achieved a Perfect Day!<br/>Day #{dayNum} · Score: {totalScore} pts
-            </div>
-            <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nI completed all 5 levels without buying any!\nDay #${dayNum} · Score: ${totalScore} pts 🏆\nPlay at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
-            <button className="ll-btn replay-btn" onClick={()=>{ setPerfectDayAchieved(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:20,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
-              🏆 PROVE IT! Play Again!
-            </button>
-          </div>
-        </div>
-      )}
+      {perfectDayAchieved&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
+        <div style={{fontSize:56}}>🌈</div>
+        <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
+        <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>You completed all 5 levels<br/>without buying a single one!</div>
+        <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} — Day #{dayNum}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}</div>
+        <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nAll 5 levels cleared, no buys!\nDay #${dayNum} · Score: ${totalScore} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\nPlay at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
+        <button className="ll-btn replay-btn" onClick={()=>{ setPerfectDayAchieved(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:18,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
+          🧠 WOW! You're a Smart One!<br/>Want to Do it Again?
+        </button>
+      </div></div>}
 
       {/* Level Complete Modal */}
-      {levelComplete&&(
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
-            <div style={{fontSize:52}}>🎉</div>
-            <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
-            <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
-            <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
-            <div style={{fontSize:11,color:"#aaa",marginTop:4}}>Time: {formatTime(levelTimeRef.current)}</div>
-            <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
-            <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
-          </div>
-        </div>
-      )}
+      {levelComplete&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
+        <div style={{fontSize:52}}>🎉</div>
+        <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
+        <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
+        <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
+        <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Level Time: {formatTime(levelTimeRef.current)}</div>
+        {timeLeaderboard.levels[level]?.length > 0 && <div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
+        <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
+        <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
+      </div></div>}
 
       {/* Buy Level Modal */}
-      {showBuyModal&&(
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
-            <div style={{fontSize:44}}>🔓</div>
-            <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
-            <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You haven't cleared all tiles yet.<br/>Spend points to unlock the next level.</div>
-            <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
-            <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
-            <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits your Perfect Day</div>
-            <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
-            <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
-          </div>
-        </div>
-      )}
+      {showBuyModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
+        <div style={{fontSize:44}}>🔓</div>
+        <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
+        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You haven't cleared all tiles yet.<br/>Spend points to unlock the next level.</div>
+        <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
+        <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
+        <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits Perfect Day and time records</div>
+        <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
+        <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
+      </div></div>}
 
-      {/* Save Score / Game Complete Modal */}
-      {showNameInput&&(
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
-            <div style={{fontSize:44}}>{perfectDay?"🌈":"🏆"}</div>
-            <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div>
-            <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
-            <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · {formatTime(totalTimeRef.current)}</div>
-            <div style={{fontSize:13,color:"#ccc",marginTop:16,marginBottom:8}}>Save your score to leaderboard:</div>
-            <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
-            <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save to Leaderboard 🏆</button>
-            <button className="ll-btn replay-btn" onClick={()=>{ setShowNameInput(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#ffffff",fontSize:20,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
-              🎮 TRY AGAIN — Go Perfect!
-            </button>
-            <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:10,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
-          </div>
-        </div>
-      )}
+      {/* Save Score Modal */}
+      {showNameInput&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
+        <div style={{fontSize:44}}>{perfectDay?"🌈":"🏆"}</div>
+        <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div>
+        <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
+        <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · ⏱️ {formatTime(totalTimeRef.current)}</div>
+        <div style={{fontSize:13,color:"#ccc",marginTop:16,marginBottom:8}}>Save your score to leaderboard:</div>
+        <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
+        <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save to Leaderboard 🏆</button>
+        <button className="ll-btn replay-btn" onClick={()=>{ setShowNameInput(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#ffffff",fontSize:18,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
+          🎮 WOW! That was SO Close.<br/>Want to Try Again?
+        </button>
+        <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:10,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
+      </div></div>}
 
-      {/* HEADER */}
+      {/* ── HEADER ── */}
       <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"12px 14px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:6}}>
           {editingName?(
@@ -562,7 +798,7 @@ export default function App() {
 
         <div style={{textAlign:"center",marginBottom:6}}>
           <div style={{fontSize:34,fontWeight:"bold",letterSpacing:5,background:"linear-gradient(90deg,#f6d365,#fda085,#f093fb,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>LetterLoot</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:4}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:4,flexWrap:"wrap"}}>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>{today} · Day #{dayNum}</div>
             <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,color:musicOn?"#f6d365":"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif"}}>{musicOn?"🎸 ON":"🎸 OFF"}</button>
             {perfectDay&&<div style={{fontSize:9,color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</div>}
@@ -576,21 +812,27 @@ export default function App() {
           {[1,2,3,4,5].map(l=>(<div key={l} style={{fontSize:8,color:l<=level?"#f6d365":"rgba(255,255,255,0.3)",fontWeight:l===level?"bold":"normal"}}>L{l}</div>))}
         </div>
 
-        <div style={{display:"flex",justifyContent:"center",gap:20,marginBottom:8,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"8px",border:"1px solid rgba(255,255,255,0.12)"}}>
+        {/* Timers + Pause */}
+        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:12,marginBottom:8,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"8px 12px",border:"1px solid rgba(255,255,255,0.12)"}}>
           <div style={{textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(levelTime)}</div>
-            <div style={{fontSize:7,color:"rgba(255,255,255,0.45)",letterSpacing:2}}>LEVEL TIME</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.45)",letterSpacing:2}}>LEVEL</div>
           </div>
-          <div style={{width:1,background:"rgba(255,255,255,0.15)"}}/>
+          <div style={{width:1,background:"rgba(255,255,255,0.15)",height:30}}/>
           <div style={{textAlign:"center"}}>
             <div style={{fontSize:16,fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace"}}>{formatTime(totalTime)}</div>
-            <div style={{fontSize:7,color:"rgba(255,255,255,0.45)",letterSpacing:2}}>TOTAL TIME</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.45)",letterSpacing:2}}>TOTAL</div>
           </div>
+          <div style={{width:1,background:"rgba(255,255,255,0.15)",height:30}}/>
+          <button className="ll-btn" onClick={handlePause} style={{padding:"6px 14px",borderRadius:20,background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.1)",border:`1px solid ${paused?"rgba(0,200,83,0.5)":"rgba(255,255,255,0.2)"}`,color:paused?"#003300":"#f5f0e8",fontSize:13,fontWeight:"bold"}}>
+            {paused?"▶️ Resume":"⏸️ Pause"}
+          </button>
         </div>
 
-        <div style={{display:"flex",gap:5,justifyContent:"center",margin:"6px 0",flexWrap:"wrap"}}>
-          {[["play","🎮 Play"],["badges","🏅 Badges"],["history","📜 History"],["leaderboard","🏆 Board"]].map(([id,label])=>(
-            <button key={id} className="ll-tab" onClick={()=>setTab(id)} style={{padding:"5px 11px",borderRadius:20,fontSize:10,background:tab===id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===id?"#1a1a2e":"#f5f0e8",fontWeight:tab===id?"bold":"normal",border:tab===id?"none":"1px solid rgba(255,255,255,0.18)"}}>{label}</button>
+        {/* Tabs */}
+        <div style={{display:"flex",gap:4,justifyContent:"center",margin:"6px 0",flexWrap:"wrap"}}>
+          {[["play","🎮 Play"],["badges","🏅 Badges"],["history","📜 History"],["leaderboard","🏆 Scores"],["times","⏱️ Times"],["stats","📊 Stats"]].map(([id,label])=>(
+            <button key={id} className="ll-tab" onClick={()=>setTab(id)} style={{padding:"5px 9px",borderRadius:20,fontSize:10,background:tab===id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===id?"#1a1a2e":"#f5f0e8",fontWeight:tab===id?"bold":"normal",border:tab===id?"none":"1px solid rgba(255,255,255,0.18)"}}>{label}</button>
           ))}
         </div>
 
@@ -604,7 +846,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* PLAY TAB */}
+      {/* ── PLAY TAB ── */}
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           <div style={{background:"rgba(255,255,255,0.08)",borderRadius:15,padding:"12px",marginBottom:9,border:"1px solid rgba(255,255,255,0.2)",minHeight:72}}>
@@ -613,7 +855,7 @@ export default function App() {
               {selected.length===0
                 ?<div style={{color:"rgba(255,255,255,0.35)",fontSize:12,fontStyle:"italic"}}>Tap tiles below to start…</div>
                 :selected.map(id=>{ const tile=tiles.find(t=>t.id===id); return(
-                  <div key={id} onClick={()=>!validating&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:8,padding:"6px 10px",display:"flex",flexDirection:"column",alignItems:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.5)",cursor:"pointer",minWidth:34}}>
+                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:8,padding:"6px 10px",display:"flex",flexDirection:"column",alignItems:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.5)",cursor:"pointer",minWidth:34}}>
                     <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:"#fff"}}>{tile?.letter}</div>
                     <div style={{fontSize:8,color:"rgba(255,255,255,0.95)",fontWeight:"bold"}}>{tile?.bonus==="triple"?"3×":tile?.bonus==="double"?"2×":tile?.value}</div>
                   </div>
@@ -630,21 +872,22 @@ export default function App() {
           </div>
 
           <div style={{display:"flex",gap:6,marginBottom:8}}>
-            <button className="ll-btn" onClick={()=>!validating&&setSelected([])} style={{flex:1,padding:"10px",borderRadius:11,fontSize:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#f5f0e8"}}>Clear</button>
-            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating} style={{flex:2,padding:"10px",borderRadius:11,fontSize:13,fontWeight:"bold",background:currentWord.length>=3&&!validating?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating?"pointer":"default"}}>{validating?"Checking…":"Submit Word"}</button>
+            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"10px",borderRadius:11,fontSize:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#f5f0e8"}}>Clear</button>
+            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused} style={{flex:2,padding:"10px",borderRadius:11,fontSize:13,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused?"pointer":"default"}}>{validating?"Checking…":paused?"Paused":"Submit Word"}</button>
           </div>
 
           <div style={{display:"flex",gap:6,marginBottom:9}}>
-            <button className="ll-btn" onClick={handleLevelReset} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.45)",color:"#93c5fd"}}>↺ Reset Level</button>
+            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.45)",color:"#93c5fd"}}>🔄 Try Level Again</button>
             {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.45)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#f6d365":"rgba(255,255,255,0.35)"}}>🔓 Buy L{level+1} ({buyCost}pts)</button>}
           </div>
 
-          <div style={{background:"rgba(255,255,255,0.06)",borderRadius:15,padding:"10px 6px",border:"1px solid rgba(255,255,255,0.15)"}}>
+          <div style={{background:"rgba(255,255,255,0.06)",borderRadius:15,padding:"10px 6px",border:"1px solid rgba(255,255,255,0.15)",position:"relative"}}>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",letterSpacing:2,marginBottom:8,textAlign:"center"}}>LEVEL {level} · {availableTiles.length} of {tiles.length} tiles remaining</div>
+            {paused&&<div style={{position:"absolute",inset:0,borderRadius:15,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}><div style={{fontSize:28,color:"rgba(255,255,255,0.4)"}}>⏸️ PAUSED</div></div>}
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:4,marginBottom:4}}>
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; return(
-                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}`} onClick={()=>!tile.used&&!validating&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:42,height:50,background:tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:9,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.65)":isDouble?"1px solid rgba(255,215,0,0.65)":"1px solid rgba(255,255,255,0.2)"}}>
+                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:42,height:50,background:tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:9,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.65)":isDouble?"1px solid rgba(255,215,0,0.65)":"1px solid rgba(255,255,255,0.2)"}}>
                     <div style={{fontSize:18,fontWeight:"bold",lineHeight:1,color:tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
                     <div style={{fontSize:8,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
                   </div>
@@ -654,14 +897,13 @@ export default function App() {
           </div>
 
           {longestWordToday&&<div style={{textAlign:"center",marginTop:8,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters){longestWordAllTime&&longestWordAllTime.length>longestWordToday.length&&<span> · All-time: <span style={{color:"#f093fb"}}>{longestWordAllTime}</span></span>}</div>}
-
           <div style={{textAlign:"center",marginTop:10}}>
             <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.35)",padding:"6px 16px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
           </div>
         </div>
       )}
 
-      {/* BADGES TAB */}
+      {/* ── BADGES TAB ── */}
       {tab==="badges"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
@@ -682,16 +924,22 @@ export default function App() {
         </div>
       )}
 
-      {/* HISTORY TAB */}
+      {/* ── HISTORY TAB ── */}
       {tab==="history"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {submitted.length===0
             ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No words yet — go loot some letters!</div>
             :<div style={{display:"flex",flexDirection:"column",gap:6}}>
               {[...submitted].reverse().map((s,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?"rgba(80,220,100,0.1)":"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?"rgba(80,220,100,0.3)":"rgba(220,80,80,0.25)"}`,borderRadius:11,padding:"9px 13px"}}>
-                  <div><div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginTop:1}}>{s.valid?"Valid ✓":"Invalid ✗"}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontSize:18,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>{s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>points</div>}</div>
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:11,padding:"9px 13px"}}>
+                  <div>
+                    <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}{s.medical?" 🩺":""}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginTop:1}}>{s.valid?(s.medical?"Medical ✓":"Valid ✓"):"Invalid ✗"}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:18,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
+                    {s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>points</div>}
+                  </div>
                 </div>
               ))}
               <div style={{textAlign:"center",padding:"12px",background:"rgba(255,255,255,0.07)",borderRadius:12,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>
@@ -703,15 +951,15 @@ export default function App() {
         </div>
       )}
 
-      {/* LEADERBOARD TAB */}
+      {/* ── SCORES LEADERBOARD ── */}
       {tab==="leaderboard"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <div style={{textAlign:"center",marginBottom:14}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>TOP LOOTERS</div></div>
+          <div style={{textAlign:"center",marginBottom:14}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>TOP LOOTERS — SCORES</div></div>
           {leaderboard.length===0
-            ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No scores yet — clear a level to appear here!</div>
+            ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No scores yet!</div>
             :leaderboard.map((entry,i)=>(
               <div key={i} style={{display:"flex",alignItems:"center",gap:12,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.1))":"rgba(255,255,255,0.05)",border:i===0?"1px solid rgba(246,211,101,0.4)":"1px solid rgba(255,255,255,0.13)",borderRadius:12,padding:"11px 14px",marginBottom:7}}>
-                <div style={{fontSize:20,minWidth:30,textAlign:"center"}}>{i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`}</div>
+                <div style={{fontSize:20,minWidth:30,textAlign:"center"}}>{medalFor(i)}</div>
                 <div style={{flex:1}}>
                   <div style={{fontSize:14,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}{entry.perfectDay?" 🌈":""}</div>
                   <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>Level {entry.level} · {entry.date}</div>
@@ -721,7 +969,154 @@ export default function App() {
             ))
           }
           <div style={{textAlign:"center",marginTop:12}}>
-            <button onClick={()=>{saveLeaderboard([]);setLeaderboard([]);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Clear Leaderboard</button>
+            <button onClick={()=>{saveLeaderboard([]);setLeaderboard([]);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Clear Score Board</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── TIMES TAB ── */}
+      {tab==="times"&&(
+        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          <div style={{textAlign:"center",marginBottom:10}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>TOP LOOTERS — SPEED</div></div>
+          <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:14}}>
+            {[["levels","📊 By Level"],["perfect","🌈 Perfect Day"]].map(([id,label])=>(
+              <button key={id} className="ll-tab" onClick={()=>setTimeSubTab(id)} style={{padding:"6px 14px",borderRadius:20,fontSize:11,background:timeSubTab===id?"linear-gradient(135deg,#60a5fa,#a78bfa)":"rgba(255,255,255,0.1)",color:timeSubTab===id?"#fff":"#f5f0e8",fontWeight:timeSubTab===id?"bold":"normal",border:timeSubTab===id?"none":"1px solid rgba(255,255,255,0.18)"}}>{label}</button>
+            ))}
+          </div>
+          {timeSubTab==="levels"&&(
+            <div>
+              <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:12}}>
+                {[1,2,3,4,5].map(l=>(
+                  <button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:40,height:40,borderRadius:10,fontSize:13,fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.6)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>
+                ))}
+              </div>
+              <div style={{background:"rgba(255,255,255,0.04)",borderRadius:14,padding:"10px",border:"1px solid rgba(255,255,255,0.1)",marginBottom:8}}>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",letterSpacing:2,marginBottom:10,textAlign:"center"}}>FASTEST LEVEL {selectedLevelView} CLEARS</div>
+                {!timeLeaderboard.levels[selectedLevelView]?.length
+                  ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:12,fontStyle:"italic",padding:"16px 0"}}>No times yet for Level {selectedLevelView}</div>
+                  :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:i===0?"rgba(96,165,250,0.12)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"9px 12px",marginBottom:6}}>
+                      <div style={{fontSize:18,minWidth:28,textAlign:"center"}}>{medalFor(i)}</div>
+                      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
+                      <div style={{fontSize:18,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
+                    </div>
+                  ))
+                }
+              </div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",textAlign:"center",fontStyle:"italic"}}>Board-clear completions only — no bought levels</div>
+            </div>
+          )}
+          {timeSubTab==="perfect"&&(
+            <div>
+              <div style={{background:"rgba(255,255,255,0.04)",borderRadius:14,padding:"10px",border:"1px solid rgba(255,255,255,0.1)",marginBottom:8}}>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",letterSpacing:2,marginBottom:10,textAlign:"center"}}>FASTEST PERFECT DAY — ALL 5 LEVELS</div>
+                {!timeLeaderboard.perfect?.length
+                  ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:12,fontStyle:"italic",padding:"16px 0"}}>No Perfect Day times yet!<br/>Clear all 5 levels without buying to qualify.</div>
+                  :timeLeaderboard.perfect.map((entry,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.12),rgba(253,160,133,0.08))":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(246,211,101,0.3)":"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"9px 12px",marginBottom:6}}>
+                      <div style={{fontSize:18,minWidth:28,textAlign:"center"}}>{medalFor(i)}</div>
+                      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
+                      <div style={{fontSize:18,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
+                    </div>
+                  ))
+                }
+              </div>
+              <div style={{textAlign:"center",marginTop:12}}>
+                <button onClick={()=>{saveTimeLeaderboard({levels:{"1":[],"2":[],"3":[],"4":[],"5":[]},perfect:[]});setTimeLeaderboard({levels:{"1":[],"2":[],"3":[],"4":[],"5":[]},perfect:[]});}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Clear Time Records</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── STATS TAB ── */}
+      {tab==="stats"&&(
+        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+
+          {/* Days Played */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>📅 DAYS PLAYED</div>
+            <div style={{display:"flex",justifyContent:"center"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:40,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Total Days</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Perfect Days */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAYS</div>
+            <div style={{display:"flex",justifyContent:"space-around"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:28,fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>This Week</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:28,fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>All Time</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Highest Game Score */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>🏆 HIGHEST GAME SCORE</div>
+            <div style={{display:"flex",justifyContent:"space-around"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday || "—"}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Today</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:"bold",color:"#fda085"}}>{weekHighScore || "—"}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>This Week</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime || "—"}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>All Time</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Highest Word Score */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
+            <div style={{display:"flex",justifyContent:"space-around"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday || "—"}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Today</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord || "—"}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>This Week</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:22,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime || "—"}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>All Time</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Fastest Level Times */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>⏱️ YOUR FASTEST LEVEL TIMES</div>
+            {[1,2,3,4,5].map(l=>(
+              <div key={l} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:l<5?"1px solid rgba(255,255,255,0.06)":"none"}}>
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.7)"}}>Level {l}</div>
+                <div style={{fontSize:15,fontWeight:"bold",color:statsData.fastestLevels[l]?"#60a5fa":"rgba(255,255,255,0.25)",fontFamily:"monospace"}}>
+                  {statsData.fastestLevels[l] ? formatTime(statsData.fastestLevels[l]) : "—"}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{textAlign:"center",marginTop:4}}>
+            <button onClick={()=>{ saveStats({daysPlayed:0,lastPlayedDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null}}); setStatsData(getStats()); }} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
           </div>
         </div>
       )}

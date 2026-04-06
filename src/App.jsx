@@ -8,6 +8,7 @@ const SCORE_MAP = {
   X:15,J:16,Q:20,Z:22
 };
 "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach(l => { LETTER_VALUES[l] = SCORE_MAP[l] || 5; });
+
 function seededRandom(seed) {
   let s = seed;
   return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
@@ -118,7 +119,6 @@ async function validateWordWithAI(word) {
   } catch { return word.length >= 3; }
 }
 
-// ── Original Guitar Music (Karplus-Strong string synthesis) ───
 function createGuitar(ctx) {
   function pluck(freq, time, duration = 2.0, gain = 0.35) {
     const bufferSize = Math.round(ctx.sampleRate / freq);
@@ -309,6 +309,21 @@ export default function App() {
     });
   }, []);
 
+  const handleFullReset = useCallback(() => {
+    const rng = seededRandom(getDailySeed());
+    const bp = getBonusPositions(42, getBonusCount(1), rng);
+    setTiles(generateLevelTiles(1, 0, rng, bp));
+    tileCountRef.current = 42; setLevel(1); setSelected([]);
+    setSubmitted([]); submittedRef.current = [];
+    setTotalScore(0); totalRef.current = 0;
+    setStreak(0); setBadges([]); setShowBadge(null);
+    setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
+    setPerfectDay(true); setPerfectDayAchieved(false); setLongestWordToday("");
+    levelResetCount.current = 0;
+    stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
+    setLevelTime(0); setTotalTime(0); startTimer();
+  }, [startTimer, stopTimer]);
+
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating) return;
     setValidating(true);
@@ -418,21 +433,6 @@ export default function App() {
     setLeaderboard(board); setShowNameInput(false);
   };
 
-  const handleFullReset = () => {
-    const rng = seededRandom(getDailySeed());
-    const bp = getBonusPositions(42, getBonusCount(1), rng);
-    setTiles(generateLevelTiles(1, 0, rng, bp));
-    tileCountRef.current = 42; setLevel(1); setSelected([]);
-    setSubmitted([]); submittedRef.current = [];
-    setTotalScore(0); totalRef.current = 0;
-    setStreak(0); setBadges([]); setShowBadge(null);
-    setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
-    setPerfectDay(true); setPerfectDayAchieved(false); setLongestWordToday("");
-    levelResetCount.current = 0;
-    stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
-    setLevelTime(0); setTotalTime(0); startTimer();
-  };
-
   const handleNameSave = () => {
     if (playerName.trim()) { localStorage.setItem("ll_name", playerName); setEditingName(false); }
   };
@@ -455,6 +455,7 @@ export default function App() {
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
         @keyframes rainbow{0%{color:#ff0000}16%{color:#ff8800}33%{color:#ffff00}50%{color:#00ff00}66%{color:#0088ff}83%{color:#8800ff}100%{color:#ff0000}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         .ll-tile{transition:all 0.14s ease;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .ll-tile:active{transform:scale(0.88)!important;}
         .ll-tile.sel{transform:translateY(-6px) scale(1.12);}
@@ -465,6 +466,7 @@ export default function App() {
         .bonus-double{box-shadow:0 0 12px 3px rgba(255,215,0,0.8)!important;}
         .bonus-triple{box-shadow:0 0 14px 4px rgba(255,100,255,0.9)!important;}
         .perfect-text{animation:rainbow 2s linear infinite;}
+        .replay-btn{animation:provethat 2s ease-in-out infinite;}
       `}</style>
 
       <ConfettiCanvas active={confetti && !rainbowConfetti} rainbow={false} />
@@ -474,14 +476,75 @@ export default function App() {
       {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?"rgba(30,160,70,0.97)":"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?18:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts`:"Not a valid word!"}</div></div>}
       {validating&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>🔍</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>CHECKING…</div></div>}
 
-      {perfectDayAchieved&&(<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}><div style={{fontSize:56}}>🌈</div><div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div><div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>You completed all 5 levels<br/>without buying a single one!</div><div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} achieved a Perfect Day!<br/>Day #{dayNum} · Score: {totalScore} pts</div><button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nI completed all 5 levels without buying any!\nDay #${dayNum} · Score: ${totalScore} pts 🏆\nPlay at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button><button className="ll-btn" onClick={()=>setPerfectDayAchieved(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Continue</button></div></div>)}
+      {/* Perfect Day Modal */}
+      {perfectDayAchieved&&(
+        <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
+            <div style={{fontSize:56}}>🌈</div>
+            <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
+            <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>You completed all 5 levels<br/>without buying a single one!</div>
+            <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
+              🏆 {playerName||"You"} achieved a Perfect Day!<br/>Day #{dayNum} · Score: {totalScore} pts
+            </div>
+            <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nI completed all 5 levels without buying any!\nDay #${dayNum} · Score: ${totalScore} pts 🏆\nPlay at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
+            <button className="ll-btn replay-btn" onClick={()=>{ setPerfectDayAchieved(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:20,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
+              🏆 PROVE IT! Play Again!
+            </button>
+          </div>
+        </div>
+      )}
 
-      {levelComplete&&(<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}><div style={{fontSize:52}}>🎉</div><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div><div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div><div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div><div style={{fontSize:11,color:"#aaa",marginTop:4}}>Time: {formatTime(levelTimeRef.current)}</div><div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div><button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button></div></div>)}
+      {/* Level Complete Modal */}
+      {levelComplete&&(
+        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
+            <div style={{fontSize:52}}>🎉</div>
+            <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
+            <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
+            <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
+            <div style={{fontSize:11,color:"#aaa",marginTop:4}}>Time: {formatTime(levelTimeRef.current)}</div>
+            <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
+            <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
+          </div>
+        </div>
+      )}
 
-      {showBuyModal&&(<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}><div style={{fontSize:44}}>🔓</div><div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div><div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You haven't cleared all tiles yet.<br/>Spend points to unlock the next level.</div><div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div><div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div><div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits your Perfect Day</div><button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button><button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button></div></div>)}
+      {/* Buy Level Modal */}
+      {showBuyModal&&(
+        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
+            <div style={{fontSize:44}}>🔓</div>
+            <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
+            <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You haven't cleared all tiles yet.<br/>Spend points to unlock the next level.</div>
+            <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
+            <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
+            <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits your Perfect Day</div>
+            <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
+            <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
+          </div>
+        </div>
+      )}
 
-      {showNameInput&&(<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}><div style={{fontSize:44}}>{perfectDay?"🌈":"🏆"}</div><div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div><div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div><div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · {formatTime(totalTimeRef.current)}</div><div style={{fontSize:13,color:"#ccc",marginTop:16,marginBottom:8}}>Save your score to leaderboard:</div><input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/><button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save to Leaderboard 🏆</button><button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:12}}>Skip</button></div></div>)}
+      {/* Save Score / Game Complete Modal */}
+      {showNameInput&&(
+        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
+            <div style={{fontSize:44}}>{perfectDay?"🌈":"🏆"}</div>
+            <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div>
+            <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
+            <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · {formatTime(totalTimeRef.current)}</div>
+            <div style={{fontSize:13,color:"#ccc",marginTop:16,marginBottom:8}}>Save your score to leaderboard:</div>
+            <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
+            <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save to Leaderboard 🏆</button>
+            <button className="ll-btn replay-btn" onClick={()=>{ setShowNameInput(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#ffffff",fontSize:20,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
+              🎮 TRY AGAIN — Go Perfect!
+            </button>
+            <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:10,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
+          </div>
+        </div>
+      )}
 
+      {/* HEADER */}
       <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"12px 14px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:6}}>
           {editingName?(
@@ -500,7 +563,7 @@ export default function App() {
         <div style={{textAlign:"center",marginBottom:6}}>
           <div style={{fontSize:34,fontWeight:"bold",letterSpacing:5,background:"linear-gradient(90deg,#f6d365,#fda085,#f093fb,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>LetterLoot</div>
           <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,marginTop:4}}>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>LEVEL {level}/5 · DAY #{dayNum}</div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>{today} · Day #{dayNum}</div>
             <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,color:musicOn?"#f6d365":"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif"}}>{musicOn?"🎸 ON":"🎸 OFF"}</button>
             {perfectDay&&<div style={{fontSize:9,color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</div>}
           </div>
@@ -541,6 +604,7 @@ export default function App() {
         </div>
       </div>
 
+      {/* PLAY TAB */}
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           <div style={{background:"rgba(255,255,255,0.08)",borderRadius:15,padding:"12px",marginBottom:9,border:"1px solid rgba(255,255,255,0.2)",minHeight:72}}>
@@ -590,12 +654,14 @@ export default function App() {
           </div>
 
           {longestWordToday&&<div style={{textAlign:"center",marginTop:8,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters){longestWordAllTime&&longestWordAllTime.length>longestWordToday.length&&<span> · All-time: <span style={{color:"#f093fb"}}>{longestWordAllTime}</span></span>}</div>}
+
           <div style={{textAlign:"center",marginTop:10}}>
             <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.35)",padding:"6px 16px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
           </div>
         </div>
       )}
 
+      {/* BADGES TAB */}
       {tab==="badges"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
@@ -616,6 +682,7 @@ export default function App() {
         </div>
       )}
 
+      {/* HISTORY TAB */}
       {tab==="history"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {submitted.length===0
@@ -636,6 +703,7 @@ export default function App() {
         </div>
       )}
 
+      {/* LEADERBOARD TAB */}
       {tab==="leaderboard"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           <div style={{textAlign:"center",marginBottom:14}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>TOP LOOTERS</div></div>

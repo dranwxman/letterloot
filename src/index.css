@@ -2,13 +2,67 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- Primary SEO -->
+    <title>LetterLoot — Daily Word Puzzle Game</title>
+    <meta name="description" content="A free daily word puzzle where every letter has a point value. Spell words, score points, earn badges and climb the leaderboard. Play free in your browser!" />
+    <meta name="keywords" content="word game, daily puzzle, letter game, word puzzle, free word game, Wordle alternative, Scrabble, brain game, word score game" />
+    <meta name="author" content="LetterLoot" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://letterloot-6k6v.vercel.app" />
+
+    <!-- Open Graph (Facebook, Instagram, LinkedIn) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://letterloot-6k6v.vercel.app" />
+    <meta property="og:title" content="LetterLoot — Every letter has a value. Do you?" />
+    <meta property="og:description" content="A free daily word puzzle where every letter has a point value. Spell words, score big, earn badges across 5 levels. Play free — no download needed!" />
+    <meta property="og:image" content="https://letterloot-6k6v.vercel.app/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="LetterLoot" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://letterloot-6k6v.vercel.app" />
+    <meta name="twitter:title" content="LetterLoot — Every letter has a value. Do you?" />
+    <meta name="twitter:description" content="Free daily word puzzle. Spell words, score points, earn badges across 5 levels. Play in your browser — no download needed!" />
+    <meta name="twitter:image" content="https://letterloot-6k6v.vercel.app/og-image.png" />
+
+    <!-- iPhone / PWA -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="LetterLoot" />
     <meta name="theme-color" content="#0f0c29" />
-    <title>LetterLoot</title>
+
+    <!-- Schema.org structured data for Google -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "LetterLoot",
+      "description": "A free daily word puzzle game where every letter has a point value. Spell words from your tiles to score points, earn badges, and complete 5 levels.",
+      "url": "https://letterloot-6k6v.vercel.app",
+      "applicationCategory": "GameApplication",
+      "genre": "Word Game",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "Daily changing puzzles",
+        "5 difficulty levels",
+        "AI word validation",
+        "Badges and achievements",
+        "Leaderboard",
+        "No download required"
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,8 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 const LETTER_VALUES = {};
-"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach((l, i) => { LETTER_VALUES[l] = i + 1; });
-
+const SCORE_MAP = {
+  E:3,T:3,A:4,I:4,O:4,N:4,S:5,R:5,
+  H:6,L:6,D:6,C:7,U:7,M:7,F:8,P:8,
+  G:9,W:9,Y:9,B:10,V:11,K:12,
+  X:15,J:16,Q:20,Z:22
+};
+"ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach(l => { LETTER_VALUES[l] = SCORE_MAP[l] || 5; });
 function seededRandom(seed) {
   let s = seed;
   return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };

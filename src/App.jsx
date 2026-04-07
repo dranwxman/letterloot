@@ -12,7 +12,6 @@ const SCORE_MAP = {
 const MW_COLLEGIATE_KEY = "6c41ef2c-8c1d-440a-b04a-24e623cf68e1";
 const MW_MEDICAL_KEY    = "05a10875-f553-43f6-be64-6dafcdb4152e";
 
-// ── UTC-based daily seed ───────────────────────────────────────
 function getDailySeed() {
   const d = new Date();
   return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
@@ -42,8 +41,6 @@ function formatTime(seconds) {
   const s = (seconds % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
 }
-
-// ── Long word bonus scoring ────────────────────────────────────
 function getLongWordBonus(length) {
   if (length < 8) return 0;
   if (length === 8) return 1;
@@ -54,7 +51,6 @@ function getLongWordBonus(length) {
   if (length === 13) return 25;
   return 25 + (length - 13) * 10;
 }
-
 function seededRandom(seed) {
   let s = seed;
   return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
@@ -80,7 +76,6 @@ function generateLevelTiles(level, startId, rng, bonusPositions) {
   const pool = buildPool(rng);
   const count = 42 + (level - 1) * 6;
   let letters = pool.slice(0, count);
-  // Guarantee U if Q present
   if (letters.includes("Q") && !letters.includes("U")) {
     const replaceIdx = letters.findIndex(l => !["Q","A","E","I","O","U"].includes(l));
     if (replaceIdx !== -1) letters[replaceIdx] = "U";
@@ -106,44 +101,43 @@ const VOWELS = new Set(["A","E","I","O","U"]);
 const LEVEL_BUY_COST = [0, 250, 500, 750, 1000, 1000];
 
 const BADGE_DEFS = [
-  { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",          cat:"core" },
-  { id:"score_50",     icon:"🔥", label:"On Fire",         desc:"Score 50+ in one word",           cat:"core" },
-  { id:"score_100",    icon:"💯", label:"Century",         desc:"Score 100+ in one word",          cat:"core" },
-  { id:"score_200",    icon:"🚀", label:"Rocket",          desc:"Score 200+ in one word",          cat:"core" },
-  { id:"long_word",    icon:"📏", label:"Long Haul",       desc:"Use 7+ letters in a word",        cat:"core" },
-  { id:"streak_3",     icon:"⚡", label:"Streak x3",      desc:"3 valid words in a row",          cat:"core" },
-  { id:"streak_5",     icon:"🌪️", label:"Streak x5",      desc:"5 valid words in a row",          cat:"core" },
-  { id:"daily_500",    icon:"🏆", label:"Loot Master",     desc:"500+ total daily score",          cat:"core" },
-  { id:"daily_1000",   icon:"💰", label:"Treasure Chest",  desc:"1000+ total daily score",         cat:"core" },
-  { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                cat:"core" },
-  { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",             cat:"core" },
-  { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",   cat:"core" },
-  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",          cat:"core" },
-  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",          cat:"core" },
-  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",        cat:"core" },
-  { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                   cat:"level" },
-  { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                   cat:"level" },
-  { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                   cat:"level" },
-  { id:"level_5",      icon:"💎", label:"Diamond",         desc:"Reach Level 5",                   cat:"level" },
-  { id:"all_tiles_1",  icon:"🌟", label:"Clear L1",        desc:"Use all tiles on Level 1",        cat:"level" },
-  { id:"all_tiles_2",  icon:"🌟", label:"Clear L2",        desc:"Use all tiles on Level 2",        cat:"level" },
-  { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",        cat:"level" },
-  { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",        cat:"level" },
-  { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",        cat:"level" },
-  { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",  cat:"level" },
-  { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min", cat:"word" },
-  { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting",cat:"word" },
-  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",    cat:"word" },
-  { id:"points_1k",    icon:"💫", label:"1K Points",       desc:"Accumulate 1,000 lifetime points",cat:"alltime" },
-  { id:"points_5k",    icon:"⭐", label:"5K Points",       desc:"Accumulate 5,000 lifetime points",cat:"alltime" },
+  { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",           cat:"core" },
+  { id:"score_50",     icon:"🔥", label:"On Fire",         desc:"Score 50+ in one word",            cat:"core" },
+  { id:"score_100",    icon:"💯", label:"Century",         desc:"Score 100+ in one word",           cat:"core" },
+  { id:"score_200",    icon:"🚀", label:"Rocket",          desc:"Score 200+ in one word",           cat:"core" },
+  { id:"long_word",    icon:"📏", label:"Long Haul",       desc:"Use 7+ letters in a word",         cat:"core" },
+  { id:"streak_3",     icon:"⚡", label:"Streak x3",      desc:"3 valid words in a row",           cat:"core" },
+  { id:"streak_5",     icon:"🌪️", label:"Streak x5",      desc:"5 valid words in a row",           cat:"core" },
+  { id:"daily_500",    icon:"🏆", label:"Loot Master",     desc:"500+ total daily score",           cat:"core" },
+  { id:"daily_1000",   icon:"💰", label:"Treasure Chest",  desc:"1000+ total daily score",          cat:"core" },
+  { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                 cat:"core" },
+  { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",              cat:"core" },
+  { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",    cat:"core" },
+  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",           cat:"core" },
+  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",           cat:"core" },
+  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",         cat:"core" },
+  { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                    cat:"level" },
+  { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                    cat:"level" },
+  { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                    cat:"level" },
+  { id:"level_5",      icon:"💎", label:"Diamond",         desc:"Reach Level 5",                    cat:"level" },
+  { id:"all_tiles_1",  icon:"🌟", label:"Clear L1",        desc:"Use all tiles on Level 1",         cat:"level" },
+  { id:"all_tiles_2",  icon:"🌟", label:"Clear L2",        desc:"Use all tiles on Level 2",         cat:"level" },
+  { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",         cat:"level" },
+  { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",         cat:"level" },
+  { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",         cat:"level" },
+  { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",   cat:"level" },
+  { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min",  cat:"word" },
+  { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting", cat:"word" },
+  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",     cat:"word" },
+  { id:"points_1k",    icon:"💫", label:"1K Points",       desc:"Accumulate 1,000 lifetime points", cat:"alltime" },
+  { id:"points_5k",    icon:"⭐", label:"5K Points",       desc:"Accumulate 5,000 lifetime points", cat:"alltime" },
   { id:"points_10k",   icon:"🌠", label:"10K Points",      desc:"Accumulate 10,000 lifetime points",cat:"alltime" },
-  { id:"streak_7",     icon:"🔥", label:"Week Streak",     desc:"Play 7 days in a row",            cat:"alltime" },
-  { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",           cat:"alltime" },
-  { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",  cat:"alltime" },
-  { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time", cat:"alltime" },
+  { id:"streak_7",     icon:"🔥", label:"Week Streak",     desc:"Play 7 days in a row",             cat:"alltime" },
+  { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",            cat:"alltime" },
+  { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",   cat:"alltime" },
+  { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",  cat:"alltime" },
 ];
 
-// ── Dictionary validation ──────────────────────────────────────
 const wordCache = {};
 async function validateWord(word) {
   const key = word.toLowerCase();
@@ -152,24 +146,19 @@ async function validateWord(word) {
     const collRes = await fetch(`https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`);
     const collData = await collRes.json();
     if (Array.isArray(collData) && collData.length > 0 && typeof collData[0] === "object" && collData[0].shortdef) {
-      wordCache[key] = { valid: true, source: "collegiate" };
-      return wordCache[key];
+      wordCache[key] = { valid: true, source: "collegiate" }; return wordCache[key];
     }
     const medRes = await fetch(`https://www.dictionaryapi.com/api/v3/references/medical/json/${encodeURIComponent(key)}?key=${MW_MEDICAL_KEY}`);
     const medData = await medRes.json();
     if (Array.isArray(medData) && medData.length > 0 && typeof medData[0] === "object" && medData[0].shortdef) {
-      wordCache[key] = { valid: true, source: "medical" };
-      return wordCache[key];
+      wordCache[key] = { valid: true, source: "medical" }; return wordCache[key];
     }
-    wordCache[key] = { valid: false, source: null };
-    return wordCache[key];
+    wordCache[key] = { valid: false, source: null }; return wordCache[key];
   } catch {
-    wordCache[key] = { valid: word.length >= 3, source: "fallback" };
-    return wordCache[key];
+    wordCache[key] = { valid: word.length >= 3, source: "fallback" }; return wordCache[key];
   }
 }
 
-// ── Smart stuck detection ──────────────────────────────────────
 async function hasValidWordsRemaining(tiles) {
   const available = tiles.filter(t => !t.used).map(t => t.letter);
   if (available.length < 3) return false;
@@ -190,7 +179,6 @@ async function hasValidWordsRemaining(tiles) {
   return false;
 }
 
-// ── Guitar music ───────────────────────────────────────────────
 function createGuitar(ctx) {
   function pluck(freq, time, duration = 2.0, gain = 0.35) {
     const bufferSize = Math.round(ctx.sampleRate / freq);
@@ -226,7 +214,6 @@ const MELODY = [
 const BEAT_DUR = 0.32;
 const LOOP_DUR = 16 * BEAT_DUR;
 
-// ── Confetti ───────────────────────────────────────────────────
 function ConfettiCanvas({ active, rainbow }) {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
@@ -266,25 +253,20 @@ function ConfettiCanvas({ active, rainbow }) {
   return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:9999, pointerEvents:"none" }} />;
 }
 
-// ── Lifetime points ────────────────────────────────────────────
 function getLifetimePoints() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_lifetime") || "null");
     if (!data) return { total: 0, lastPlayedDate: null };
-    // Check if missed a day — reset to zero
     const todayKey = getTodayKey();
     const yesterdayKey = getYesterdayKey();
     if (data.lastPlayedDate && data.lastPlayedDate !== todayKey && data.lastPlayedDate !== yesterdayKey) {
-      // Missed at least one day — reset
       return { total: 0, lastPlayedDate: null, wasReset: true };
     }
     return data;
   } catch { return { total: 0, lastPlayedDate: null }; }
 }
 function saveLifetimePoints(total) {
-  try {
-    localStorage.setItem("ll_lifetime", JSON.stringify({ total, lastPlayedDate: getTodayKey() }));
-  } catch {}
+  try { localStorage.setItem("ll_lifetime", JSON.stringify({ total, lastPlayedDate: getTodayKey() })); } catch {}
 }
 function addLifetimePoints(pts) {
   const data = getLifetimePoints();
@@ -293,7 +275,6 @@ function addLifetimePoints(pts) {
   return newTotal;
 }
 
-// ── Storage helpers ────────────────────────────────────────────
 function getTimeLeaderboard() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_times") || "null");
@@ -329,7 +310,6 @@ function saveAllTimeStats(stats) {
   try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {}
 }
 
-// ── Stats helpers ──────────────────────────────────────────────
 function getStats() {
   const def = {
     daysPlayed:0, lastPlayedDate:null,
@@ -357,23 +337,15 @@ function updateStats(updates) {
   if (stats.lastPlayedDate !== todayKey) {
     stats.daysPlayed += 1;
     const yesterdayKey = getYesterdayKey();
-    if (stats.lastStreakDate === yesterdayKey) {
-      stats.currentStreak += 1;
-    } else {
-      stats.currentStreak = 1;
-    }
+    if (stats.lastStreakDate === yesterdayKey) { stats.currentStreak += 1; }
+    else { stats.currentStreak = 1; }
     if (stats.currentStreak > stats.longestStreak) stats.longestStreak = stats.currentStreak;
     stats.lastStreakDate = todayKey;
     stats.lastPlayedDate = todayKey;
-    stats.highScoreToday = 0;
-    stats.highWordToday = 0;
-    stats.longestWordToday = "";
+    stats.highScoreToday = 0; stats.highWordToday = 0; stats.longestWordToday = "";
   }
   if (stats.weekKey !== weekKey) {
-    stats.weekKey = weekKey;
-    stats.perfectDaysWeek = {};
-    stats.highScoreWeek = {};
-    stats.highWordWeek = {};
+    stats.weekKey = weekKey; stats.perfectDaysWeek = {}; stats.highScoreWeek = {}; stats.highWordWeek = {};
   }
   if (updates.score !== undefined) {
     if (updates.score > stats.highScoreToday) stats.highScoreToday = updates.score;
@@ -406,11 +378,9 @@ function updateStats(updates) {
     const lvl = String(updates.levelNum);
     if (!stats.fastestLevels[lvl] || updates.levelTime < stats.fastestLevels[lvl]) stats.fastestLevels[lvl] = updates.levelTime;
   }
-  saveStats(stats);
-  return stats;
+  saveStats(stats); return stats;
 }
 
-// ── Save/restore session ───────────────────────────────────────
 function saveSession(state) {
   try { localStorage.setItem("ll_session", JSON.stringify({ ...state, savedDate: getTodayKey() })); } catch {}
 }
@@ -421,19 +391,14 @@ function loadSession() {
     return data;
   } catch { return null; }
 }
-function clearSession() {
-  try { localStorage.removeItem("ll_session"); } catch {}
-}
+function clearSession() { try { localStorage.removeItem("ll_session"); } catch {} }
 
-// ── Notifications ──────────────────────────────────────────────
 function scheduleNotifications() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  // Clear any previously scheduled notifications (we use setTimeout IDs stored in localStorage)
   const now = new Date();
   const midnight = new Date();
-  midnight.setHours(24, 0, 0, 0); // local midnight
+  midnight.setHours(24, 0, 0, 0);
   const msToMidnight = midnight - now;
-  // Schedule at 12h, 9h, 6h before midnight
   const offsets = [12 * 3600000, 9 * 3600000, 6 * 3600000];
   const messages = [
     "⏰ 12 hours left! Don't let your points disappear at midnight!",
@@ -444,16 +409,8 @@ function scheduleNotifications() {
     const msUntil = msToMidnight - offset;
     if (msUntil > 0) {
       setTimeout(() => {
-        // Only fire if game not completed today
-        const session = loadSession();
         const todayDone = localStorage.getItem("ll_completed_today") === getTodayKey();
-        if (!todayDone) {
-          new Notification("🎮 LetterLoot", {
-            body: messages[i],
-            icon: "/favicon.svg",
-            badge: "/favicon.svg",
-          });
-        }
+        if (!todayDone) new Notification("🎮 LetterLoot", { body: messages[i], icon: "/favicon.svg" });
       }, msUntil);
     }
   });
@@ -467,66 +424,29 @@ async function requestNotificationPermission() {
   return false;
 }
 
-// ── First open tour ────────────────────────────────────────────
 const TOUR_STEPS = [
-  {
-    emoji: "🎮",
-    title: "Welcome to LetterLoot!",
-    body: "A daily word puzzle where every letter has a point value. Fresh tiles every day at midnight — same board for every player worldwide!",
-  },
-  {
-    emoji: "✨",
-    title: "Letters Don't Need to Connect!",
-    body: "Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!",
-  },
-  {
-    emoji: "💎",
-    title: "Every Letter Has a Value",
-    body: "Common letters (E, T, A) score 3-5 pts. Rare letters score big — Q=20, Z=22, J=16! Gold tiles = 2×, Purple = 3× your score!",
-  },
-  {
-    emoji: "🕹️",
-    title: "What the Buttons Do",
-    body: "Submit Word — checks your word\nClear — removes your selection\nTry Level Again — restart with same tiles\n⏸️ Pause — stops your timer\n🔓 Buy Level — spend points to advance",
-  },
-  {
-    emoji: "🌟",
-    title: "Clearing a Level",
-    body: "Use ALL tiles to clear the board and earn a big bonus! Can't finish? Spend earned points to buy the next level, or try again with the same tiles.",
-  },
-  {
-    emoji: "💰",
-    title: "Your Points Are Everything!",
-    body: "Points you earn carry over EVERY DAY — building your lifetime total forever.\n\n⚠️ WARNING: Miss just ONE day and ALL your points reset to ZERO!\n\nPlay every single day to protect your lifetime total. We'll send reminders before midnight!",
-    warning: true,
-  },
+  { emoji:"🎮", title:"Welcome to LetterLoot!", body:"A daily word puzzle where every letter has a point value. Fresh tiles every day at midnight — same board for every player worldwide!", warning:false },
+  { emoji:"✨", title:"Letters Don't Need to Connect!", body:"Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!", warning:false },
+  { emoji:"💎", title:"Every Letter Has a Value", body:"Common letters (E, T, A) score 3–5 pts. Rare letters score big — Q=20, Z=22, J=16!\n\nGold tiles = 2× your score\nPurple tiles = 3× your score!", warning:false },
+  { emoji:"🕹️", title:"What the Buttons Do", body:"Submit Word — checks your word\n✕ Clear — removes your selection\n🔄 ReTry Level — same tiles, fresh start\n⏸️ Pause — stops your timer\n🔓 Buy Level — spend points to advance", warning:false },
+  { emoji:"🌟", title:"Clearing a Level", body:"Use ALL tiles to clear the board and earn a big bonus! Can't finish? Spend earned points to buy the next level, or retry with the same tiles.", warning:false },
+  { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
 ];
 
-// ══════════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ══════════════════════════════════════════════════════════════
 export default function App() {
   const [playerName, setPlayerName] = useState(localStorage.getItem("ll_name") || "");
   const [editingName, setEditingName] = useState(!localStorage.getItem("ll_name"));
-
-  // ── Tour ───────────────────────────────────────────────────
   const [showTour, setShowTour] = useState(!localStorage.getItem("ll_tour_done"));
   const [tourStep, setTourStep] = useState(0);
-  const completeTour = () => {
-    localStorage.setItem("ll_tour_done", "1");
-    setShowTour(false);
-    requestNotificationPermission();
-  };
+  const completeTour = () => { localStorage.setItem("ll_tour_done", "1"); setShowTour(false); requestNotificationPermission(); };
 
-  // ── Lifetime points ────────────────────────────────────────
   const lifetimeData = useRef(getLifetimePoints());
   const [lifetimePoints, setLifetimePoints] = useState(lifetimeData.current.total || 0);
   const [showResetWarning, setShowResetWarning] = useState(lifetimeData.current.wasReset || false);
 
-  // ── Restore session ────────────────────────────────────────
   const ss = useRef(loadSession()).current;
-
   const [level, setLevel] = useState(ss?.level || 1);
+  const [levelScore, setLevelScore] = useState(0);
   const [tiles, setTiles] = useState(() => {
     if (ss?.tiles) return ss.tiles;
     const rng = seededRandom(getDailySeed());
@@ -571,6 +491,7 @@ export default function App() {
   const totalTimeRef = useRef(ss?.totalTime || 0);
   const submittedRef = useRef(ss?.submitted || []);
   const totalRef = useRef(ss?.totalScore || 0);
+  const levelScoreRef = useRef(0);
   const audioCtxRef = useRef(null);
   const musicLoopRef = useRef(null);
   const nextLoopRef = useRef(0);
@@ -579,6 +500,8 @@ export default function App() {
   const today = new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
   const dayNum = getDayOfYear();
   const availableTiles = tiles.filter(t => !t.used);
+  const vowelsRemaining = availableTiles.filter(t => VOWELS.has(t.letter)).length;
+  const consonantsRemaining = availableTiles.filter(t => !VOWELS.has(t.letter)).length;
   const tileRows = [];
   for (let i = 0; i < tiles.length; i += 7) tileRows.push(tiles.slice(i, i + 7));
   const currentWord = selected.map(id => tiles.find(t => t.id === id)?.letter).join("");
@@ -598,22 +521,12 @@ export default function App() {
   const allTimeTotal = Object.values(statsData.dailyScores || {}).reduce((a,b)=>a+b,0);
   const avgDaily = statsData.daysPlayed > 0 ? Math.round(allTimeTotal / statsData.daysPlayed) : 0;
 
-  // ── Save session ───────────────────────────────────────────
   useEffect(() => {
-    saveSession({
-      level, tiles, totalScore: totalRef.current,
-      submitted: submittedRef.current, badges, streak,
-      perfectDay, longestWordToday, tileCount: tileCountRef.current,
-      levelTime: levelTimeRef.current, totalTime: totalTimeRef.current,
-    });
+    saveSession({ level, tiles, totalScore: totalRef.current, submitted: submittedRef.current, badges, streak, perfectDay, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current });
   }, [level, tiles, badges, streak, perfectDay, longestWordToday]);
 
-  // ── Schedule notifications on load ────────────────────────
-  useEffect(() => {
-    if (Notification.permission === "granted") scheduleNotifications();
-  }, []);
+  useEffect(() => { if (Notification.permission === "granted") scheduleNotifications(); }, []);
 
-  // ── Timers ─────────────────────────────────────────────────
   const startTimer = useCallback(() => {
     if (timerRef.current) return;
     timerRef.current = setInterval(() => {
@@ -625,13 +538,11 @@ export default function App() {
   const resetLevelTimer = useCallback(() => { levelTimeRef.current = 0; setLevelTime(0); }, []);
   useEffect(() => { startTimer(); return () => stopTimer(); }, []);
 
-  // ── Pause ──────────────────────────────────────────────────
   const handlePause = () => {
     if (paused) { setPaused(false); startTimer(); if (musicOn) startMusic(); }
     else { setPaused(true); stopTimer(); stopMusic(); }
   };
 
-  // ── Music ──────────────────────────────────────────────────
   const startMusic = useCallback(() => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
     const ctx = audioCtxRef.current;
@@ -653,7 +564,6 @@ export default function App() {
   }, []);
   useEffect(() => { if (musicOn && !paused) startMusic(); else stopMusic(); return () => stopMusic(); }, [musicOn, paused]);
 
-  // ── Badges ─────────────────────────────────────────────────
   const awardBadge = useCallback((id) => {
     setBadges(prev => {
       if (prev.includes(id)) return prev;
@@ -663,7 +573,6 @@ export default function App() {
     });
   }, []);
 
-  // ── Full Reset ─────────────────────────────────────────────
   const handleFullReset = useCallback(() => {
     const rng = seededRandom(getDailySeed());
     const bp = getBonusPositions(42, getBonusCount(1), rng);
@@ -671,6 +580,7 @@ export default function App() {
     tileCountRef.current = 42; setLevel(1); setSelected([]);
     setSubmitted([]); submittedRef.current = [];
     setTotalScore(0); totalRef.current = 0;
+    setLevelScore(0); levelScoreRef.current = 0;
     setStreak(0); setBadges([]); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
     setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
@@ -681,7 +591,6 @@ export default function App() {
     clearSession();
   }, [startTimer, stopTimer]);
 
-  // ── Level Reset (same tiles) ───────────────────────────────
   const doLevelReset = useCallback(() => {
     levelResetCount.current += 1;
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
@@ -689,7 +598,6 @@ export default function App() {
     setShowResetConfirm(false); setShowStuckModal(false);
   }, [resetLevelTimer]);
 
-  // ── Submit ─────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
     setValidating(true);
@@ -703,7 +611,7 @@ export default function App() {
     const newStreak = valid ? streak + 1 : 0;
     setStreak(newStreak);
     let flashMsg = currentWord;
-    if (valid && longBonus > 0) flashMsg = `${currentWord}  +${longBonus} length bonus!`;
+    if (valid && longBonus > 0) flashMsg = `${currentWord}  +${longBonus} bonus!`;
     setFlash({ word: flashMsg, score, valid, medical: isMedical, collegiate: isCollegiate });
     setTimeout(() => setFlash(null), 2000);
     if (!valid) { setShake(true); setTimeout(() => setShake(false), 500); }
@@ -715,7 +623,9 @@ export default function App() {
       const newTotal = totalRef.current + score;
       totalRef.current = newTotal;
       setTotalScore(newTotal);
-      // Add to lifetime points
+      const newLevelScore = levelScoreRef.current + score;
+      levelScoreRef.current = newLevelScore;
+      setLevelScore(newLevelScore);
       const newLifetime = addLifetimePoints(score);
       setLifetimePoints(newLifetime);
       const newTiles = tiles.map(t => selected.includes(t.id) ? { ...t, used: true } : t);
@@ -723,10 +633,7 @@ export default function App() {
       const ats = getAllTimeStats();
       ats.words += 1; ats.score += score;
       saveAllTimeStats(ats);
-      const updated = updateStats({
-        score: newTotal, wordScore: score, word: currentWord, source: result.source,
-        ...(longBonus > 0 ? { longWordBonus: longBonus, wordLength: currentWord.length } : {}),
-      });
+      const updated = updateStats({ score: newTotal, wordScore: score, word: currentWord, source: result.source, ...(longBonus > 0 ? { longWordBonus: longBonus, wordLength: currentWord.length } : {}) });
       setStatsData(updated);
       if (currentWord.length > (longestWordToday.length||0)) { setLongestWordToday(currentWord); awardBadge("longest_day"); }
       if (currentWord.length > (longestWordAllTime.length||0)) { setLongestWordAllTime(currentWord); localStorage.setItem("ll_longest", currentWord); }
@@ -759,34 +666,26 @@ export default function App() {
       if (allUsed) {
         awardBadge(`all_tiles_${level}`);
         const bonus = 100 * level;
-        totalRef.current += bonus;
-        setTotalScore(totalRef.current);
+        totalRef.current += bonus; setTotalScore(totalRef.current);
+        levelScoreRef.current += bonus; setLevelScore(levelScoreRef.current);
         const newLifetime2 = addLifetimePoints(bonus);
         setLifetimePoints(newLifetime2);
         setFlash({ word: "BOARD CLEAR!", score: bonus, valid: true });
-        setConfetti(true);
-        setTimeout(() => setConfetti(false), 4000);
+        setConfetti(true); setTimeout(() => setConfetti(false), 4000);
         stopTimer();
         const clearedTime = levelTimeRef.current;
         clearedLevelsRef.current[level] = clearedTime;
         const updatedStats = updateStats({ levelTime: clearedTime, levelNum: level, score: totalRef.current });
         setStatsData(updatedStats);
-        if (playerName.trim()) {
-          const updatedTimes = addLevelTime(playerName, level, clearedTime);
-          setTimeLeaderboard(updatedTimes);
-        }
+        if (playerName.trim()) { const updatedTimes = addLevelTime(playerName, level, clearedTime); setTimeLeaderboard(updatedTimes); }
         if (level < 5) setTimeout(() => setLevelComplete(true), 1200);
         else {
           localStorage.setItem("ll_completed_today", getTodayKey());
           if (perfectDay) {
             setPerfectDayAchieved(true); awardBadge("perfect_day");
             setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
-            const perfStats = updateStats({ perfectDay: true });
-            setStatsData(perfStats);
-            if (playerName.trim()) {
-              const updatedTimes = addPerfectTime(playerName, totalTimeRef.current);
-              setTimeLeaderboard(updatedTimes);
-            }
+            const perfStats = updateStats({ perfectDay: true }); setStatsData(perfStats);
+            if (playerName.trim()) { const updatedTimes = addPerfectTime(playerName, totalTimeRef.current); setTimeLeaderboard(updatedTimes); }
             setTimeout(() => setShowNameInput(true), 1000);
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
@@ -797,14 +696,14 @@ export default function App() {
         if (!hasWords) setTimeout(() => setShowStuckModal(true), 600);
       }
     }
-    setSelected([]);
-    setValidating(false);
+    setSelected([]); setValidating(false);
   };
 
   const handleNextLevel = (bought = false) => {
     if (bought) setPerfectDay(false);
     const newLevel = level + 1;
     setLevel(newLevel); setLevelComplete(false); setShowBuyModal(false);
+    levelScoreRef.current = 0; setLevelScore(0);
     const rng = seededRandom(getDailySeed() + newLevel * 999);
     const count = 42 + (newLevel - 1) * 6;
     const bp = getBonusPositions(count, getBonusCount(newLevel), rng);
@@ -842,24 +741,18 @@ export default function App() {
     localStorage.setItem("ll_name", playerName);
     if (Object.keys(clearedLevelsRef.current).length > 0) {
       let updatedTimes = getTimeLeaderboard();
-      Object.entries(clearedLevelsRef.current).forEach(([lvl, secs]) => {
-        updatedTimes = addLevelTime(playerName, parseInt(lvl), secs);
-      });
+      Object.entries(clearedLevelsRef.current).forEach(([lvl, secs]) => { updatedTimes = addLevelTime(playerName, parseInt(lvl), secs); });
       if (perfectDay) updatedTimes = addPerfectTime(playerName, totalTimeRef.current);
       setTimeLeaderboard(updatedTimes);
     }
-    setShowNameInput(false);
-    clearSession();
+    setShowNameInput(false); clearSession();
   };
 
-  const handleNameSave = () => {
-    if (playerName.trim()) { localStorage.setItem("ll_name", playerName); setEditingName(false); }
-  };
-
+  const handleNameSave = () => { if (playerName.trim()) { localStorage.setItem("ll_name", playerName); setEditingName(false); } };
   const medalFor = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:60, position:"relative", overflow:"hidden" }}>
+    <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:40, position:"relative", overflow:"hidden" }}>
 
       <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0}}>
         {[...Array(50)].map((_,i)=>(
@@ -909,41 +802,31 @@ export default function App() {
         </div>
       )}
 
-      {/* First Open Tour */}
+      {/* Tour */}
       {showTour&&(
         <div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background: TOUR_STEPS[tourStep].warning ? "linear-gradient(135deg,#1a0808,#2d1010)" : "linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:28, padding:"36px 32px", textAlign:"center", boxShadow:"0 16px 60px rgba(0,0,0,0.9)", border: TOUR_STEPS[tourStep].warning ? "2px solid rgba(220,38,38,0.6)" : "2px solid rgba(255,215,0,0.3)", maxWidth:340, width:"90%"}}>
+          <div style={{background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#1a0808,#2d1010)":"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"36px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:TOUR_STEPS[tourStep].warning?"2px solid rgba(220,38,38,0.5)":"2px solid rgba(167,139,250,0.5)",maxWidth:340,width:"90%"}}>
             <div style={{fontSize:52}}>{TOUR_STEPS[tourStep].emoji}</div>
-            <div style={{fontSize:20,fontWeight:"bold",color: TOUR_STEPS[tourStep].warning ? "#ef4444" : "#f6d365",marginTop:12,lineHeight:1.3}}>{TOUR_STEPS[tourStep].title}</div>
-
-            {TOUR_STEPS[tourStep].warning ? (
+            <div style={{fontSize:20,fontWeight:"bold",color:TOUR_STEPS[tourStep].warning?"#ef4444":"#f6d365",marginTop:12,lineHeight:1.3}}>{TOUR_STEPS[tourStep].title}</div>
+            {TOUR_STEPS[tourStep].warning?(
               <div style={{marginTop:12}}>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>
-                  Points you earn carry over <span style={{color:"#6ee7b7",fontWeight:"bold"}}>EVERY DAY</span> — building your lifetime total forever.
-                </div>
-                <div className="warning-box" style={{marginTop:14,borderRadius:14,padding:"16px",border:"2px solid rgba(220,38,38,0.5)"}}>
-                  <div style={{fontSize:28}}>⚠️</div>
-                  <div style={{fontSize:16,fontWeight:"bold",color:"#ef4444",marginTop:6}}>Miss ONE day...</div>
-                  <div style={{fontSize:22,fontWeight:"bold",color:"#fff",marginTop:4}}>ALL points → <span style={{color:"#ef4444"}}>ZERO</span></div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:6}}>No exceptions. No grace period.</div>
-                </div>
-                <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:12,lineHeight:1.6}}>
-                  We'll send reminders before midnight<br/>so you never lose your streak!
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>Points you earn carry over <span style={{color:"#6ee7b7",fontWeight:"bold"}}>every single day</span> — building your lifetime total.</div>
+                <div className="warning-box" style={{marginTop:14,borderRadius:14,padding:"16px",border:"1px solid rgba(220,38,38,0.4)"}}>
+                  <div style={{fontSize:15,fontWeight:"bold",color:"#ef4444"}}>⚠️ Miss just one day...</div>
+                  <div style={{fontSize:20,fontWeight:"bold",color:"#fff",marginTop:6}}>All your points → <span style={{color:"#ef4444"}}>ZERO</span></div>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:6}}>We'll send reminders before midnight so you never lose your streak.</div>
                 </div>
               </div>
-            ) : (
+            ):(
               <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:12,lineHeight:1.7,whiteSpace:"pre-line"}}>{TOUR_STEPS[tourStep].body}</div>
             )}
-
             <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:20}}>
-              {TOUR_STEPS.map((_,i)=>(
-                <div key={i} style={{width: i===tourStep?16:8,height:8,borderRadius:4,background:i===tourStep?"#f6d365":"rgba(255,255,255,0.2)",transition:"all 0.3s"}}/>
-              ))}
+              {TOUR_STEPS.map((_,i)=>(<div key={i} style={{width:i===tourStep?16:8,height:8,borderRadius:4,background:i===tourStep?"#a78bfa":"rgba(255,255,255,0.2)",transition:"all 0.3s"}}/>))}
             </div>
             <div style={{display:"flex",gap:8,marginTop:16}}>
               <button className="ll-btn" onClick={completeTour} style={{flex:1,padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",fontSize:12}}>Skip</button>
-              <button className="ll-btn" onClick={()=>{ if(tourStep < TOUR_STEPS.length-1) setTourStep(t=>t+1); else completeTour(); }} style={{flex:2,padding:"10px",borderRadius:12,background: TOUR_STEPS[tourStep].warning ? "linear-gradient(135deg,#ef4444,#dc2626)" : "linear-gradient(135deg,#f6d365,#fda085)",color: TOUR_STEPS[tourStep].warning ? "#fff" : "#1a1a2e",fontSize:14,fontWeight:"bold"}}>
-                {tourStep < TOUR_STEPS.length-1 ? "Next →" : "Let's Play! 🎮"}
+              <button className="ll-btn" onClick={()=>{ if(tourStep<TOUR_STEPS.length-1) setTourStep(t=>t+1); else completeTour(); }} style={{flex:2,padding:"10px",borderRadius:12,background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#a78bfa,#7c3aed)":"linear-gradient(135deg,#f6d365,#fda085)",color:"#fff",fontSize:14,fontWeight:"bold"}}>
+                {tourStep<TOUR_STEPS.length-1?"Next →":"Let's Play! 🎮"}
               </button>
             </div>
           </div>
@@ -979,12 +862,12 @@ export default function App() {
       {showStuckModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
         <div style={{fontSize:52}}>😬</div>
         <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
-        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed<br/>from the remaining tiles.</div>
+        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
         <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
         <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:13,fontWeight:"bold"}}>🔄 Try Level {level} Again</button>
-        {level < 5 && <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
-        {level === 5 && <button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current < 1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
-        <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowNameInput(true); }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — Save Score":"📊 End & Save Score"}</button>
+        {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
+        {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
+        <button className="ll-btn" onClick={()=>{setShowStuckModal(false);setShowNameInput(true);}} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — Save Score":"📊 End & Save Score"}</button>
       </div></div>}
 
       {/* Buy Level Modal */}
@@ -1004,9 +887,9 @@ export default function App() {
         <div style={{fontSize:56}}>🌈</div>
         <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
         <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>All 5 levels cleared without buying!</div>
-        <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} — Day #{dayNum}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime Total: {lifetimePoints.toLocaleString()} pts</div>
-        <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nAll 5 levels cleared, no buys!\nDay #${dayNum} · Score: ${totalScore} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\nPlay free at letterloot-6k6v.vercel.app`); setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
-        <button className="ll-btn replay-btn" onClick={()=>{ setPerfectDayAchieved(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:18,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
+        <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} — Day #{dayNum}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+        <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nAll 5 levels cleared, no buys!\nDay #${dayNum} · Score: ${totalScore} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\nPlay free at letterloot-6k6v.vercel.app`);setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
+        <button className="ll-btn replay-btn" onClick={()=>{setPerfectDayAchieved(false);handleFullReset();}} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
           🧠 WOW! You're a Smart One!<br/>Want to Do it Again?
         </button>
       </div></div>}
@@ -1018,7 +901,7 @@ export default function App() {
         <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
         <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
         <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
-        {timeLeaderboard.levels[level]?.length > 0 && <div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
+        {timeLeaderboard.levels[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
         <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
         <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
       </div></div>}
@@ -1028,166 +911,175 @@ export default function App() {
         <div style={{fontSize:44}}>{perfectDay?"🌈":"🏆"}</div>
         <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div>
         <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
-        <div style={{fontSize:13,color:"#6ee7b7",marginTop:4}}>💰 Lifetime Total: {lifetimePoints.toLocaleString()} pts</div>
+        <div style={{fontSize:13,color:"#6ee7b7",marginTop:4}}>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
         <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · ⏱️ {formatTime(totalTimeRef.current)}</div>
         <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:16,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
         <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
-        <button className="ll-btn replay-btn" onClick={()=>{ setShowNameInput(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#ffffff",fontSize:18,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
+        <button className="ll-btn replay-btn" onClick={()=>{setShowNameInput(false);handleFullReset();}} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#fff",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
           🎮 WOW! That was SO Close.<br/>Want to Try Again?
         </button>
         <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:10,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
       </div></div>}
 
       {/* ── HEADER ── */}
-      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"12px 14px 0"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginBottom:6}}>
-          {editingName?(
-            <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <input value={playerName} onChange={e=>setPlayerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleNameSave()} placeholder="Enter your name…" style={{padding:"5px 12px",borderRadius:20,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:12,fontFamily:"Georgia,serif",outline:"none",width:160,textAlign:"center"}}/>
-              <button className="ll-btn" onClick={handleNameSave} style={{padding:"5px 12px",borderRadius:20,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:11,fontWeight:"bold"}}>Save</button>
-            </div>
-          ):(
-            <div style={{display:"flex",alignItems:"center",gap:8}}>
-              <div style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>setEditingName(true)}>
-                <span style={{fontSize:13,color:"#f6d365",fontWeight:"bold"}}>👤 {playerName||"Set Name"}</span>
-                <span style={{fontSize:9,color:"rgba(255,255,255,0.3)"}}>✏️</span>
+      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"10px 12px 0"}}>
+
+        {/* ROW 1: Name + Title + Music + ? */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            {editingName?(
+              <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                <input value={playerName} onChange={e=>setPlayerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleNameSave()} placeholder="Your name…" style={{padding:"4px 10px",borderRadius:16,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:11,fontFamily:"Georgia,serif",outline:"none",width:130,textAlign:"center"}}/>
+                <button className="ll-btn" onClick={handleNameSave} style={{padding:"4px 10px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:10,fontWeight:"bold"}}>Save</button>
               </div>
-              <button onClick={()=>{ setTourStep(0); setShowTour(true); }} style={{background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:22,height:22,cursor:"pointer",fontSize:11,color:"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
+            ):(
+              <div style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>setEditingName(true)}>
+                <span style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>👤 {playerName||"Set Name"}</span>
+                <span style={{fontSize:9,color:"rgba(255,255,255,0.35)"}}>✏️</span>
+              </div>
+            )}
+          </div>
+
+          {/* LetterLoot title — bright white, bright purple box */}
+          <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"4px 14px"}}>
+            <span style={{fontSize:22,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85),0 0 4px rgba(255,255,255,0.5)"}}>LetterLoot</span>
+          </div>
+
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:10,color:musicOn?"#f6d365":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif"}}>{musicOn?"🎸":"🎸"}</button>
+            <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2px solid rgba(255,255,255,0.9)",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#ffffff",fontWeight:"bold",background:"rgba(255,255,255,0.18)",cursor:"pointer",fontFamily:"Georgia,serif"}}>?</button>
+          </div>
+        </div>
+
+        {/* Date + perfect day */}
+        <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <span>{today} · Day #{dayNum}</span>
+          {perfectDay&&<span style={{color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</span>}
+        </div>
+
+        {/* ROW 2: Level progress */}
+        <div style={{background:"rgba(255,255,255,0.12)",borderRadius:8,height:5,overflow:"hidden",marginBottom:3}}>
+          <div style={{height:"100%",width:`${((level-1)/5)*100}%`,background:"linear-gradient(90deg,#f6d365,#fda085)",borderRadius:8,transition:"width 0.5s ease"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",padding:"0 2px",marginBottom:7}}>
+          {[1,2,3,4,5].map(l=>(<div key={l} style={{fontSize:8,color:l<=level?"#f6d365":"rgba(255,255,255,0.35)",fontWeight:l===level?"bold":"normal"}}>L{l}</div>))}
+        </div>
+
+        {/* ROW 3: Points — This Level / Today / Lifetime */}
+        <div style={{display:"flex",gap:5,marginBottom:5}}>
+          <div style={{flex:1,background:"rgba(246,211,101,0.12)",border:"1px solid rgba(246,211,101,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
+            <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365"}}>{levelScore.toLocaleString()}</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)",letterSpacing:0.5}}>THIS LEVEL</div>
+          </div>
+          <div style={{flex:1,background:"rgba(253,160,133,0.12)",border:"1px solid rgba(253,160,133,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
+            <div style={{fontSize:14,fontWeight:"bold",color:"#fda085"}}>{totalScore.toLocaleString()}</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)",letterSpacing:0.5}}>TODAY</div>
+          </div>
+          <div style={{flex:1,background:"rgba(110,231,183,0.12)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
+            <div style={{fontSize:14,fontWeight:"bold",color:"#6ee7b7"}}>{lifetimePoints.toLocaleString()}</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)",letterSpacing:0.5}}>💰 LIFETIME</div>
+          </div>
+        </div>
+
+        {/* ROW 4: Badges / Remaining Letters / Vowels / Consonants */}
+        <div style={{display:"flex",gap:5,marginBottom:5}}>
+          <div style={{flex:1,background:"rgba(240,147,251,0.1)",border:"1px solid rgba(240,147,251,0.4)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb"}}>{badges.length}/{BADGE_DEFS.length}</div>
+            <div style={{fontSize:6.5,color:"rgba(255,255,255,0.75)"}}>BADGES</div>
+          </div>
+          <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#60a5fa"}}>{availableTiles.length}</div>
+            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>REMAINING LETTERS</div>
+          </div>
+          <div style={{flex:1,background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#6ee7b7"}}>{vowelsRemaining}</div>
+            <div style={{fontSize:6.5,color:"rgba(255,255,255,0.75)"}}>VOWELS</div>
+          </div>
+          <div style={{flex:1,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa"}}>{consonantsRemaining}</div>
+            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>CONSONANTS</div>
+          </div>
+        </div>
+
+        {/* ROW 5: TIME / Level / Total / Pause */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,255,255,0.07)",borderRadius:10,padding:"5px 10px",marginBottom:5,border:"1px solid rgba(255,255,255,0.2)"}}>
+          <div style={{fontSize:10,color:"#ffffff",letterSpacing:2,fontWeight:"bold"}}>TIME</div>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(levelTime)}</div>
+              <div style={{fontSize:7,color:"#ffffff",letterSpacing:1,fontWeight:"bold"}}>LEVEL</div>
             </div>
-          )}
-        </div>
-
-        <div style={{textAlign:"center",marginBottom:6}}>
-          <div style={{fontSize:34,fontWeight:"bold",letterSpacing:5,background:"linear-gradient(90deg,#f6d365,#fda085,#f093fb,#a78bfa)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}}>LetterLoot</div>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:8,marginTop:4,flexWrap:"wrap"}}>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",letterSpacing:2}}>{today} · Day #{dayNum}</div>
-            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.25)",borderRadius:20,padding:"3px 10px",cursor:"pointer",fontSize:11,color:musicOn?"#f6d365":"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif"}}>{musicOn?"🎸 ON":"🎸 OFF"}</button>
-            {perfectDay&&<div style={{fontSize:9,color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</div>}
+            <div style={{width:1,height:26,background:"rgba(255,255,255,0.2)"}}/>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:15,fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace"}}>{formatTime(totalTime)}</div>
+              <div style={{fontSize:7,color:"#ffffff",letterSpacing:1,fontWeight:"bold"}}>TOTAL</div>
+            </div>
           </div>
-        </div>
-
-        {/* Lifetime points bar */}
-        <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.12),rgba(253,160,133,0.08))",borderRadius:12,padding:"8px 14px",marginBottom:8,border:"1px solid rgba(246,211,101,0.25)",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-          <div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:2}}>💰 LIFETIME POINTS</div>
-            <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
-          </div>
-          <div style={{textAlign:"right"}}>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1}}>🔥 DAY STREAK</div>
-            <div style={{fontSize:20,fontWeight:"bold",color:"#fda085"}}>{statsData.currentStreak}</div>
-          </div>
-        </div>
-
-        <div style={{background:"rgba(255,255,255,0.1)",borderRadius:10,height:6,overflow:"hidden",marginBottom:4}}>
-          <div style={{height:"100%",width:`${((level-1)/5)*100}%`,background:"linear-gradient(90deg,#f6d365,#fda085)",borderRadius:10,transition:"width 0.5s ease"}}/>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",padding:"0 2px",marginBottom:8}}>
-          {[1,2,3,4,5].map(l=>(<div key={l} style={{fontSize:8,color:l<=level?"#f6d365":"rgba(255,255,255,0.3)",fontWeight:l===level?"bold":"normal"}}>L{l}</div>))}
-        </div>
-
-        {/* Timers + Pause */}
-        <div style={{display:"flex",justifyContent:"center",alignItems:"center",gap:12,marginBottom:8,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"8px 12px",border:"1px solid rgba(255,255,255,0.12)"}}>
-          <div style={{textAlign:"center"}}>
-            <div style={{fontSize:16,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(levelTime)}</div>
-            <div style={{fontSize:7,color:"rgba(255,255,255,0.45)",letterSpacing:2}}>LEVEL</div>
-          </div>
-          <div style={{width:1,background:"rgba(255,255,255,0.15)",height:30}}/>
-          <div style={{textAlign:"center"}}>
-            <div style={{fontSize:16,fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace"}}>{formatTime(totalTime)}</div>
-            <div style={{fontSize:7,color:"rgba(255,255,255,0.45)",letterSpacing:2}}>TOTAL</div>
-          </div>
-          <div style={{width:1,background:"rgba(255,255,255,0.15)",height:30}}/>
-          <button className="ll-btn" onClick={handlePause} style={{padding:"6px 14px",borderRadius:20,background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.1)",border:`1px solid ${paused?"rgba(0,200,83,0.5)":"rgba(255,255,255,0.2)"}`,color:paused?"#003300":"#f5f0e8",fontSize:13,fontWeight:"bold"}}>
+          <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1.5px solid rgba(255,255,255,0.5)",borderRadius:16,padding:"4px 10px",fontSize:11,color:paused?"#003300":"#ffffff",fontWeight:"bold"}}>
             {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
         </div>
 
-        {/* Tabs */}
-        <div style={{display:"flex",gap:4,justifyContent:"center",margin:"6px 0",flexWrap:"wrap"}}>
-          {[["play","🎮 Play"],["badges","🏅 Badges"],["history","📜 History"],["times","⏱️ Times"],["stats","📊 Stats"]].map(([id,label])=>(
-            <button key={id} className="ll-tab" onClick={()=>setTab(id)} style={{padding:"5px 9px",borderRadius:20,fontSize:10,background:tab===id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===id?"#1a1a2e":"#f5f0e8",fontWeight:tab===id?"bold":"normal",border:tab===id?"none":"1px solid rgba(255,255,255,0.18)"}}>{label}</button>
-          ))}
-        </div>
-
-        {/* Score strip */}
-        <div style={{display:"flex",justifyContent:"space-around",alignItems:"center",background:"rgba(255,255,255,0.08)",borderRadius:13,padding:"9px 6px",marginBottom:9,border:"1px solid rgba(255,255,255,0.18)"}}>
-          {[[totalScore,"TODAY","#f6d365"],[`⚡${streak}`,"STREAK","#fda085"],[`${badges.length}/${BADGE_DEFS.length}`,"BADGES","#f093fb"],[submitted.filter(s=>s.valid).length,"WORDS","#6ee7b7"],[availableTiles.length,"LEFT","#60a5fa"]].map(([val,label,color])=>(
-            <div key={label} style={{textAlign:"center"}}>
-              <div style={{fontSize:16,fontWeight:"bold",color}}>{val}</div>
-              <div style={{fontSize:7,color:"rgba(255,255,255,0.55)",letterSpacing:1.5}}>{label}</div>
-            </div>
-          ))}
+        {/* ROW 6: Tabs + Level badge */}
+        <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginBottom:5,flexWrap:"nowrap"}}>
+          <button className="ll-tab" onClick={()=>setTab("play")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="play"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="play"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="play"?"bold":"normal",border:tab==="play"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>🎮 Play</button>
+          <div style={{padding:"4px 10px",borderRadius:16,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1}}>✦ L{level} ✦</div>
+          <button className="ll-tab" onClick={()=>setTab("badges")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="badges"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="badges"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="badges"?"bold":"normal",border:tab==="badges"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>🏅 Badges</button>
+          <button className="ll-tab" onClick={()=>setTab("history")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="history"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="history"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="history"?"bold":"normal",border:tab==="history"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>📜 History</button>
+          <button className="ll-tab" onClick={()=>setTab("stats")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="stats"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="stats"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="stats"?"bold":"normal",border:tab==="stats"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>📊 Stats</button>
         </div>
       </div>
 
       {/* ── PLAY TAB ── */}
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:15,padding:"12px",marginBottom:9,border:"1px solid rgba(255,255,255,0.2)",minHeight:72}}>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:7}}>YOUR WORD</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:4,minHeight:40,alignItems:"center",animation:shake?"shake 0.4s ease":"none"}}>
+
+          {/* Action buttons */}
+          <div style={{display:"flex",gap:4,marginBottom:5}}>
+            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":"Submit Word"}</button>
+            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
+            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>🔄 ReTry L{level}</button>
+            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1}</button>}
+          </div>
+
+          {/* Word strip — bright white border */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:9,padding:"5px 10px",marginBottom:4,border:"2px solid rgba(255,255,255,0.9)",minHeight:38}}>
+            <div style={{display:"flex",gap:4,alignItems:"center",flex:1,flexWrap:"wrap"}}>
               {selected.length===0
-                ?<div style={{color:"rgba(255,255,255,0.35)",fontSize:12,fontStyle:"italic"}}>Tap tiles below to start…</div>
+                ?<div style={{color:"rgba(255,255,255,0.35)",fontSize:11,fontStyle:"italic"}}>Tap tiles to build a word…</div>
                 :selected.map(id=>{ const tile=tiles.find(t=>t.id===id); return(
-                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:8,padding:"6px 10px",display:"flex",flexDirection:"column",alignItems:"center",boxShadow:"0 3px 10px rgba(0,0,0,0.5)",cursor:"pointer",minWidth:34}}>
-                    <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:"#fff"}}>{tile?.letter}</div>
-                    <div style={{fontSize:8,color:"rgba(255,255,255,0.95)",fontWeight:"bold"}}>{tile?.bonus==="triple"?"3×":tile?.bonus==="double"?"2×":tile?.value}</div>
+                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:6,padding:"4px 7px",fontSize:15,fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>
+                    {tile?.letter}
                   </div>
                 );})
               }
             </div>
             {currentWord.length>0&&(
-              <div style={{marginTop:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.65)"}}>
-                  Value: <span style={{color:"#f6d365",fontWeight:"bold",fontSize:12}}>{currentScore}</span>
-                  {getLongWordBonus(currentWord.length) > 0 && <span style={{color:"#6ee7b7",marginLeft:6,fontSize:9}}>+{getLongWordBonus(currentWord.length)} length bonus!</span>}
-                  {currentWord.length<3&&<span style={{color:"#fb7185",marginLeft:6,fontSize:9}}>need 3+</span>}
-                </div>
-                <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>{currentWord.length} letters</div>
+              <div style={{textAlign:"right",marginLeft:8,flexShrink:0}}>
+                <div style={{fontSize:12,color:"#f6d365",fontWeight:"bold"}}>+{currentScore}{getLongWordBonus(currentWord.length)>0&&<span style={{color:"#6ee7b7",fontSize:10}}> +{getLongWordBonus(currentWord.length)}!</span>}</div>
+                <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{currentWord.length} letters</div>
               </div>
             )}
           </div>
 
-          <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:8}}>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.75)",display:"flex",alignItems:"center",gap:4}}><span style={{display:"inline-block",width:10,height:10,borderRadius:2,background:"#ffd700",boxShadow:"0 0 8px #ffd700"}}/>2× Double</div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.75)",display:"flex",alignItems:"center",gap:4}}><span style={{display:"inline-block",width:10,height:10,borderRadius:2,background:"#e040fb",boxShadow:"0 0 8px #e040fb"}}/>3× Triple</div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>+{100*level} clear bonus</div>
-          </div>
-
-          <div style={{display:"flex",gap:6,marginBottom:8}}>
-            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"10px",borderRadius:11,fontSize:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#f5f0e8"}}>Clear</button>
-            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused} style={{flex:2,padding:"10px",borderRadius:11,fontSize:13,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused?"pointer":"default"}}>{validating?"Checking…":paused?"Paused":"Submit Word"}</button>
-          </div>
-
-          <div style={{display:"flex",gap:6,marginBottom:9}}>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.45)",color:"#93c5fd"}}>🔄 Try Level {level} Again</button>
-            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.45)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#f6d365":"rgba(255,255,255,0.35)"}}>🔓 Buy L{level+1} ({buyCost}pts)</button>}
-          </div>
-
           {/* Tile grid */}
-          <div style={{background:"rgba(255,255,255,0.06)",borderRadius:15,padding:"10px 6px",border:"1px solid rgba(255,255,255,0.15)",position:"relative"}}>
-            <div style={{textAlign:"center",marginBottom:6}}>
-              <div style={{display:"inline-block",background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",borderRadius:20,padding:"4px 20px",border:"1px solid rgba(246,211,101,0.35)"}}>
-                <span style={{fontSize:12,fontWeight:"bold",color:"#f6d365",letterSpacing:3}}>✦ LEVEL {level} ✦</span>
-              </div>
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:3}}>{tiles.length} tiles · {getBonusCount(level)} bonus tiles · {availableTiles.length} remaining</div>
-            </div>
-            {paused&&<div style={{position:"absolute",inset:0,borderRadius:15,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}><div style={{fontSize:28,color:"rgba(255,255,255,0.4)"}}>⏸️ PAUSED</div></div>}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative",animation:shake?"shake 0.4s ease":"none"}}>
+            {paused&&<div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}><div style={{fontSize:24,color:"rgba(255,255,255,0.4)"}}>⏸️ PAUSED</div></div>}
             {tileRows.map((row,ri)=>(
-              <div key={ri} style={{display:"flex",justifyContent:"center",gap:4,marginBottom:4}}>
+              <div key={ri} style={{display:"flex",justifyContent:"center",gap:3,marginBottom:3}}>
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; return(
-                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:42,height:50,background:tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:9,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.65)":isDouble?"1px solid rgba(255,215,0,0.65)":"1px solid rgba(255,255,255,0.2)"}}>
-                    <div style={{fontSize:18,fontWeight:"bold",lineHeight:1,color:tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
-                    <div style={{fontSize:8,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
+                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:38,height:44,background:tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)"}}>
+                    <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
+                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
                   </div>
                 );})}
               </div>
             ))}
           </div>
 
-          {longestWordToday&&<div style={{textAlign:"center",marginTop:8,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters)</div>}
-          <div style={{textAlign:"center",marginTop:10}}>
-            <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.35)",padding:"6px 16px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
+          {longestWordToday&&<div style={{textAlign:"center",marginTop:6,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters)</div>}
+          <div style={{textAlign:"center",marginTop:8}}>
+            <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
           </div>
         </div>
       )}
@@ -1196,15 +1088,15 @@ export default function App() {
       {tab==="badges"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
-            <div key={cat} style={{marginBottom:16}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.6)",letterSpacing:3,marginBottom:8,paddingLeft:4}}>{title}</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div key={cat} style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:7,paddingLeft:4}}>{title}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
                 {BADGE_DEFS.filter(b=>b.cat===cat).map(b=>{ const earned=badges.includes(b.id); return(
-                  <div key={b.id} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"12px 9px",textAlign:"center"}}>
-                    <div style={{fontSize:26,filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22}}>{b.icon}</div>
+                  <div key={b.id} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+                    <div style={{fontSize:24,filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22}}>{b.icon}</div>
                     <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
-                    {earned&&<div style={{marginTop:4,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ EARNED</div>}
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
+                    {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ EARNED</div>}
                   </div>
                 );})}
               </div>
@@ -1218,82 +1110,25 @@ export default function App() {
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {submitted.length===0
             ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No words yet — go loot some letters!</div>
-            :<div style={{display:"flex",flexDirection:"column",gap:6}}>
+            :<div style={{display:"flex",flexDirection:"column",gap:5}}>
               {[...submitted].reverse().map((s,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:11,padding:"9px 13px"}}>
+                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:10,padding:"8px 12px"}}>
                   <div>
                     <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginTop:1}}>
-                      {s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}
-                    </div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:1}}>{s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:18,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
-                    {s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>points</div>}
+                    <div style={{fontSize:17,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
+                    {s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>pts</div>}
                   </div>
                 </div>
               ))}
-              <div style={{textAlign:"center",padding:"12px",background:"rgba(255,255,255,0.07)",borderRadius:12,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.55)"}}>TODAY'S TOTAL</div>
-                <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>{totalScore}</div>
+              <div style={{textAlign:"center",padding:"10px",background:"rgba(255,255,255,0.07)",borderRadius:10,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>TODAY'S TOTAL</div>
+                <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365"}}>{totalScore}</div>
               </div>
             </div>
           }
-        </div>
-      )}
-
-      {/* ── TIMES TAB ── */}
-      {tab==="times"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <div style={{textAlign:"center",marginBottom:10}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>SPEED RECORDS</div></div>
-          <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:14}}>
-            {[["levels","📊 By Level"],["perfect","🌈 Perfect Day"]].map(([id,label])=>(
-              <button key={id} className="ll-tab" onClick={()=>setTimeSubTab(id)} style={{padding:"6px 14px",borderRadius:20,fontSize:11,background:timeSubTab===id?"linear-gradient(135deg,#60a5fa,#a78bfa)":"rgba(255,255,255,0.1)",color:timeSubTab===id?"#fff":"#f5f0e8",fontWeight:timeSubTab===id?"bold":"normal",border:timeSubTab===id?"none":"1px solid rgba(255,255,255,0.18)"}}>{label}</button>
-            ))}
-          </div>
-          {timeSubTab==="levels"&&(
-            <div>
-              <div style={{display:"flex",gap:6,justifyContent:"center",marginBottom:12}}>
-                {[1,2,3,4,5].map(l=>(
-                  <button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:40,height:40,borderRadius:10,fontSize:13,fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.6)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>
-                ))}
-              </div>
-              <div style={{background:"rgba(255,255,255,0.04)",borderRadius:14,padding:"10px",border:"1px solid rgba(255,255,255,0.1)",marginBottom:8}}>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",letterSpacing:2,marginBottom:10,textAlign:"center"}}>FASTEST LEVEL {selectedLevelView} CLEARS</div>
-                {!timeLeaderboard.levels[selectedLevelView]?.length
-                  ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:12,fontStyle:"italic",padding:"16px 0"}}>No times yet for Level {selectedLevelView}.<br/>Clear the board to record a time!</div>
-                  :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:i===0?"rgba(96,165,250,0.12)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"9px 12px",marginBottom:6}}>
-                      <div style={{fontSize:18,minWidth:28,textAlign:"center"}}>{medalFor(i)}</div>
-                      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
-                      <div style={{fontSize:18,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
-                    </div>
-                  ))
-                }
-              </div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",textAlign:"center",fontStyle:"italic"}}>Board-clear completions only</div>
-            </div>
-          )}
-          {timeSubTab==="perfect"&&(
-            <div>
-              <div style={{background:"rgba(255,255,255,0.04)",borderRadius:14,padding:"10px",border:"1px solid rgba(255,255,255,0.1)",marginBottom:8}}>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",letterSpacing:2,marginBottom:10,textAlign:"center"}}>FASTEST PERFECT DAY</div>
-                {!timeLeaderboard.perfect?.length
-                  ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:12,fontStyle:"italic",padding:"16px 0"}}>No Perfect Day times yet!<br/>Clear all 5 levels without buying to qualify.</div>
-                  :timeLeaderboard.perfect.map((entry,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.12),rgba(253,160,133,0.08))":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(246,211,101,0.3)":"1px solid rgba(255,255,255,0.07)",borderRadius:10,padding:"9px 12px",marginBottom:6}}>
-                      <div style={{fontSize:18,minWidth:28,textAlign:"center"}}>{medalFor(i)}</div>
-                      <div style={{flex:1}}><div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
-                      <div style={{fontSize:18,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
-                    </div>
-                  ))
-                }
-              </div>
-              <div style={{textAlign:"center",marginTop:12}}>
-                <button onClick={()=>{saveTimeLeaderboard({levels:{"1":[],"2":[],"3":[],"4":[],"5":[]},perfect:[]});setTimeLeaderboard({levels:{"1":[],"2":[],"3":[],"4":[],"5":[]},perfect:[]});}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Clear Time Records</button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -1301,142 +1136,155 @@ export default function App() {
       {tab==="stats"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
 
-          {/* Lifetime Points — hero card */}
-          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:16,padding:"18px",marginBottom:10,border:"2px solid rgba(246,211,101,0.3)",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.55)",letterSpacing:3,marginBottom:6}}>💰 LIFETIME POINTS</div>
-            <div style={{fontSize:48,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>Accumulates every day you play</div>
-            <div style={{marginTop:8,background:"rgba(220,38,38,0.15)",borderRadius:10,padding:"8px",border:"1px solid rgba(220,38,38,0.3)"}}>
-              <div style={{fontSize:11,color:"#ef4444",fontWeight:"bold"}}>⚠️ Miss a day = Reset to ZERO</div>
+          {/* Lifetime Points hero */}
+          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:9,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
+            <div style={{fontSize:44,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:3}}>Accumulates every day you play</div>
+            <div style={{marginTop:7,background:"rgba(220,38,38,0.12)",borderRadius:8,padding:"6px 10px",border:"1px solid rgba(220,38,38,0.25)"}}>
+              <div style={{fontSize:10,color:"#ef4444",fontWeight:"bold"}}>⚠️ Miss a day = Reset to ZERO</div>
             </div>
           </div>
 
           {/* Days & Streaks */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>📅 DAYS & STREAKS</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📅 DAYS & STREAKS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Total Days</div>
-              </div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Total Days</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Current Streak</div>
-                {statsData.currentStreak > 0 && statsData.currentStreak === statsData.longestStreak && <div style={{fontSize:8,color:"#6ee7b7"}}>Personal Best!</div>}
+                <div style={{fontSize:26,fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Current Streak</div>
+                {statsData.currentStreak>0&&statsData.currentStreak===statsData.longestStreak&&<div style={{fontSize:8,color:"#6ee7b7"}}>Personal Best!</div>}
               </div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:28,fontWeight:"bold",color:"#f6d365"}}>🏆 {statsData.longestStreak}</div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Longest Streak</div>
-              </div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>🏆 {statsData.longestStreak}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Longest Streak</div></div>
             </div>
           </div>
 
           {/* Perfect Days */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>🌈 PERFECT DAYS</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAYS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:28,fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>This Week</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:28,fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>All Time</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div></div>
             </div>
           </div>
 
-          {/* Scores */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>📈 DAILY SCORES</div>
-            <div style={{display:"flex",justifyContent:"space-around",marginBottom:12}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Today</div></div>
+          {/* Daily Scores */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📈 DAILY SCORES</div>
+            <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>This Week Best</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week Best</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Best Day Ever</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Best Day Ever</div></div>
             </div>
-            <div style={{display:"flex",justifyContent:"space-around",paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Daily Average</div></div>
+            <div style={{display:"flex",justifyContent:"space-around",paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Daily Average</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#6ee7b7"}}>{allTimeTotal.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>All-Time Total</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#6ee7b7"}}>{allTimeTotal.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All-Time Total</div></div>
             </div>
-            {/* 7-day bar chart */}
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:12,marginBottom:6,textAlign:"center",letterSpacing:1}}>LAST 7 DAYS</div>
-            <div style={{display:"flex",gap:4,alignItems:"flex-end",height:50,justifyContent:"space-around"}}>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginTop:10,marginBottom:5,textAlign:"center",letterSpacing:1}}>LAST 7 DAYS</div>
+            <div style={{display:"flex",gap:3,alignItems:"flex-end",height:44,justifyContent:"space-around"}}>
               {last7Days.map((d,i)=>(
                 <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                  <div style={{width:"100%",background:d.score>0?"linear-gradient(180deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",borderRadius:"3px 3px 0 0",height:d.score>0?`${Math.max(4,(d.score/maxDayScore)*40)}px`:"4px",transition:"height 0.3s ease"}}/>
-                  <div style={{fontSize:7,color:"rgba(255,255,255,0.35)"}}>{d.label}</div>
+                  <div style={{width:"100%",background:d.score>0?"linear-gradient(180deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",borderRadius:"3px 3px 0 0",height:d.score>0?`${Math.max(4,(d.score/maxDayScore)*36)}px`:"4px",transition:"height 0.3s ease"}}/>
+                  <div style={{fontSize:7,color:"rgba(255,255,255,0.4)"}}>{d.label}</div>
                 </div>
               ))}
             </div>
           </div>
 
           {/* Highest Word Score */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>💎 HIGHEST WORD SCORE</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Today</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>This Week</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>All Time</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div></div>
             </div>
           </div>
 
-          {/* Fastest Level Times */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>⏱️ YOUR FASTEST LEVEL TIMES</div>
-            {[1,2,3,4,5].map(l=>(
-              <div key={l} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 0",borderBottom:l<5?"1px solid rgba(255,255,255,0.06)":"none"}}>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.7)"}}>Level {l}</div>
-                <div style={{fontSize:15,fontWeight:"bold",color:statsData.fastestLevels[l]?"#60a5fa":"rgba(255,255,255,0.25)",fontFamily:"monospace"}}>{statsData.fastestLevels[l]?formatTime(statsData.fastestLevels[l]):"—"}</div>
-              </div>
-            ))}
+          {/* Fastest Level Times — merged from Times tab */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>⏱️ FASTEST LEVEL TIMES</div>
+            <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:10}}>
+              {[1,2,3,4,5].map(l=>(
+                <button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:36,height:36,borderRadius:8,fontSize:11,fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.6)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>
+              ))}
+            </div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginBottom:6,textAlign:"center"}}>Personal Best: <span style={{color:"#60a5fa",fontWeight:"bold",fontFamily:"monospace"}}>{statsData.fastestLevels[selectedLevelView]?formatTime(statsData.fastestLevels[selectedLevelView]):"—"}</span></div>
+            {!timeLeaderboard.levels[selectedLevelView]?.length
+              ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>No times yet — clear the board to record!</div>
+              :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(
+                <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:5}}>
+                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div>
+                  <div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
+                  <div style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
+                </div>
+              ))
+            }
+            <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:2,marginBottom:8}}>🌈 PERFECT DAY TIMES</div>
+              {!timeLeaderboard.perfect?.length
+                ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0"}}>No Perfect Day times yet!</div>
+                :timeLeaderboard.perfect.slice(0,5).map((entry,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.06))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:4}}>
+                    <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div>
+                    <div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
+                    <div style={{fontSize:15,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
+                  </div>
+                ))
+              }
+            </div>
           </div>
 
-          {/* Dictionary Breakdown */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>📚 DICTIONARY BREAKDOWN</div>
+          {/* Dictionary */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📚 DICTIONARY BREAKDOWN</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:24,fontWeight:"bold",color:"#6ee7b7"}}>{statsData.collegiateWords||0}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>📖 Collegiate</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#6ee7b7"}}>{statsData.collegiateWords||0}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>📖 Collegiate</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:24,fontWeight:"bold",color:"#60a5fa"}}>{statsData.medicalWords||0}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>🩺 Medical</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#60a5fa"}}>{statsData.medicalWords||0}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>🩺 Medical</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:24,fontWeight:"bold",color:"#f6d365"}}>{(statsData.collegiateWords||0)+(statsData.medicalWords||0)}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Total Valid</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#f6d365"}}>{(statsData.collegiateWords||0)+(statsData.medicalWords||0)}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Total Valid</div></div>
             </div>
           </div>
 
           {/* Longest Words */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>📏 LONGEST WORDS</div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>Today's Best</div>
-              <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{statsData.longestWordToday||"—"}</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>📏 LONGEST WORDS</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>Today's Best</div>
+              <div style={{fontSize:12,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{statsData.longestWordToday||"—"}</div>
             </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0"}}>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>All-Time Best</div>
-              <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{statsData.longestWordAllTime||"—"}</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0"}}>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>All-Time Best</div>
+              <div style={{fontSize:12,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{statsData.longestWordAllTime||"—"}</div>
             </div>
           </div>
 
           {/* Long Word Bonuses */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>🌟 LONG WORD BONUSES EARNED</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>🌟 LONG WORD BONUSES</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center"}}>
               {[["8","+1"],["9","+3"],["10","+6"],["11","+10"],["12","+15"],["13","+25"],["14+","+35+"]].map(([len,bonus])=>(
-                <div key={len} style={{textAlign:"center",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(255,255,255,0.1)",minWidth:52}}>
-                  <div style={{fontSize:16,fontWeight:"bold",color:(statsData.longWordBonuses?.[len]||0)>0?"#f6d365":"rgba(255,255,255,0.2)"}}>{statsData.longWordBonuses?.[len]||0}</div>
-                  <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{len} letters</div>
-                  <div style={{fontSize:8,color:"rgba(255,255,255,0.35)"}}>{bonus} pts</div>
+                <div key={len} style={{textAlign:"center",background:"rgba(255,255,255,0.06)",borderRadius:9,padding:"6px 8px",border:"1px solid rgba(255,255,255,0.1)",minWidth:46}}>
+                  <div style={{fontSize:14,fontWeight:"bold",color:(statsData.longWordBonuses?.[len]||0)>0?"#f6d365":"rgba(255,255,255,0.2)"}}>{statsData.longWordBonuses?.[len]||0}</div>
+                  <div style={{fontSize:7,color:"rgba(255,255,255,0.45)"}}>{len} ltrs</div>
+                  <div style={{fontSize:7,color:"rgba(255,255,255,0.35)"}}>{bonus}</div>
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{textAlign:"center",marginTop:4}}>
-            <button onClick={()=>{
-              const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}};
-              saveStats(def); setStatsData(def);
-            }} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
+          <div style={{textAlign:"center",marginTop:4,marginBottom:8}}>
+            <button onClick={()=>{const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}};saveStats(def);setStatsData(def);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
           </div>
         </div>
       )}

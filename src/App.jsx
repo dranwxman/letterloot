@@ -13,32 +13,47 @@ const MW_COLLEGIATE_KEY = "6c41ef2c-8c1d-440a-b04a-24e623cf68e1";
 const MW_MEDICAL_KEY    = "05a10875-f553-43f6-be64-6dafcdb4152e";
 const PAYPAL_CLIENT_ID  = "AWV-XEqYa4wqwUhFgnBS220hTO9ZK5ON7p25gney3EfH-Zd1Kp4b7cfXK3Kg8wEhW0mpRs8uqR6Rr8NM";
 
-function seededRandom(seed) {
-  let s = seed;
-  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
-}
+// ── UTC-based daily seed (guarantees same board for all players worldwide) ──
 function getDailySeed() {
   const d = new Date();
-  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
 }
 function getDayOfYear() {
   const now = new Date();
-  return Math.floor((now - new Date(now.getFullYear(), 0, 0)) / 86400000);
+  const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 0));
+  return Math.floor((now - start) / 86400000);
 }
 function getWeekKey() {
   const now = new Date();
   const monday = new Date(now);
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  return `${monday.getFullYear()}-${monday.getMonth()+1}-${monday.getDate()}`;
+  monday.setUTCDate(now.getUTCDate() - ((now.getUTCDay() + 6) % 7));
+  return `${monday.getUTCFullYear()}-${monday.getUTCMonth()+1}-${monday.getUTCDate()}`;
 }
 function getTodayKey() {
   const d = new Date();
-  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+  return `${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`;
 }
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
   const s = (seconds % 60).toString().padStart(2, "0");
   return `${m}:${s}`;
+}
+
+// ── Long word bonus scoring ────────────────────────────────────
+function getLongWordBonus(length) {
+  if (length < 8) return 0;
+  if (length === 8) return 1;
+  if (length === 9) return 3;
+  if (length === 10) return 6;
+  if (length === 11) return 10;
+  if (length === 12) return 15;
+  if (length === 13) return 25;
+  return 25 + (length - 13) * 10;
+}
+
+function seededRandom(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
 }
 
 const FREQ = { A:9,B:2,C:2,D:4,E:12,F:2,G:3,H:2,I:9,J:1,K:1,L:4,M:2,N:6,O:8,P:2,Q:1,R:6,S:4,T:6,U:4,V:2,W:2,X:1,Y:2,Z:1 };
@@ -60,7 +75,13 @@ function getBonusPositions(count, bonusCount, rng) {
 function generateLevelTiles(level, startId, rng, bonusPositions) {
   const pool = buildPool(rng);
   const count = 42 + (level - 1) * 6;
-  return pool.slice(0, count).map((l, i) => ({
+  let letters = pool.slice(0, count);
+  // Guarantee U if Q is present
+  if (letters.includes("Q") && !letters.includes("U")) {
+    const replaceIdx = letters.findIndex(l => !["Q","A","E","I","O","U"].includes(l));
+    if (replaceIdx !== -1) letters[replaceIdx] = "U";
+  }
+  return letters.map((l, i) => ({
     id: startId + i, letter: l, value: LETTER_VALUES[l], used: false,
     bonus: bonusPositions.includes(i) ? (Math.random() < 0.5 ? "double" : "triple") : null,
   }));
@@ -93,6 +114,9 @@ const BADGE_DEFS = [
   { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                cat:"core" },
   { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",             cat:"core" },
   { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",   cat:"core" },
+  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",          cat:"core" },
+  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",          cat:"core" },
+  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",        cat:"core" },
   { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                   cat:"level" },
   { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                   cat:"level" },
   { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                   cat:"level" },
@@ -103,35 +127,28 @@ const BADGE_DEFS = [
   { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",        cat:"level" },
   { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",        cat:"level" },
   { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",  cat:"level" },
-  { id:"word_6",       icon:"📖", label:"6 Letters",       desc:"Spell a 6-letter word",           cat:"word" },
-  { id:"word_8",       icon:"📚", label:"8 Letters",       desc:"Spell an 8-letter word",          cat:"word" },
-  { id:"word_10",      icon:"🧠", label:"10 Letters",      desc:"Spell a 10-letter word!",         cat:"word" },
-  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",    cat:"word" },
   { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min", cat:"word" },
   { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting",cat:"word" },
+  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",    cat:"word" },
   { id:"big_spender",  icon:"💳", label:"Big Spender",     desc:"Purchase points in the game",     cat:"alltime" },
   { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",  cat:"alltime" },
   { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time", cat:"alltime" },
   { id:"all_time_10k", icon:"👸", label:"Legend",          desc:"10,000+ all-time score",          cat:"alltime" },
 ];
 
-// ── Merriam-Webster Validation ─────────────────────────────────
+// ── Dictionary validation ──────────────────────────────────────
 const wordCache = {};
 async function validateWord(word) {
   const key = word.toLowerCase();
   if (wordCache[key] !== undefined) return wordCache[key];
   try {
-    const collRes = await fetch(
-      `https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`
-    );
+    const collRes = await fetch(`https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`);
     const collData = await collRes.json();
     if (Array.isArray(collData) && collData.length > 0 && typeof collData[0] === "object" && collData[0].shortdef) {
       wordCache[key] = { valid: true, source: "collegiate" };
       return wordCache[key];
     }
-    const medRes = await fetch(
-      `https://www.dictionaryapi.com/api/v3/references/medical/json/${encodeURIComponent(key)}?key=${MW_MEDICAL_KEY}`
-    );
+    const medRes = await fetch(`https://www.dictionaryapi.com/api/v3/references/medical/json/${encodeURIComponent(key)}?key=${MW_MEDICAL_KEY}`);
     const medData = await medRes.json();
     if (Array.isArray(medData) && medData.length > 0 && typeof medData[0] === "object" && medData[0].shortdef) {
       wordCache[key] = { valid: true, source: "medical" };
@@ -143,6 +160,35 @@ async function validateWord(word) {
     wordCache[key] = { valid: word.length >= 3, source: "fallback" };
     return wordCache[key];
   }
+}
+
+// ── Smart stuck detection ──────────────────────────────────────
+// Checks if any 3+ letter word can be formed from remaining tiles
+async function hasValidWordsRemaining(tiles) {
+  const available = tiles.filter(t => !t.used).map(t => t.letter);
+  if (available.length < 3) return false;
+  // Generate all 3-letter combinations and check a sample
+  const letters = [...available];
+  const combos = new Set();
+  // Check all permutations of 3 letters from available
+  for (let i = 0; i < letters.length; i++) {
+    for (let j = 0; j < letters.length; j++) {
+      if (j === i) continue;
+      for (let k = 0; k < letters.length; k++) {
+        if (k === i || k === j) continue;
+        combos.add(letters[i] + letters[j] + letters[k]);
+        if (combos.size > 50) break; // limit API calls
+      }
+      if (combos.size > 50) break;
+    }
+    if (combos.size > 50) break;
+  }
+  // Check each combo against dictionary
+  for (const combo of combos) {
+    const result = await validateWord(combo);
+    if (result.valid) return true;
+  }
+  return false;
 }
 
 // ── Guitar music ───────────────────────────────────────────────
@@ -222,22 +268,6 @@ function ConfettiCanvas({ active, rainbow }) {
 }
 
 // ── Storage helpers ────────────────────────────────────────────
-function getLeaderboard() {
-  try {
-    const data = JSON.parse(localStorage.getItem("ll_leaderboard") || "[]");
-    return Array.isArray(data) ? data : [];
-  } catch { return []; }
-}
-function saveLeaderboard(board) {
-  try { localStorage.setItem("ll_leaderboard", JSON.stringify(board)); } catch {}
-}
-function addScore(name, score, level, perfectDay) {
-  const board = getLeaderboard();
-  board.push({ name, score, level, perfectDay, date: new Date().toLocaleDateString() });
-  board.sort((a, b) => b.score - a.score);
-  const trimmed = board.slice(0, 10);
-  saveLeaderboard(trimmed); return trimmed;
-}
 function getTimeLeaderboard() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_times") || "null");
@@ -246,9 +276,7 @@ function getTimeLeaderboard() {
     if (!data.perfect) data.perfect = [];
     [1,2,3,4,5].forEach(l => { if (!Array.isArray(data.levels[l])) data.levels[l] = []; });
     return data;
-  } catch {
-    return { levels:{"1":[],"2":[],"3":[],"4":[],"5":[]}, perfect:[] };
-  }
+  } catch { return { levels:{"1":[],"2":[],"3":[],"4":[],"5":[]}, perfect:[] }; }
 }
 function saveTimeLeaderboard(board) {
   try { localStorage.setItem("ll_times", JSON.stringify(board)); } catch {}
@@ -274,13 +302,37 @@ function getAllTimeStats() {
 function saveAllTimeStats(stats) {
   try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {}
 }
+function getBonusPoints() {
+  try { return parseInt(localStorage.getItem("ll_bonus_points") || "0"); } catch { return 0; }
+}
+function addBonusPoints(pts) {
+  try {
+    const current = getBonusPoints();
+    localStorage.setItem("ll_bonus_points", String(current + pts));
+    return current + pts;
+  } catch { return pts; }
+}
+function spendBonusPoints(pts) {
+  try {
+    const current = getBonusPoints();
+    const newVal = Math.max(0, current - pts);
+    localStorage.setItem("ll_bonus_points", String(newVal));
+    return newVal;
+  } catch { return 0; }
+}
+
+// ── Stats helpers ──────────────────────────────────────────────
 function getStats() {
   const def = {
     daysPlayed:0, lastPlayedDate:null,
+    currentStreak:0, longestStreak:0, lastStreakDate:null,
     perfectDaysAllTime:0, perfectDaysWeek:{}, weekKey:"",
     highScoreAllTime:0, highScoreWeek:{}, highScoreToday:0,
     highWordAllTime:0, highWordWeek:{}, highWordToday:0,
     fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},
+    dailyScores:{}, collegiateWords:0, medicalWords:0,
+    longestWordToday:"", longestWordAllTime:"",
+    longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0},
   };
   try {
     const data = JSON.parse(localStorage.getItem("ll_stats") || "null");
@@ -294,11 +346,24 @@ function updateStats(updates) {
   const stats = getStats();
   const todayKey = getTodayKey();
   const weekKey = getWeekKey();
+  // New day tracking
   if (stats.lastPlayedDate !== todayKey) {
     stats.daysPlayed += 1;
+    // Streak logic
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yesterdayKey = `${yesterday.getUTCFullYear()}-${yesterday.getUTCMonth()+1}-${yesterday.getUTCDate()}`;
+    if (stats.lastStreakDate === yesterdayKey) {
+      stats.currentStreak += 1;
+    } else {
+      stats.currentStreak = 1;
+    }
+    if (stats.currentStreak > stats.longestStreak) stats.longestStreak = stats.currentStreak;
+    stats.lastStreakDate = todayKey;
     stats.lastPlayedDate = todayKey;
     stats.highScoreToday = 0;
     stats.highWordToday = 0;
+    stats.longestWordToday = "";
   }
   if (stats.weekKey !== weekKey) {
     stats.weekKey = weekKey;
@@ -310,11 +375,26 @@ function updateStats(updates) {
     if (updates.score > stats.highScoreToday) stats.highScoreToday = updates.score;
     if (updates.score > (stats.highScoreWeek[todayKey]||0)) stats.highScoreWeek[todayKey] = updates.score;
     if (updates.score > stats.highScoreAllTime) stats.highScoreAllTime = updates.score;
+    stats.dailyScores = stats.dailyScores || {};
+    if (!stats.dailyScores[todayKey] || updates.score > stats.dailyScores[todayKey]) {
+      stats.dailyScores[todayKey] = updates.score;
+    }
   }
   if (updates.wordScore !== undefined) {
     if (updates.wordScore > stats.highWordToday) stats.highWordToday = updates.wordScore;
     if (updates.wordScore > (stats.highWordWeek[todayKey]||0)) stats.highWordWeek[todayKey] = updates.wordScore;
     if (updates.wordScore > stats.highWordAllTime) stats.highWordAllTime = updates.wordScore;
+  }
+  if (updates.word) {
+    if (!stats.longestWordToday || updates.word.length > stats.longestWordToday.length) stats.longestWordToday = updates.word;
+    if (!stats.longestWordAllTime || updates.word.length > stats.longestWordAllTime.length) stats.longestWordAllTime = updates.word;
+  }
+  if (updates.source === "collegiate") stats.collegiateWords = (stats.collegiateWords||0) + 1;
+  if (updates.source === "medical") stats.medicalWords = (stats.medicalWords||0) + 1;
+  if (updates.longWordBonus !== undefined && updates.wordLength !== undefined) {
+    const key = updates.wordLength >= 14 ? "14+" : String(updates.wordLength);
+    stats.longWordBonuses = stats.longWordBonuses || {};
+    stats.longWordBonuses[key] = (stats.longWordBonuses[key]||0) + 1;
   }
   if (updates.perfectDay) {
     stats.perfectDaysAllTime += 1;
@@ -329,16 +409,59 @@ function updateStats(updates) {
   saveStats(stats);
   return stats;
 }
-function getBonusPoints() {
-  try { return parseInt(localStorage.getItem("ll_bonus_points") || "0"); } catch { return 0; }
-}
-function addBonusPoints(pts) {
+
+// ── Save/restore game session ──────────────────────────────────
+function saveSession(state) {
   try {
-    const current = getBonusPoints();
-    localStorage.setItem("ll_bonus_points", String(current + pts));
-    return current + pts;
-  } catch { return pts; }
+    const todayKey = getTodayKey();
+    localStorage.setItem("ll_session", JSON.stringify({ ...state, savedDate: todayKey }));
+  } catch {}
 }
+function loadSession() {
+  try {
+    const data = JSON.parse(localStorage.getItem("ll_session") || "null");
+    if (!data) return null;
+    if (data.savedDate !== getTodayKey()) return null; // New day — ignore saved session
+    return data;
+  } catch { return null; }
+}
+function clearSession() {
+  try { localStorage.removeItem("ll_session"); } catch {}
+}
+
+// ── First open tour ────────────────────────────────────────────
+const TOUR_STEPS = [
+  {
+    title: "Welcome to LetterLoot! 🎉",
+    body: "A daily word puzzle where every letter has a point value. New tiles every day at midnight!",
+    emoji: "🎮",
+  },
+  {
+    title: "Letters Don't Need to Connect!",
+    body: "Unlike other word games, you can tap ANY tiles in ANY order to spell words. No adjacency needed!",
+    emoji: "✨",
+  },
+  {
+    title: "Every Letter Has a Value",
+    body: "Common letters (E, T, A) score 3-5 pts. Rare letters (Q=20, Z=22, J=16) score big! Gold tiles = 2×, Purple = 3×!",
+    emoji: "💎",
+  },
+  {
+    title: "What the Buttons Do",
+    body: "Submit Word — checks your word against the dictionary\nClear — removes your current selection\nTry Level Again — restart with same tiles\n⏸️ Pause — stops your timer\n🔓 Buy Level — spend points to advance",
+    emoji: "🕹️",
+  },
+  {
+    title: "Clearing a Level",
+    body: "Use ALL tiles to clear the board and earn a big bonus! Can't finish? Spend points to buy the next level, or try again with the same tiles.",
+    emoji: "🌟",
+  },
+  {
+    title: "Need More Points?",
+    body: "Visit the 🛒 Shop tab to purchase points with PayPal. Purchased points carry over every day and never expire!",
+    emoji: "💳",
+  },
+];
 
 // ══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
@@ -346,21 +469,33 @@ function addBonusPoints(pts) {
 export default function App() {
   const [playerName, setPlayerName] = useState(localStorage.getItem("ll_name") || "");
   const [editingName, setEditingName] = useState(!localStorage.getItem("ll_name"));
-  const [level, setLevel] = useState(1);
+
+  // ── Tour ───────────────────────────────────────────────────
+  const [showTour, setShowTour] = useState(!localStorage.getItem("ll_tour_done"));
+  const [tourStep, setTourStep] = useState(0);
+  const completeTour = () => { localStorage.setItem("ll_tour_done", "1"); setShowTour(false); };
+
+  // ── Game state — restore from session if available ─────────
+  const savedSession = useRef(loadSession());
+  const ss = savedSession.current;
+
+  const [level, setLevel] = useState(ss?.level || 1);
   const [tiles, setTiles] = useState(() => {
+    if (ss?.tiles) return ss.tiles;
     const rng = seededRandom(getDailySeed());
     const bp = getBonusPositions(42, getBonusCount(1), rng);
     return generateLevelTiles(1, 0, rng, bp);
   });
-  const tileCountRef = useRef(42);
+  const tileCountRef = useRef(ss?.tileCount || 42);
   const levelResetCount = useRef(0);
   const [selected, setSelected] = useState([]);
-  const [submitted, setSubmitted] = useState([]);
-  const [totalScore, setTotalScore] = useState(0);
+  const [submitted, setSubmitted] = useState(ss?.submitted || []);
+  const [totalScore, setTotalScore] = useState(ss?.totalScore || 0);
   const [bonusPoints, setBonusPoints] = useState(() => getBonusPoints());
-  const [badges, setBadges] = useState([]);
-  const [streak, setStreak] = useState(0);
+  const [badges, setBadges] = useState(ss?.badges || []);
+  const [streak, setStreak] = useState(ss?.streak || 0);
   const [validating, setValidating] = useState(false);
+  const [checkingStuck, setCheckingStuck] = useState(false);
   const [shake, setShake] = useState(false);
   const [flash, setFlash] = useState(null);
   const [showBadge, setShowBadge] = useState(null);
@@ -369,35 +504,35 @@ export default function App() {
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
   const [levelComplete, setLevelComplete] = useState(false);
   const [showBuyModal, setShowBuyModal] = useState(false);
+  const [showBuyChoiceModal, setShowBuyChoiceModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [paused, setPaused] = useState(false);
   const [musicOn, setMusicOn] = useState(false);
-  const [leaderboard, setLeaderboard] = useState(() => getLeaderboard());
   const [timeLeaderboard, setTimeLeaderboard] = useState(() => getTimeLeaderboard());
   const [statsData, setStatsData] = useState(() => getStats());
   const [showNameInput, setShowNameInput] = useState(false);
-  const [perfectDay, setPerfectDay] = useState(true);
-  const [longestWordToday, setLongestWordToday] = useState("");
+  const [perfectDay, setPerfectDay] = useState(ss?.perfectDay ?? true);
+  const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
-  const [levelTime, setLevelTime] = useState(0);
-  const [totalTime, setTotalTime] = useState(0);
+  const [levelTime, setLevelTime] = useState(ss?.levelTime || 0);
+  const [totalTime, setTotalTime] = useState(ss?.totalTime || 0);
   const [timeSubTab, setTimeSubTab] = useState("levels");
   const [selectedLevelView, setSelectedLevelView] = useState(1);
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [purchaseStatus, setPurchaseStatus] = useState(null);
   const [purchasing, setPurchasing] = useState(false);
+
   const timerRef = useRef(null);
-  const levelTimeRef = useRef(0);
-  const totalTimeRef = useRef(0);
-  const submittedRef = useRef([]);
-  const totalRef = useRef(0);
+  const levelTimeRef = useRef(ss?.levelTime || 0);
+  const totalTimeRef = useRef(ss?.totalTime || 0);
+  const submittedRef = useRef(ss?.submitted || []);
+  const totalRef = useRef(ss?.totalScore || 0);
   const audioCtxRef = useRef(null);
   const musicLoopRef = useRef(null);
   const nextLoopRef = useRef(0);
   const clearedLevelsRef = useRef({});
-  const consecutiveInvalidRef = useRef(0);
 
   const today = new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
   const dayNum = getDayOfYear();
@@ -407,22 +542,44 @@ export default function App() {
   const currentWord = selected.map(id => tiles.find(t => t.id === id)?.letter).join("");
   const currentScore = calcWordScore(selected, tiles);
   const buyCost = LEVEL_BUY_COST[level] || 0;
-  const canBuy = totalRef.current >= buyCost && buyCost > 0;
+  const canBuyEarned = totalRef.current >= buyCost && buyCost > 0;
+  const canBuyPurchased = bonusPoints >= buyCost && buyCost > 0;
   const weekPerfectCount = Object.values(statsData.perfectDaysWeek || {}).reduce((a,b)=>a+b,0);
   const weekHighScore = Math.max(0, ...Object.values(statsData.highScoreWeek || {}).concat([0]));
   const weekHighWord = Math.max(0, ...Object.values(statsData.highWordWeek || {}).concat([0]));
+
+  // Daily scores for 7-day chart
+  const last7Days = Array.from({length:7}, (_,i) => {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - (6-i));
+    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`;
+    return { key, score: statsData.dailyScores?.[key] || 0, label: d.toLocaleDateString("en-US",{weekday:"short"}) };
+  });
+  const maxDayScore = Math.max(...last7Days.map(d => d.score), 1);
+  const allTimeTotal = Object.values(statsData.dailyScores || {}).reduce((a,b)=>a+b,0);
+  const avgDaily = statsData.daysPlayed > 0 ? Math.round(allTimeTotal / statsData.daysPlayed) : 0;
+
+  // ── Save session on every state change ────────────────────
+  useEffect(() => {
+    saveSession({
+      level, tiles, totalScore: totalRef.current,
+      submitted: submittedRef.current, badges, streak,
+      perfectDay, longestWordToday, tileCount: tileCountRef.current,
+      levelTime: levelTimeRef.current, totalTime: totalTimeRef.current,
+    });
+  }, [level, tiles, badges, streak, perfectDay, longestWordToday]);
 
   // ── Load PayPal SDK ────────────────────────────────────────
   useEffect(() => {
     if (paypalLoaded || document.getElementById("paypal-sdk")) return;
     const script = document.createElement("script");
     script.id = "paypal-sdk";
-    script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=USD`;
+    script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&currency=USD&components=buttons&enable-funding=paypal`;
     script.onload = () => setPaypalLoaded(true);
     document.body.appendChild(script);
   }, []);
 
-  // ── Render PayPal buttons when tab is active ───────────────
+  // ── Render PayPal buttons ──────────────────────────────────
   useEffect(() => {
     if (tab !== "shop" || !paypalLoaded || !window.paypal) return;
     const tiers = [
@@ -435,12 +592,10 @@ export default function App() {
       if (!container || container.children.length > 0) return;
       window.paypal.Buttons({
         style: { layout:"vertical", color:"gold", shape:"pill", label:"pay", height:40 },
-        createOrder: (data, actions) => {
-          return actions.order.create({
-            purchase_units: [{ amount: { value: amount }, description: `LetterLoot ${points.toLocaleString()} Points` }]
-          });
-        },
-        onApprove: async (data, actions) => {
+        createOrder: (data, actions) => actions.order.create({
+          purchase_units: [{ amount: { value: amount }, description: `LetterLoot ${points.toLocaleString()} Points` }]
+        }),
+        onApprove: async (data) => {
           setPurchasing(true);
           try {
             const res = await fetch("/api/paypal", {
@@ -452,8 +607,6 @@ export default function App() {
             if (result.success) {
               const newTotal = addBonusPoints(result.points);
               setBonusPoints(newTotal);
-              totalRef.current += result.points;
-              setTotalScore(totalRef.current);
               setPurchaseStatus({ success: true, points: result.points });
               awardBadge("big_spender");
               setTimeout(() => setPurchaseStatus(null), 4000);
@@ -489,13 +642,8 @@ export default function App() {
 
   // ── Pause ──────────────────────────────────────────────────
   const handlePause = () => {
-    if (paused) {
-      setPaused(false); startTimer();
-      if (musicOn) startMusic();
-    } else {
-      setPaused(true); stopTimer();
-      stopMusic();
-    }
+    if (paused) { setPaused(false); startTimer(); if (musicOn) startMusic(); }
+    else { setPaused(true); stopTimer(); stopMusic(); }
   };
 
   // ── Music ──────────────────────────────────────────────────
@@ -543,22 +691,36 @@ export default function App() {
     setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
     setPerfectDay(true); setPerfectDayAchieved(false); setLongestWordToday("");
     levelResetCount.current = 0; clearedLevelsRef.current = {};
-    consecutiveInvalidRef.current = 0;
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
+    clearSession();
   }, [startTimer, stopTimer]);
 
-  // ── Level Reset ────────────────────────────────────────────
+  // ── Level Reset (same tiles) ───────────────────────────────
   const doLevelReset = useCallback(() => {
     levelResetCount.current += 1;
-    const rng = seededRandom(getDailySeed() + level * 999);
-    const count = 42 + (level - 1) * 6;
-    const bp = getBonusPositions(count, getBonusCount(level), rng);
-    setTiles(generateLevelTiles(level, tileCountRef.current - count, rng, bp));
+    // Reset used status on existing tiles — same tiles, fresh start
+    setTiles(prev => prev.map(t => ({ ...t, used: false })));
     setSelected([]); resetLevelTimer();
     setShowResetConfirm(false); setShowStuckModal(false);
-    consecutiveInvalidRef.current = 0;
-  }, [level, resetLevelTimer]);
+  }, [resetLevelTimer]);
+
+  // ── Buy level with choice of point pool ───────────────────
+  const handleBuyWithEarned = () => {
+    const cost = LEVEL_BUY_COST[level];
+    if (totalRef.current < cost) return;
+    totalRef.current -= cost; setTotalScore(totalRef.current);
+    setShowBuyChoiceModal(false); setShowBuyModal(false); setShowStuckModal(false);
+    handleNextLevel(true);
+  };
+  const handleBuyWithPurchased = () => {
+    const cost = LEVEL_BUY_COST[level];
+    if (bonusPoints < cost) return;
+    const newBonus = spendBonusPoints(cost);
+    setBonusPoints(newBonus);
+    setShowBuyChoiceModal(false); setShowBuyModal(false); setShowStuckModal(false);
+    handleNextLevel(true);
+  };
 
   // ── Submit ─────────────────────────────────────────────────
   const handleSubmit = async () => {
@@ -567,35 +729,43 @@ export default function App() {
     const result = await validateWord(currentWord);
     const valid = result.valid;
     const isMedical = result.source === "medical";
-    const score = valid ? currentScore : 0;
+    const isCollegiate = result.source === "collegiate";
+    const baseScore = valid ? currentScore : 0;
+    const longBonus = valid ? getLongWordBonus(currentWord.length) : 0;
+    const score = baseScore + longBonus;
     const newStreak = valid ? streak + 1 : 0;
     setStreak(newStreak);
-    setFlash({ word: currentWord, score, valid, medical: isMedical });
-    setTimeout(() => setFlash(null), 1800);
-    if (!valid) {
-      setShake(true); setTimeout(() => setShake(false), 500);
-      consecutiveInvalidRef.current += 1;
-      if (consecutiveInvalidRef.current >= 3 && availableTiles.length <= 8) {
-        setTimeout(() => setShowStuckModal(true), 600);
-      }
-    } else {
-      consecutiveInvalidRef.current = 0;
-    }
-    const newEntry = { word: currentWord, score, valid, medical: isMedical };
+
+    // Flash message
+    let flashMsg = currentWord;
+    if (valid && longBonus > 0) flashMsg = `${currentWord} +${longBonus} bonus!`;
+    setFlash({ word: flashMsg, score, valid, medical: isMedical, collegiate: isCollegiate });
+    setTimeout(() => setFlash(null), 2000);
+    if (!valid) { setShake(true); setTimeout(() => setShake(false), 500); }
+
+    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate };
     const newSubmitted = [...submittedRef.current, newEntry];
     submittedRef.current = newSubmitted;
     setSubmitted(newSubmitted);
+
     if (valid) {
       const newTotal = totalRef.current + score;
       totalRef.current = newTotal;
       setTotalScore(newTotal);
       const newTiles = tiles.map(t => selected.includes(t.id) ? { ...t, used: true } : t);
       setTiles(newTiles);
+
+      // Update stats
       const ats = getAllTimeStats();
       ats.words += 1; ats.score += score;
       saveAllTimeStats(ats);
-      const updated = updateStats({ score: newTotal, wordScore: score });
+      const updated = updateStats({
+        score: newTotal, wordScore: score,
+        word: currentWord, source: result.source,
+        ...(longBonus > 0 ? { longWordBonus: longBonus, wordLength: currentWord.length } : {}),
+      });
       setStatsData(updated);
+
       if (currentWord.length > (longestWordToday.length||0)) { setLongestWordToday(currentWord); awardBadge("longest_day"); }
       if (currentWord.length > (longestWordAllTime.length||0)) { setLongestWordAllTime(currentWord); localStorage.setItem("ll_longest", currentWord); }
       if (isMedical) awardBadge("medical_word");
@@ -604,10 +774,10 @@ export default function App() {
       if (score >= 50) awardBadge("score_50");
       if (score >= 100) awardBadge("score_100");
       if (score >= 200) awardBadge("score_200");
-      if (currentWord.length >= 6) awardBadge("word_6");
       if (currentWord.length >= 7) awardBadge("long_word");
-      if (currentWord.length >= 8) awardBadge("word_8");
-      if (currentWord.length >= 10) awardBadge("word_10");
+      if (currentWord.length >= 8) awardBadge("long_8");
+      if (currentWord.length >= 10) awardBadge("long_10");
+      if (currentWord.length >= 13) awardBadge("long_13");
       if (newStreak >= 3) awardBadge("streak_3");
       if (newStreak >= 5) awardBadge("streak_5");
       if (newTotal >= 500) awardBadge("daily_500");
@@ -619,6 +789,7 @@ export default function App() {
       if (ats.score >= 10000) awardBadge("all_time_10k");
       if (levelTimeRef.current < 180) awardBadge("speed_demon");
       if (levelResetCount.current === 0) awardBadge("no_retreat");
+
       const allUsed = newTiles.every(t => t.used);
       if (allUsed) {
         awardBadge(`all_tiles_${level}`);
@@ -651,6 +822,12 @@ export default function App() {
             setTimeout(() => setShowNameInput(true), 1000);
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
+      } else {
+        // Smart stuck detection — check remaining tiles after each valid word
+        setCheckingStuck(true);
+        const hasWords = await hasValidWordsRemaining(newTiles);
+        setCheckingStuck(false);
+        if (!hasWords) setTimeout(() => setShowStuckModal(true), 600);
       }
     }
     setSelected([]);
@@ -667,7 +844,7 @@ export default function App() {
     const newTiles = generateLevelTiles(newLevel, tileCountRef.current, rng, bp);
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
-    levelResetCount.current = 0; consecutiveInvalidRef.current = 0;
+    levelResetCount.current = 0;
     resetLevelTimer(); startTimer();
     if (newLevel === 2) awardBadge("level_2");
     if (newLevel === 3) awardBadge("level_3");
@@ -675,9 +852,15 @@ export default function App() {
     if (newLevel === 5) awardBadge("level_5");
   };
 
-  const handleExtendLevel5 = () => {
-    if (totalRef.current < 1000) return;
-    totalRef.current -= 1000; setTotalScore(totalRef.current);
+  const handleExtendLevel5 = (useBonus = false) => {
+    const cost = 1000;
+    if (useBonus) {
+      if (bonusPoints < cost) return;
+      setBonusPoints(spendBonusPoints(cost));
+    } else {
+      if (totalRef.current < cost) return;
+      totalRef.current -= cost; setTotalScore(totalRef.current);
+    }
     setPerfectDay(false);
     const rng = seededRandom(getDailySeed() + level * 999 + Date.now());
     const count = 42 + (level - 1) * 6;
@@ -685,22 +868,12 @@ export default function App() {
     setTiles(generateLevelTiles(level, tileCountRef.current, rng, bp));
     tileCountRef.current += count;
     setSelected([]); setShowStuckModal(false);
-    consecutiveInvalidRef.current = 0; startTimer();
-  };
-
-  const handleBuyLevel = () => {
-    const cost = LEVEL_BUY_COST[level];
-    if (totalRef.current < cost) return;
-    totalRef.current -= cost; setTotalScore(totalRef.current);
-    setShowStuckModal(false);
-    handleNextLevel(true);
+    startTimer();
   };
 
   const handleSaveScore = () => {
     if (!playerName.trim()) return;
     localStorage.setItem("ll_name", playerName);
-    const board = addScore(playerName, totalRef.current, level, perfectDay);
-    setLeaderboard(board);
     if (Object.keys(clearedLevelsRef.current).length > 0) {
       let updatedTimes = getTimeLeaderboard();
       Object.entries(clearedLevelsRef.current).forEach(([lvl, secs]) => {
@@ -710,6 +883,7 @@ export default function App() {
       setTimeLeaderboard(updatedTimes);
     }
     setShowNameInput(false);
+    clearSession();
   };
 
   const handleNameSave = () => {
@@ -755,6 +929,29 @@ export default function App() {
       <ConfettiCanvas active={confetti && !rainbowConfetti} rainbow={false} />
       <ConfettiCanvas active={rainbowConfetti} rainbow={true} />
 
+      {/* ── FIRST OPEN TOUR ── */}
+      {showTour&&(
+        <div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"36px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.3)",maxWidth:340,width:"90%"}}>
+            <div style={{fontSize:52}}>{TOUR_STEPS[tourStep].emoji}</div>
+            <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365",marginTop:12,lineHeight:1.3}}>{TOUR_STEPS[tourStep].title}</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:12,lineHeight:1.7,whiteSpace:"pre-line"}}>{TOUR_STEPS[tourStep].body}</div>
+            {/* Step dots */}
+            <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:20}}>
+              {TOUR_STEPS.map((_,i)=>(
+                <div key={i} style={{width:8,height:8,borderRadius:"50%",background:i===tourStep?"#f6d365":"rgba(255,255,255,0.2)",transition:"all 0.2s"}}/>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:16}}>
+              <button className="ll-btn" onClick={completeTour} style={{flex:1,padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",fontSize:12}}>Skip</button>
+              <button className="ll-btn" onClick={()=>{ if(tourStep < TOUR_STEPS.length-1) setTourStep(t=>t+1); else completeTour(); }} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>
+                {tourStep < TOUR_STEPS.length-1 ? "Next →" : "Let's Play! 🎮"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Purchase status toast */}
       {purchaseStatus&&<div style={{position:"fixed",bottom:80,left:"50%",zIndex:9999,animation:"purchasePop 4s forwards",background:purchaseStatus.success?"linear-gradient(135deg,#00c853,#00e676)":"rgba(200,40,40,0.95)",borderRadius:20,padding:"14px 28px",boxShadow:"0 8px 32px rgba(0,0,0,0.6)",textAlign:"center",whiteSpace:"nowrap"}}>
         {purchaseStatus.success
@@ -767,40 +964,56 @@ export default function App() {
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}><div style={{fontSize:28}}>{b.icon}</div><div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div><div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}</div></div>):null; })()}
 
       {/* Word flash */}
-      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?18:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts${flash.medical?" 🩺":""}` :"Not a valid word!"}</div></div>}
+      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?16:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}` :"Not a valid word!"}</div></div>}
 
-      {/* Checking */}
-      {validating&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>🔍</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>CHECKING…</div></div>}
+      {/* Checking / scanning */}
+      {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>{checkingStuck?"🔎":"🔍"}</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div></div>}
 
-      {/* Purchasing overlay */}
+      {/* Purchasing */}
       {purchasing&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>💳</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>PROCESSING…</div></div>}
 
-      {/* Paused overlay */}
+      {/* Paused */}
       {paused&&<div style={{position:"fixed",inset:0,zIndex:8000,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={handlePause}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"40px",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
         <div style={{fontSize:52}}>⏸️</div>
         <div style={{fontSize:28,fontWeight:"bold",color:"#f6d365",marginTop:8}}>PAUSED</div>
         <div style={{fontSize:13,color:"#ccc",marginTop:8}}>Tap anywhere to resume</div>
-        <div style={{fontSize:11,color:"rgba(255,255,255,0.35)",marginTop:4}}>Timers stopped · Music paused</div>
       </div></div>}
 
       {/* Reset confirm */}
       {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
         <div style={{fontSize:40}}>🔄</div>
         <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Try Level {level} Again?</div>
-        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Your current progress on this level will be lost.<br/>Your total score is kept.</div>
-        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:14,fontWeight:"bold"}}>Yes, Try Again</button>
+        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Your current progress on Level {level} will be lost.<br/>Your total score is kept.<br/>Same tiles will be used.</div>
+        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:14,fontWeight:"bold"}}>Yes, Try Level {level} Again</button>
         <button className="ll-btn" onClick={()=>setShowResetConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
+      </div></div>}
+
+      {/* Buy choice modal */}
+      {showBuyChoiceModal&&<div style={{position:"fixed",inset:0,zIndex:9100,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
+        <div style={{fontSize:44}}>🔓</div>
+        <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Unlock Level {level+1 <= 5 ? level+1 : level}</div>
+        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Choose which points to use:</div>
+        <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:8}}>{buyCost} pts required</div>
+        <div style={{fontSize:11,color:"#f093fb",marginTop:4}}>⚠️ Buying forfeits Perfect Day</div>
+        <button className="ll-btn" onClick={handleBuyWithEarned} disabled={!canBuyEarned} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuyEarned?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuyEarned?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuyEarned?"pointer":"default"}}>🎮 Use Earned Points — {totalRef.current} available {!canBuyEarned?"(not enough)":"✓"}</button>
+        <button className="ll-btn" onClick={handleBuyWithPurchased} disabled={!canBuyPurchased} style={{marginTop:8,width:"100%",padding:"13px",borderRadius:14,background:canBuyPurchased?"linear-gradient(135deg,#60a5fa,#3b82f6)":"rgba(255,255,255,0.08)",color:canBuyPurchased?"#fff":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuyPurchased?"pointer":"default"}}>💳 Use Purchased Points — {bonusPoints.toLocaleString()} available {!canBuyPurchased?"(not enough)":"✓"}</button>
+        {!canBuyEarned && !canBuyPurchased && <div style={{marginTop:8,fontSize:11,color:"#fb7185"}}>Not enough points in either pool.<br/>Visit the 🛒 Shop to buy more!</div>}
+        <button className="ll-btn" onClick={()=>setShowBuyChoiceModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Cancel</button>
       </div></div>}
 
       {/* Stuck modal */}
       {showStuckModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
         <div style={{fontSize:52}}>😬</div>
         <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
-        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You've gone as far as you can<br/>with these tiles.</div>
+        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed<br/>from the remaining tiles.</div>
         <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
-        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:13,fontWeight:"bold"}}>🔄 Try Level Again</button>
-        {level < 5 && <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
-        {level === 5 && <button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current < 1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
+        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:13,fontWeight:"bold"}}>🔄 Try Level {level} Again</button>
+        {level < 5 && <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowBuyChoiceModal(true); }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>🔓 Buy Level {level+1} — {buyCost} pts</button>}
+        {level === 5 && (
+          <div>
+            <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowBuyChoiceModal(true); }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>🔓 Extend Level 5 — 1,000 pts</button>
+          </div>
+        )}
         <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowNameInput(true); }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — Save Score":"📊 End & Save Score"}</button>
       </div></div>}
 
@@ -822,22 +1035,10 @@ export default function App() {
         <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
         <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
         <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
-        <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Level Time: {formatTime(levelTimeRef.current)}</div>
+        <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
         {timeLeaderboard.levels[level]?.length > 0 && <div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
         <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
         <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
-      </div></div>}
-
-      {/* Buy Level Modal */}
-      {showBuyModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
-        <div style={{fontSize:44}}>🔓</div>
-        <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
-        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>You haven't cleared all tiles yet.<br/>Spend points to unlock the next level.</div>
-        <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
-        <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
-        <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits Perfect Day and time records</div>
-        <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
-        <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
       </div></div>}
 
       {/* Save Score Modal */}
@@ -846,9 +1047,8 @@ export default function App() {
         <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div>
         <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
         <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · ⏱️ {formatTime(totalTimeRef.current)}</div>
-        <div style={{fontSize:13,color:"#ccc",marginTop:16,marginBottom:8}}>Save your score to leaderboard:</div>
-        <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
-        <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save to Leaderboard 🏆</button>
+        <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:16,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
+        <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
         <button className="ll-btn replay-btn" onClick={()=>{ setShowNameInput(false); handleFullReset(); }} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#ffffff",fontSize:18,fontWeight:"bold",letterSpacing:1,boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
           🎮 WOW! That was SO Close.<br/>Want to Try Again?
         </button>
@@ -864,9 +1064,12 @@ export default function App() {
               <button className="ll-btn" onClick={handleNameSave} style={{padding:"5px 12px",borderRadius:20,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:11,fontWeight:"bold"}}>Save</button>
             </div>
           ):(
-            <div style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}} onClick={()=>setEditingName(true)}>
-              <span style={{fontSize:13,color:"#f6d365",fontWeight:"bold"}}>👤 {playerName||"Set Name"}</span>
-              <span style={{fontSize:9,color:"rgba(255,255,255,0.3)"}}>✏️</span>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>setEditingName(true)}>
+                <span style={{fontSize:13,color:"#f6d365",fontWeight:"bold"}}>👤 {playerName||"Set Name"}</span>
+                <span style={{fontSize:9,color:"rgba(255,255,255,0.3)"}}>✏️</span>
+              </div>
+              <button onClick={()=>setShowTour(true)} style={{background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:"50%",width:22,height:22,cursor:"pointer",fontSize:11,color:"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif",display:"flex",alignItems:"center",justifyContent:"center"}}>?</button>
             </div>
           )}
         </div>
@@ -904,15 +1107,28 @@ export default function App() {
           </button>
         </div>
 
+        {/* Point balances */}
+        <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:8}}>
+          <div style={{background:"rgba(246,211,101,0.1)",borderRadius:10,padding:"5px 12px",border:"1px solid rgba(246,211,101,0.25)",textAlign:"center"}}>
+            <span style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>🎮 {totalScore.toLocaleString()}</span>
+            <span style={{fontSize:8,color:"rgba(255,255,255,0.4)",marginLeft:4}}>earned</span>
+          </div>
+          {bonusPoints > 0 && <div style={{background:"rgba(96,165,250,0.1)",borderRadius:10,padding:"5px 12px",border:"1px solid rgba(96,165,250,0.25)",textAlign:"center"}}>
+            <span style={{fontSize:11,color:"#60a5fa",fontWeight:"bold"}}>💳 {bonusPoints.toLocaleString()}</span>
+            <span style={{fontSize:8,color:"rgba(255,255,255,0.4)",marginLeft:4}}>purchased</span>
+          </div>}
+        </div>
+
         {/* Tabs */}
         <div style={{display:"flex",gap:4,justifyContent:"center",margin:"6px 0",flexWrap:"wrap"}}>
-          {[["play","🎮 Play"],["badges","🏅 Badges"],["history","📜 History"],["leaderboard","🏆 Scores"],["times","⏱️ Times"],["stats","📊 Stats"],["shop","🛒 Shop"]].map(([id,label])=>(
+          {[["play","🎮 Play"],["badges","🏅 Badges"],["history","📜 History"],["times","⏱️ Times"],["stats","📊 Stats"],["shop","🛒 Shop"]].map(([id,label])=>(
             <button key={id} className="ll-tab" onClick={()=>setTab(id)} style={{padding:"5px 9px",borderRadius:20,fontSize:10,background:tab===id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===id?"#1a1a2e":"#f5f0e8",fontWeight:tab===id?"bold":"normal",border:tab===id?"none":"1px solid rgba(255,255,255,0.18)"}}>{label}</button>
           ))}
         </div>
 
+        {/* Score strip */}
         <div style={{display:"flex",justifyContent:"space-around",alignItems:"center",background:"rgba(255,255,255,0.08)",borderRadius:13,padding:"9px 6px",marginBottom:9,border:"1px solid rgba(255,255,255,0.18)"}}>
-          {[[totalScore,"PTS","#f6d365"],[`⚡${streak}`,"STREAK","#fda085"],[`${badges.length}/${BADGE_DEFS.length}`,"BADGES","#f093fb"],[submitted.filter(s=>s.valid).length,"WORDS","#6ee7b7"],[availableTiles.length,"LEFT","#60a5fa"]].map(([val,label,color])=>(
+          {[[`⚡${streak}`,"STREAK","#fda085"],[`${badges.length}/${BADGE_DEFS.length}`,"BADGES","#f093fb"],[submitted.filter(s=>s.valid).length,"WORDS","#6ee7b7"],[availableTiles.length,"LEFT","#60a5fa"]].map(([val,label,color])=>(
             <div key={label} style={{textAlign:"center"}}>
               <div style={{fontSize:16,fontWeight:"bold",color}}>{val}</div>
               <div style={{fontSize:7,color:"rgba(255,255,255,0.55)",letterSpacing:1.5}}>{label}</div>
@@ -937,7 +1153,16 @@ export default function App() {
                 );})
               }
             </div>
-            {currentWord.length>0&&<div style={{marginTop:7,display:"flex",justifyContent:"space-between"}}><div style={{fontSize:10,color:"rgba(255,255,255,0.65)"}}>Value: <span style={{color:"#f6d365",fontWeight:"bold",fontSize:12}}>{currentScore}</span>{currentWord.length<3&&<span style={{color:"#fb7185",marginLeft:6,fontSize:9}}>need 3+</span>}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>{currentWord.length} letters</div></div>}
+            {currentWord.length>0&&(
+              <div style={{marginTop:7,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.65)"}}>
+                  Value: <span style={{color:"#f6d365",fontWeight:"bold",fontSize:12}}>{currentScore}</span>
+                  {getLongWordBonus(currentWord.length) > 0 && <span style={{color:"#6ee7b7",marginLeft:6,fontSize:9}}>+{getLongWordBonus(currentWord.length)} length bonus!</span>}
+                  {currentWord.length<3&&<span style={{color:"#fb7185",marginLeft:6,fontSize:9}}>need 3+</span>}
+                </div>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>{currentWord.length} letters</div>
+              </div>
+            )}
           </div>
 
           <div style={{display:"flex",gap:12,justifyContent:"center",marginBottom:8}}>
@@ -952,12 +1177,19 @@ export default function App() {
           </div>
 
           <div style={{display:"flex",gap:6,marginBottom:9}}>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.45)",color:"#93c5fd"}}>🔄 Try Level Again</button>
-            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.45)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#f6d365":"rgba(255,255,255,0.35)"}}>🔓 Buy L{level+1} ({buyCost}pts)</button>}
+            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.45)",color:"#93c5fd"}}>🔄 Try Level {level} Again</button>
+            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyChoiceModal(true)} style={{flex:1,padding:"9px",borderRadius:11,fontSize:11,background:(canBuyEarned||canBuyPurchased)?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${(canBuyEarned||canBuyPurchased)?"rgba(246,211,101,0.45)":"rgba(255,255,255,0.12)"}`,color:(canBuyEarned||canBuyPurchased)?"#f6d365":"rgba(255,255,255,0.35)"}}>🔓 Buy L{level+1} ({buyCost}pts)</button>}
           </div>
 
+          {/* Tile grid with level banner */}
           <div style={{background:"rgba(255,255,255,0.06)",borderRadius:15,padding:"10px 6px",border:"1px solid rgba(255,255,255,0.15)",position:"relative"}}>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.6)",letterSpacing:2,marginBottom:8,textAlign:"center"}}>LEVEL {level} · {availableTiles.length} of {tiles.length} tiles remaining</div>
+            {/* Level banner */}
+            <div style={{textAlign:"center",marginBottom:6}}>
+              <div style={{display:"inline-block",background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",borderRadius:20,padding:"4px 20px",border:"1px solid rgba(246,211,101,0.35)"}}>
+                <span style={{fontSize:12,fontWeight:"bold",color:"#f6d365",letterSpacing:3}}>✦ LEVEL {level} ✦</span>
+              </div>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:3}}>{tiles.length} tiles · {getBonusCount(level)} bonus tiles · {availableTiles.length} remaining</div>
+            </div>
             {paused&&<div style={{position:"absolute",inset:0,borderRadius:15,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}><div style={{fontSize:28,color:"rgba(255,255,255,0.4)"}}>⏸️ PAUSED</div></div>}
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:4,marginBottom:4}}>
@@ -971,7 +1203,7 @@ export default function App() {
             ))}
           </div>
 
-          {longestWordToday&&<div style={{textAlign:"center",marginTop:8,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters){longestWordAllTime&&longestWordAllTime.length>longestWordToday.length&&<span> · All-time: <span style={{color:"#f093fb"}}>{longestWordAllTime}</span></span>}</div>}
+          {longestWordToday&&<div style={{textAlign:"center",marginTop:8,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters)</div>}
           <div style={{textAlign:"center",marginTop:10}}>
             <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.35)",padding:"6px 16px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
           </div>
@@ -1008,8 +1240,10 @@ export default function App() {
               {[...submitted].reverse().map((s,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:11,padding:"9px 13px"}}>
                   <div>
-                    <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}{s.medical?" 🩺":""}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginTop:1}}>{s.valid?(s.medical?"Medical ✓":"Valid ✓"):"Invalid ✗"}</div>
+                    <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginTop:1,display:"flex",gap:6,alignItems:"center"}}>
+                      {s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}
+                    </div>
                   </div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontSize:18,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
@@ -1026,33 +1260,10 @@ export default function App() {
         </div>
       )}
 
-      {/* ── SCORES TAB ── */}
-      {tab==="leaderboard"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <div style={{textAlign:"center",marginBottom:14}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>TOP LOOTERS — SCORES</div></div>
-          {leaderboard.length===0
-            ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No scores yet — clear a level to appear here!</div>
-            :leaderboard.map((entry,i)=>(
-              <div key={i} style={{display:"flex",alignItems:"center",gap:12,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.1))":"rgba(255,255,255,0.05)",border:i===0?"1px solid rgba(246,211,101,0.4)":"1px solid rgba(255,255,255,0.13)",borderRadius:12,padding:"11px 14px",marginBottom:7}}>
-                <div style={{fontSize:20,minWidth:30,textAlign:"center"}}>{medalFor(i)}</div>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:14,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}{entry.perfectDay?" 🌈":""}</div>
-                  <div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>Level {entry.level} · {entry.date}</div>
-                </div>
-                <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>{entry.score}</div>
-              </div>
-            ))
-          }
-          <div style={{textAlign:"center",marginTop:12}}>
-            <button onClick={()=>{saveLeaderboard([]);setLeaderboard([]);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Clear Score Board</button>
-          </div>
-        </div>
-      )}
-
       {/* ── TIMES TAB ── */}
       {tab==="times"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <div style={{textAlign:"center",marginBottom:10}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>TOP LOOTERS — SPEED</div></div>
+          <div style={{textAlign:"center",marginBottom:10}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)",letterSpacing:3}}>SPEED RECORDS</div></div>
           <div style={{display:"flex",gap:8,justifyContent:"center",marginBottom:14}}>
             {[["levels","📊 By Level"],["perfect","🌈 Perfect Day"]].map(([id,label])=>(
               <button key={id} className="ll-tab" onClick={()=>setTimeSubTab(id)} style={{padding:"6px 14px",borderRadius:20,fontSize:11,background:timeSubTab===id?"linear-gradient(135deg,#60a5fa,#a78bfa)":"rgba(255,255,255,0.1)",color:timeSubTab===id?"#fff":"#f5f0e8",fontWeight:timeSubTab===id?"bold":"normal",border:timeSubTab===id?"none":"1px solid rgba(255,255,255,0.18)"}}>{label}</button>
@@ -1078,7 +1289,7 @@ export default function App() {
                   ))
                 }
               </div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",textAlign:"center",fontStyle:"italic"}}>Board-clear completions only — no bought levels</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.3)",textAlign:"center",fontStyle:"italic"}}>Board-clear completions only</div>
             </div>
           )}
           {timeSubTab==="perfect"&&(
@@ -1107,41 +1318,80 @@ export default function App() {
       {/* ── STATS TAB ── */}
       {tab==="stats"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+
+          {/* Days & Streaks */}
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>📅 DAYS PLAYED</div>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:40,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Total Days</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>📅 DAYS & STREAKS</div>
+            <div style={{display:"flex",justifyContent:"space-around"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:28,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Total Days</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:28,fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Current Streak</div>
+                {statsData.currentStreak === statsData.longestStreak && statsData.currentStreak > 0 && <div style={{fontSize:8,color:"#6ee7b7"}}>New Record!</div>}
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:28,fontWeight:"bold",color:"#f6d365"}}>🏆 {statsData.longestStreak}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Longest Streak</div>
+              </div>
             </div>
           </div>
+
+          {/* Perfect Days */}
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAYS</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>🌈 PERFECT DAYS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:28,fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:28,fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>All Time</div></div>
             </div>
           </div>
+
+          {/* Cumulative Scores */}
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>🏆 HIGHEST GAME SCORE</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>📈 SCORES</div>
+            <div style={{display:"flex",justifyContent:"space-around",marginBottom:12}}>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Today</div></div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>This Week Best</div></div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Best Day Ever</div></div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-around",marginBottom:12,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Daily Average</div></div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#6ee7b7"}}>{allTimeTotal.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>All-Time Total</div></div>
+            </div>
+            {/* 7-day bar chart */}
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:6,textAlign:"center",letterSpacing:1}}>LAST 7 DAYS</div>
+            <div style={{display:"flex",gap:4,alignItems:"flex-end",height:50,justifyContent:"space-around"}}>
+              {last7Days.map((d,i)=>(
+                <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                  <div style={{width:"100%",background:d.score>0?"linear-gradient(180deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",borderRadius:"3px 3px 0 0",height:d.score>0?`${Math.max(4,(d.score/maxDayScore)*40)}px`:"4px",transition:"height 0.3s ease"}}/>
+                  <div style={{fontSize:7,color:"rgba(255,255,255,0.35)"}}>{d.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.3)",textAlign:"center",marginTop:6,fontStyle:"italic"}}>Today's earned points only · Purchased points tracked separately</div>
+          </div>
+
+          {/* Highest Word Score */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:12}}>💎 HIGHEST WORD SCORE</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Today</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>This Week</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>All Time</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:18,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>All Time</div></div>
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
-            <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Today</div></div>
-              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>This Week</div></div>
-              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>All Time</div></div>
-            </div>
-          </div>
+
+          {/* Fastest Level Times */}
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>⏱️ YOUR FASTEST LEVEL TIMES</div>
             {[1,2,3,4,5].map(l=>(
@@ -1151,8 +1401,66 @@ export default function App() {
               </div>
             ))}
           </div>
+
+          {/* Dictionary Breakdown */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>📚 DICTIONARY BREAKDOWN</div>
+            <div style={{display:"flex",justifyContent:"space-around"}}>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:24,fontWeight:"bold",color:"#6ee7b7"}}>{statsData.collegiateWords||0}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>📖 Collegiate</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:24,fontWeight:"bold",color:"#60a5fa"}}>{statsData.medicalWords||0}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>🩺 Medical</div>
+              </div>
+              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365"}}>{(statsData.collegiateWords||0)+(statsData.medicalWords||0)}</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)"}}>Total Valid</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Longest Words */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>📏 LONGEST WORDS</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>Today's Best</div>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{statsData.longestWordToday||"—"}</div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0"}}>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.5)"}}>All-Time Best</div>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{statsData.longestWordAllTime||"—"}</div>
+            </div>
+          </div>
+
+          {/* Long Word Bonuses */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(255,255,255,0.12)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:10}}>🌟 LONG WORD BONUSES EARNED</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center"}}>
+              {[["8","+1"],["9","+3"],["10","+6"],["11","+10"],["12","+15"],["13","+25"],["14+","+35+"]].map(([len,bonus])=>(
+                <div key={len} style={{textAlign:"center",background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(255,255,255,0.1)",minWidth:52}}>
+                  <div style={{fontSize:16,fontWeight:"bold",color:(statsData.longWordBonuses?.[len]||0)>0?"#f6d365":"rgba(255,255,255,0.2)"}}>{statsData.longWordBonuses?.[len]||0}</div>
+                  <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{len} letters</div>
+                  <div style={{fontSize:8,color:"rgba(255,255,255,0.35)"}}>{bonus} pts</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Purchased Points */}
+          {bonusPoints > 0 && <div style={{background:"rgba(96,165,250,0.08)",borderRadius:14,padding:"14px",marginBottom:10,border:"1px solid rgba(96,165,250,0.2)"}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",letterSpacing:3,marginBottom:8}}>💳 PURCHASED POINTS BALANCE</div>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:32,fontWeight:"bold",color:"#60a5fa"}}>{bonusPoints.toLocaleString()}</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:2}}>Carry over daily · Never expire</div>
+            </div>
+          </div>}
+
           <div style={{textAlign:"center",marginTop:4}}>
-            <button onClick={()=>{ const def={daysPlayed:0,lastPlayedDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null}}; saveStats(def); setStatsData(def); }} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
+            <button onClick={()=>{ const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}}; saveStats(def); setStatsData(def); }} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"6px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
           </div>
         </div>
       )}
@@ -1163,45 +1471,31 @@ export default function App() {
           <div style={{textAlign:"center",marginBottom:16}}>
             <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365"}}>🛒 Buy Points</div>
             <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginTop:4}}>Power up your game with extra points!</div>
-            {bonusPoints > 0 && <div style={{fontSize:13,color:"#6ee7b7",marginTop:6,fontWeight:"bold"}}>💰 Bonus Points Balance: {bonusPoints.toLocaleString()}</div>}
+            {bonusPoints > 0 && <div style={{fontSize:13,color:"#60a5fa",marginTop:6,fontWeight:"bold"}}>💳 Your Balance: {bonusPoints.toLocaleString()} pts</div>}
           </div>
 
-          {/* Tier 1 */}
           <div style={{background:"linear-gradient(135deg,rgba(96,165,250,0.12),rgba(167,139,250,0.08))",borderRadius:16,padding:"18px",marginBottom:12,border:"1px solid rgba(96,165,250,0.3)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div>
-                <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8"}}>🪙 Starter Pack</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginTop:2}}>1,000 points</div>
-              </div>
+              <div><div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8"}}>🪙 Starter Pack</div><div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginTop:2}}>1,000 points</div></div>
               <div style={{fontSize:26,fontWeight:"bold",color:"#60a5fa"}}>$1.00</div>
             </div>
             <div id="paypal-btn-1"/>
             {!paypalLoaded&&<div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.3)",padding:"10px 0"}}>Loading payment…</div>}
           </div>
 
-          {/* Tier 2 */}
           <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.12),rgba(253,160,133,0.08))",borderRadius:16,padding:"18px",marginBottom:12,border:"1px solid rgba(246,211,101,0.35)",position:"relative"}}>
             <div style={{position:"absolute",top:-10,right:16,background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"3px 12px",fontSize:10,fontWeight:"bold",color:"#1a1a2e"}}>BEST VALUE</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div>
-                <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8"}}>🪙 Explorer Pack</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginTop:2}}>7,500 points</div>
-                <div style={{fontSize:11,color:"#6ee7b7",marginTop:2}}>Save 50% vs Starter!</div>
-              </div>
+              <div><div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8"}}>🪙 Explorer Pack</div><div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginTop:2}}>7,500 points</div><div style={{fontSize:11,color:"#6ee7b7",marginTop:2}}>Save 50% vs Starter!</div></div>
               <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>$5.00</div>
             </div>
             <div id="paypal-btn-5"/>
             {!paypalLoaded&&<div style={{textAlign:"center",fontSize:11,color:"rgba(255,255,255,0.3)",padding:"10px 0"}}>Loading payment…</div>}
           </div>
 
-          {/* Tier 3 */}
           <div style={{background:"linear-gradient(135deg,rgba(240,147,251,0.12),rgba(167,139,250,0.08))",borderRadius:16,padding:"18px",marginBottom:12,border:"1px solid rgba(240,147,251,0.3)"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-              <div>
-                <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8"}}>🪙 Champion Pack</div>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginTop:2}}>20,000 points</div>
-                <div style={{fontSize:11,color:"#6ee7b7",marginTop:2}}>Best value — save 80%!</div>
-              </div>
+              <div><div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8"}}>🪙 Champion Pack</div><div style={{fontSize:13,color:"rgba(255,255,255,0.5)",marginTop:2}}>20,000 points</div><div style={{fontSize:11,color:"#6ee7b7",marginTop:2}}>Best value — save 80%!</div></div>
               <div style={{fontSize:26,fontWeight:"bold",color:"#f093fb"}}>$10.00</div>
             </div>
             <div id="paypal-btn-10"/>
@@ -1211,8 +1505,8 @@ export default function App() {
           <div style={{background:"rgba(255,255,255,0.04)",borderRadius:12,padding:"12px",border:"1px solid rgba(255,255,255,0.08)",marginTop:8}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",textAlign:"center",lineHeight:1.6}}>
               🔒 Secure payments via PayPal<br/>
-              Points are credited instantly after purchase<br/>
-              Points are saved to this device
+              Points credited instantly · Never expire<br/>
+              💳 Purchased points shown separately from earned points
             </div>
           </div>
         </div>

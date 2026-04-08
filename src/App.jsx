@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName } from "./supabase";
 
 const LETTER_VALUES = {};
 const SCORE_MAP = {
@@ -253,7 +254,8 @@ function ConfettiCanvas({ active, rainbow }) {
   return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:9999, pointerEvents:"none" }} />;
 }
 
-function getLifetimePoints() {
+// ── Local storage fallbacks for guests ────────────────────────
+function getLocalLifetime() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_lifetime") || "null");
     if (!data) return { total: 0, lastPlayedDate: null };
@@ -265,52 +267,10 @@ function getLifetimePoints() {
     return data;
   } catch { return { total: 0, lastPlayedDate: null }; }
 }
-function saveLifetimePoints(total) {
+function saveLocalLifetime(total) {
   try { localStorage.setItem("ll_lifetime", JSON.stringify({ total, lastPlayedDate: getTodayKey() })); } catch {}
 }
-function addLifetimePoints(pts) {
-  const data = getLifetimePoints();
-  const newTotal = (data.total || 0) + pts;
-  saveLifetimePoints(newTotal);
-  return newTotal;
-}
-
-function getTimeLeaderboard() {
-  try {
-    const data = JSON.parse(localStorage.getItem("ll_times") || "null");
-    if (!data || typeof data !== "object") throw new Error();
-    if (!data.levels) data.levels = {"1":[],"2":[],"3":[],"4":[],"5":[]};
-    if (!data.perfect) data.perfect = [];
-    [1,2,3,4,5].forEach(l => { if (!Array.isArray(data.levels[l])) data.levels[l] = []; });
-    return data;
-  } catch { return { levels:{"1":[],"2":[],"3":[],"4":[],"5":[]}, perfect:[] }; }
-}
-function saveTimeLeaderboard(board) {
-  try { localStorage.setItem("ll_times", JSON.stringify(board)); } catch {}
-}
-function addLevelTime(name, level, seconds) {
-  const board = getTimeLeaderboard();
-  if (!board.levels[level]) board.levels[level] = [];
-  board.levels[level].push({ name, seconds, date: new Date().toLocaleDateString() });
-  board.levels[level].sort((a, b) => a.seconds - b.seconds);
-  board.levels[level] = board.levels[level].slice(0, 5);
-  saveTimeLeaderboard(board); return board;
-}
-function addPerfectTime(name, seconds) {
-  const board = getTimeLeaderboard();
-  board.perfect.push({ name, seconds, date: new Date().toLocaleDateString() });
-  board.perfect.sort((a, b) => a.seconds - b.seconds);
-  board.perfect = board.perfect.slice(0, 10);
-  saveTimeLeaderboard(board); return board;
-}
-function getAllTimeStats() {
-  try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; }
-}
-function saveAllTimeStats(stats) {
-  try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {}
-}
-
-function getStats() {
+function getLocalStats() {
   const def = {
     daysPlayed:0, lastPlayedDate:null,
     currentStreak:0, longestStreak:0, lastStreakDate:null,
@@ -327,11 +287,11 @@ function getStats() {
     return data ? {...def, ...data} : def;
   } catch { return def; }
 }
-function saveStats(stats) {
+function saveLocalStats(stats) {
   try { localStorage.setItem("ll_stats", JSON.stringify(stats)); } catch {}
 }
-function updateStats(updates) {
-  const stats = getStats();
+function updateLocalStats(updates) {
+  const stats = getLocalStats();
   const todayKey = getTodayKey();
   const weekKey = getWeekKey();
   if (stats.lastPlayedDate !== todayKey) {
@@ -378,20 +338,53 @@ function updateStats(updates) {
     const lvl = String(updates.levelNum);
     if (!stats.fastestLevels[lvl] || updates.levelTime < stats.fastestLevels[lvl]) stats.fastestLevels[lvl] = updates.levelTime;
   }
-  saveStats(stats); return stats;
+  saveLocalStats(stats); return stats;
 }
-
-function saveSession(state) {
+function getLocalTimeLeaderboard() {
+  try {
+    const data = JSON.parse(localStorage.getItem("ll_times") || "null");
+    if (!data || typeof data !== "object") throw new Error();
+    if (!data.levels) data.levels = {"1":[],"2":[],"3":[],"4":[],"5":[]};
+    if (!data.perfect) data.perfect = [];
+    [1,2,3,4,5].forEach(l => { if (!Array.isArray(data.levels[l])) data.levels[l] = []; });
+    return data;
+  } catch { return { levels:{"1":[],"2":[],"3":[],"4":[],"5":[]}, perfect:[] }; }
+}
+function saveLocalTimeLeaderboard(board) {
+  try { localStorage.setItem("ll_times", JSON.stringify(board)); } catch {}
+}
+function addLocalLevelTime(name, level, seconds) {
+  const board = getLocalTimeLeaderboard();
+  if (!board.levels[level]) board.levels[level] = [];
+  board.levels[level].push({ name, seconds, date: new Date().toLocaleDateString() });
+  board.levels[level].sort((a, b) => a.seconds - b.seconds);
+  board.levels[level] = board.levels[level].slice(0, 5);
+  saveLocalTimeLeaderboard(board); return board;
+}
+function addLocalPerfectTime(name, seconds) {
+  const board = getLocalTimeLeaderboard();
+  board.perfect.push({ name, seconds, date: new Date().toLocaleDateString() });
+  board.perfect.sort((a, b) => a.seconds - b.seconds);
+  board.perfect = board.perfect.slice(0, 10);
+  saveLocalTimeLeaderboard(board); return board;
+}
+function saveLocalSession(state) {
   try { localStorage.setItem("ll_session", JSON.stringify({ ...state, savedDate: getTodayKey() })); } catch {}
 }
-function loadSession() {
+function loadLocalSession() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_session") || "null");
     if (!data || data.savedDate !== getTodayKey()) return null;
     return data;
   } catch { return null; }
 }
-function clearSession() { try { localStorage.removeItem("ll_session"); } catch {} }
+function clearLocalSession() { try { localStorage.removeItem("ll_session"); } catch {} }
+function getAllTimeStats() {
+  try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; }
+}
+function saveAllTimeStats(stats) {
+  try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {}
+}
 
 function scheduleNotifications() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
@@ -433,33 +426,274 @@ const TOUR_STEPS = [
   { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
 ];
 
+// ══════════════════════════════════════════════════════════════
+// AUTH SCREEN COMPONENT
+// ══════════════════════════════════════════════════════════════
+function AuthScreen({ onGuest, onLogin }) {
+  const [mode, setMode] = useState("welcome"); // welcome | login | signup | forgot
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const handleSignUp = async () => {
+    if (!email || !password || !name) { setError("Please fill in all fields"); return; }
+    if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    setLoading(true); setError("");
+    const { error } = await signUp(email, password, name);
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    setSuccess("Account created! Signing you in…");
+    setTimeout(() => onLogin(), 1500);
+  };
+
+  const handleSignIn = async () => {
+    if (!email || !password) { setError("Please enter your email and password"); return; }
+    setLoading(true); setError("");
+    const { error } = await signIn(email, password);
+    setLoading(false);
+    if (error) { setError("Invalid email or password"); return; }
+    onLogin();
+  };
+
+  const handleForgot = async () => {
+    if (!email) { setError("Please enter your email address"); return; }
+    setLoading(true); setError("");
+    const { error } = await resetPassword(email);
+    setLoading(false);
+    if (error) { setError(error.message); return; }
+    setSuccess("Reset link sent! Check your email.");
+  };
+
+  const inputStyle = {
+    width:"100%", padding:"11px 14px", borderRadius:10,
+    border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.08)",
+    color:"#f5f0e8", fontSize:14, fontFamily:"Georgia,serif", outline:"none",
+    marginBottom:10, boxSizing:"border-box",
+  };
+  const btnStyle = (bg, color="#1a1a2e") => ({
+    width:"100%", padding:"13px", borderRadius:12, border:"none",
+    background:bg, color, fontSize:14, fontWeight:"bold",
+    fontFamily:"Georgia,serif", cursor:"pointer", marginBottom:8,
+  });
+
+  return (
+    <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px", fontFamily:"Georgia,serif", color:"#f5f0e8" }}>
+      {/* Stars */}
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0}}>
+        {[...Array(50)].map((_,i)=>(
+          <div key={i} style={{ position:"absolute", width:(i%4===0?2:1)+"px", height:(i%4===0?2:1)+"px", background:"#fff", borderRadius:"50%", opacity:0.1+((i*7)%5)*0.1, top:((i*37)%100)+"%", left:((i*53)%100)+"%", animation:`twinkle ${2+(i%4)}s infinite alternate`, animationDelay:`${(i%5)*0.4}s` }}/>
+        ))}
+      </div>
+      <style>{`@keyframes twinkle{from{opacity:0.08}to{opacity:0.7}}`}</style>
+
+      <div style={{zIndex:1, width:"100%", maxWidth:360}}>
+        {/* Title */}
+        <div style={{textAlign:"center", marginBottom:28}}>
+          <div style={{display:"inline-block", background:"rgba(139,92,246,0.25)", border:"2.5px solid rgba(167,139,250,0.95)", borderRadius:12, padding:"6px 20px", marginBottom:12}}>
+            <span style={{fontSize:28, fontWeight:"bold", letterSpacing:4, color:"#ffffff", textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+          </div>
+          <div style={{fontSize:12, color:"rgba(255,255,255,0.5)"}}>Daily word puzzle · Every letter has a value</div>
+        </div>
+
+        {/* Welcome screen */}
+        {mode==="welcome"&&(
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center", marginBottom:20}}>
+              <div style={{fontSize:40, marginBottom:8}}>🎮</div>
+              <div style={{fontSize:16, fontWeight:"bold", color:"#f6d365"}}>Welcome!</div>
+              <div style={{fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:6, lineHeight:1.6}}>Sign in to save your progress across devices, or play as a guest to try it out.</div>
+            </div>
+            <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={()=>setMode("login")}>Sign In</button>
+            <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={()=>setMode("signup")}>Create Account</button>
+            <button style={{...btnStyle("rgba(255,255,255,0.08)","rgba(255,255,255,0.7)"), border:"1px solid rgba(255,255,255,0.2)"}} onClick={onGuest}>
+              Play as Guest
+              <div style={{fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:"normal", marginTop:2}}>Progress saved on this device only</div>
+            </button>
+          </div>
+        )}
+
+        {/* Sign In */}
+        {mode==="login"&&(
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center", marginBottom:18}}>
+              <div style={{fontSize:13, fontWeight:"bold", color:"#f6d365", letterSpacing:2}}>SIGN IN</div>
+            </div>
+            {error&&<div style={{background:"rgba(220,38,38,0.2)", border:"1px solid rgba(220,38,38,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)", border:"1px solid rgba(34,197,94,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#86efac", marginBottom:10}}>{success}</div>}
+            <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSignIn()}/>
+            <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSignIn()}/>
+            <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={handleSignIn} disabled={loading}>{loading?"Signing in…":"Sign In"}</button>
+            <div style={{textAlign:"center", marginTop:4}}>
+              <span style={{fontSize:11, color:"rgba(255,255,255,0.4)", cursor:"pointer"}} onClick={()=>{setMode("forgot");setError("");}}>Forgot password?</span>
+            </div>
+            <div style={{textAlign:"center", marginTop:12, fontSize:12, color:"rgba(255,255,255,0.4)"}}>
+              Don't have an account? <span style={{color:"#a78bfa", cursor:"pointer"}} onClick={()=>{setMode("signup");setError("");}}>Sign up</span>
+            </div>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"), border:"none", fontSize:12, marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
+          </div>
+        )}
+
+        {/* Sign Up */}
+        {mode==="signup"&&(
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center", marginBottom:18}}>
+              <div style={{fontSize:13, fontWeight:"bold", color:"#a78bfa", letterSpacing:2}}>CREATE ACCOUNT</div>
+            </div>
+            {error&&<div style={{background:"rgba(220,38,38,0.2)", border:"1px solid rgba(220,38,38,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)", border:"1px solid rgba(34,197,94,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#86efac", marginBottom:10}}>{success}</div>}
+            <input style={inputStyle} type="text" placeholder="Your name" value={name} onChange={e=>setName(e.target.value)}/>
+            <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
+            <input style={inputStyle} type="password" placeholder="Password (6+ characters)" value={password} onChange={e=>setPassword(e.target.value)}/>
+            <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={handleSignUp} disabled={loading}>{loading?"Creating account…":"Create Account"}</button>
+            <div style={{textAlign:"center", marginTop:8, fontSize:12, color:"rgba(255,255,255,0.4)"}}>
+              Already have an account? <span style={{color:"#f6d365", cursor:"pointer"}} onClick={()=>{setMode("login");setError("");}}>Sign in</span>
+            </div>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"), border:"none", fontSize:12, marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
+          </div>
+        )}
+
+        {/* Forgot Password */}
+        {mode==="forgot"&&(
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center", marginBottom:18}}>
+              <div style={{fontSize:13, fontWeight:"bold", color:"#60a5fa", letterSpacing:2}}>RESET PASSWORD</div>
+            </div>
+            {error&&<div style={{background:"rgba(220,38,38,0.2)", border:"1px solid rgba(220,38,38,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)", border:"1px solid rgba(34,197,94,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#86efac", marginBottom:10}}>{success}</div>}
+            <div style={{fontSize:12, color:"rgba(255,255,255,0.6)", marginBottom:14, lineHeight:1.6}}>Enter your email and we'll send you a reset link.</div>
+            <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
+            <button style={btnStyle("linear-gradient(135deg,#60a5fa,#3b82f6)","#fff")} onClick={handleForgot} disabled={loading}>{loading?"Sending…":"Send Reset Link"}</button>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"), border:"none", fontSize:12, marginTop:4}} onClick={()=>setMode("login")}>← Back to Sign In</button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// MAIN APP
+// ══════════════════════════════════════════════════════════════
 export default function App() {
-  const [playerName, setPlayerName] = useState(localStorage.getItem("ll_name") || "");
-  const [editingName, setEditingName] = useState(!localStorage.getItem("ll_name"));
-  const [showTour, setShowTour] = useState(!localStorage.getItem("ll_tour_done"));
+  const [authState, setAuthState] = useState("loading"); // loading | auth | guest | playing
+  const [user, setUser] = useState(null);
+  const [playerName, setPlayerName] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
-  const completeTour = () => { localStorage.setItem("ll_tour_done", "1"); setShowTour(false); requestNotificationPermission(); };
+  const [showResetWarning, setShowResetWarning] = useState(false);
 
-  const lifetimeData = useRef(getLifetimePoints());
-  const [lifetimePoints, setLifetimePoints] = useState(lifetimeData.current.total || 0);
-  const [showResetWarning, setShowResetWarning] = useState(lifetimeData.current.wasReset || false);
+  // ── Check for existing session on load ────────────────────
+  useEffect(() => {
+    getSession().then(session => {
+      if (session) {
+        setUser(session.user);
+        setAuthState("playing");
+      } else {
+        // Check if guest
+        const isGuest = localStorage.getItem("ll_guest") === "1";
+        if (isGuest) setAuthState("playing");
+        else setAuthState("auth");
+      }
+    });
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_IN" && session) {
+        setUser(session.user);
+        setAuthState("playing");
+      }
+      if (event === "SIGNED_OUT") {
+        setUser(null);
+        setAuthState("auth");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
-  const ss = useRef(loadSession()).current;
-  const [level, setLevel] = useState(ss?.level || 1);
+  const handleGuest = () => {
+    localStorage.setItem("ll_guest", "1");
+    setAuthState("playing");
+    const tourDone = localStorage.getItem("ll_tour_done");
+    if (!tourDone) setShowTour(true);
+  };
+
+  const handleLogin = async () => {
+    const session = await getSession();
+    if (session) {
+      setUser(session.user);
+      setAuthState("playing");
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    localStorage.removeItem("ll_guest");
+    setAuthState("auth");
+  };
+
+  if (authState === "loading") {
+    return (
+      <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif" }}>
+        <div style={{textAlign:"center"}}>
+          <div style={{display:"inline-block", background:"rgba(139,92,246,0.25)", border:"2.5px solid rgba(167,139,250,0.95)", borderRadius:12, padding:"6px 20px", marginBottom:16}}>
+            <span style={{fontSize:28, fontWeight:"bold", letterSpacing:4, color:"#ffffff", textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+          </div>
+          <div style={{fontSize:12, color:"rgba(255,255,255,0.4)", letterSpacing:2}}>LOADING…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (authState === "auth") {
+    return <AuthScreen onGuest={handleGuest} onLogin={handleLogin} />;
+  }
+
+  return (
+    <GameScreen
+      user={user}
+      onSignOut={handleSignOut}
+      showTour={showTour}
+      setShowTour={setShowTour}
+      showResetWarning={showResetWarning}
+      setShowResetWarning={setShowResetWarning}
+    />
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// GAME SCREEN COMPONENT
+// ══════════════════════════════════════════════════════════════
+function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, setShowResetWarning }) {
+  const isGuest = !user;
+  const [playerName, setPlayerName] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [tourStep, setTourStep] = useState(0);
+
+  const completeTour = () => {
+    localStorage.setItem("ll_tour_done", "1");
+    setShowTour(false);
+    requestNotificationPermission();
+  };
+
+  // ── Game state ─────────────────────────────────────────────
+  const [level, setLevel] = useState(1);
   const [levelScore, setLevelScore] = useState(0);
   const [tiles, setTiles] = useState(() => {
-    if (ss?.tiles) return ss.tiles;
     const rng = seededRandom(getDailySeed());
     const bp = getBonusPositions(42, getBonusCount(1), rng);
     return generateLevelTiles(1, 0, rng, bp);
   });
-  const tileCountRef = useRef(ss?.tileCount || 42);
+  const tileCountRef = useRef(42);
   const levelResetCount = useRef(0);
   const [selected, setSelected] = useState([]);
-  const [submitted, setSubmitted] = useState(ss?.submitted || []);
-  const [totalScore, setTotalScore] = useState(ss?.totalScore || 0);
-  const [badges, setBadges] = useState(ss?.badges || []);
-  const [streak, setStreak] = useState(ss?.streak || 0);
+  const [submitted, setSubmitted] = useState([]);
+  const [totalScore, setTotalScore] = useState(0);
+  const [lifetimePoints, setLifetimePoints] = useState(0);
+  const [badges, setBadges] = useState([]);
+  const [streak, setStreak] = useState(0);
   const [validating, setValidating] = useState(false);
   const [checkingStuck, setCheckingStuck] = useState(false);
   const [shake, setShake] = useState(false);
@@ -474,28 +708,30 @@ export default function App() {
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [paused, setPaused] = useState(false);
   const [musicOn, setMusicOn] = useState(false);
-  const [timeLeaderboard, setTimeLeaderboard] = useState(() => getTimeLeaderboard());
-  const [statsData, setStatsData] = useState(() => getStats());
+  const [statsData, setStatsData] = useState(() => getLocalStats());
+  const [timeLeaderboard, setTimeLeaderboard] = useState(() => getLocalTimeLeaderboard());
   const [showNameInput, setShowNameInput] = useState(false);
-  const [perfectDay, setPerfectDay] = useState(ss?.perfectDay ?? true);
-  const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
+  const [perfectDay, setPerfectDay] = useState(true);
+  const [longestWordToday, setLongestWordToday] = useState("");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
-  const [levelTime, setLevelTime] = useState(ss?.levelTime || 0);
-  const [totalTime, setTotalTime] = useState(ss?.totalTime || 0);
-  const [timeSubTab, setTimeSubTab] = useState("levels");
+  const [levelTime, setLevelTime] = useState(0);
+  const [totalTime, setTotalTime] = useState(0);
   const [selectedLevelView, setSelectedLevelView] = useState(1);
+  const [cloudSyncing, setCloudSyncing] = useState(false);
 
   const timerRef = useRef(null);
-  const levelTimeRef = useRef(ss?.levelTime || 0);
-  const totalTimeRef = useRef(ss?.totalTime || 0);
-  const submittedRef = useRef(ss?.submitted || []);
-  const totalRef = useRef(ss?.totalScore || 0);
+  const levelTimeRef = useRef(0);
+  const totalTimeRef = useRef(0);
+  const submittedRef = useRef([]);
+  const totalRef = useRef(0);
   const levelScoreRef = useRef(0);
+  const lifetimeRef = useRef(0);
   const audioCtxRef = useRef(null);
   const musicLoopRef = useRef(null);
   const nextLoopRef = useRef(0);
   const clearedLevelsRef = useRef({});
+  const syncTimerRef = useRef(null);
 
   const today = new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
   const dayNum = getDayOfYear();
@@ -521,12 +757,131 @@ export default function App() {
   const allTimeTotal = Object.values(statsData.dailyScores || {}).reduce((a,b)=>a+b,0);
   const avgDaily = statsData.daysPlayed > 0 ? Math.round(allTimeTotal / statsData.daysPlayed) : 0;
 
+  // ── Load data on mount ─────────────────────────────────────
   useEffect(() => {
-    saveSession({ level, tiles, totalScore: totalRef.current, submitted: submittedRef.current, badges, streak, perfectDay, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current });
+    const init = async () => {
+      const todayKey = getTodayKey();
+
+      if (!isGuest && user) {
+        // Load from cloud
+        setCloudSyncing(true);
+        const [gameState, dailySession] = await Promise.all([
+          loadGameState(user.id),
+          loadDailySession(user.id, todayKey),
+        ]);
+        setCloudSyncing(false);
+
+        if (gameState) {
+          // Check missed day
+          const yesterday = getYesterdayKey();
+          if (gameState.last_played_date && gameState.last_played_date !== todayKey && gameState.last_played_date !== yesterday) {
+            lifetimeRef.current = 0;
+            setLifetimePoints(0);
+            setShowResetWarning(true);
+            await saveGameState(user.id, { ...gameState, lifetimePoints: 0, lastPlayedDate: todayKey });
+          } else {
+            lifetimeRef.current = gameState.lifetime_points || 0;
+            setLifetimePoints(gameState.lifetime_points || 0);
+          }
+          setBadges(gameState.badges || []);
+          setStatsData(prev => ({...prev, ...(gameState.stats || {})}));
+          setTimeLeaderboard(prev => ({ ...prev, ...(gameState.time_records || {}) }));
+          setPlayerName(gameState.stats?.playerName || "");
+        }
+
+        if (dailySession) {
+          // Restore today's session
+          setLevel(dailySession.level || 1);
+          setTotalScore(dailySession.total_score || 0);
+          totalRef.current = dailySession.total_score || 0;
+          setLevelScore(dailySession.level_score || 0);
+          levelScoreRef.current = dailySession.level_score || 0;
+          if (dailySession.tiles) setTiles(dailySession.tiles);
+          tileCountRef.current = dailySession.tile_count || 42;
+          setSubmitted(dailySession.submitted || []);
+          submittedRef.current = dailySession.submitted || [];
+          setPerfectDay(dailySession.perfect_day ?? true);
+          setLongestWordToday(dailySession.longest_word_today || "");
+          levelTimeRef.current = dailySession.level_time || 0;
+          totalTimeRef.current = dailySession.total_time || 0;
+          setLevelTime(dailySession.level_time || 0);
+          setTotalTime(dailySession.total_time || 0);
+        }
+
+        // Load player name
+        const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
+        if (playerData?.name) setPlayerName(playerData.name);
+
+      } else {
+        // Guest — load from localStorage
+        const localLifetime = getLocalLifetime();
+        if (localLifetime.wasReset) setShowResetWarning(true);
+        lifetimeRef.current = localLifetime.total || 0;
+        setLifetimePoints(localLifetime.total || 0);
+
+        const session = loadLocalSession();
+        if (session) {
+          setLevel(session.level || 1);
+          setTotalScore(session.totalScore || 0);
+          totalRef.current = session.totalScore || 0;
+          setLevelScore(session.levelScore || 0);
+          levelScoreRef.current = session.levelScore || 0;
+          if (session.tiles) setTiles(session.tiles);
+          tileCountRef.current = session.tileCount || 42;
+          setSubmitted(session.submitted || []);
+          submittedRef.current = session.submitted || [];
+          setPerfectDay(session.perfectDay ?? true);
+          setLongestWordToday(session.longestWordToday || "");
+          levelTimeRef.current = session.levelTime || 0;
+          totalTimeRef.current = session.totalTime || 0;
+          setLevelTime(session.levelTime || 0);
+          setTotalTime(session.totalTime || 0);
+        }
+        setPlayerName(localStorage.getItem("ll_name") || "");
+      }
+
+      const tourDone = localStorage.getItem("ll_tour_done");
+      if (!tourDone) { setShowTour(true); }
+      if (Notification.permission === "granted") scheduleNotifications();
+    };
+    init();
+  }, [user, isGuest]);
+
+  // ── Auto-sync to cloud ─────────────────────────────────────
+  const syncToCloud = useCallback(async () => {
+    if (isGuest || !user) return;
+    const todayKey = getTodayKey();
+    await Promise.all([
+      saveDailySession(user.id, todayKey, {
+        level, totalScore: totalRef.current, levelScore: levelScoreRef.current,
+        tiles, submitted: submittedRef.current, perfectDay,
+        tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
+        totalTime: totalTimeRef.current, longestWordToday,
+      }),
+      saveGameState(user.id, {
+        lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
+        currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
+        lastStreakDate: statsData.lastStreakDate, badges,
+        stats: {...statsData, playerName},
+        timeRecords: timeLeaderboard,
+      }),
+    ]);
+  }, [user, isGuest, level, tiles, perfectDay, longestWordToday, badges, statsData, timeLeaderboard, playerName]);
+
+  // Debounced auto-sync — fires 3 seconds after last change
+  const scheduleSyncToCloud = useCallback(() => {
+    if (isGuest || !user) return;
+    clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = setTimeout(syncToCloud, 3000);
+  }, [syncToCloud, isGuest, user]);
+
+  // Save session locally always
+  useEffect(() => {
+    saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges, streak, perfectDay, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current });
+    scheduleSyncToCloud();
   }, [level, tiles, badges, streak, perfectDay, longestWordToday]);
 
-  useEffect(() => { if (Notification.permission === "granted") scheduleNotifications(); }, []);
-
+  // ── Timers ─────────────────────────────────────────────────
   const startTimer = useCallback(() => {
     if (timerRef.current) return;
     timerRef.current = setInterval(() => {
@@ -588,7 +943,7 @@ export default function App() {
     levelResetCount.current = 0; clearedLevelsRef.current = {};
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
-    clearSession();
+    clearLocalSession();
   }, [startTimer, stopTimer]);
 
   const doLevelReset = useCallback(() => {
@@ -598,6 +953,14 @@ export default function App() {
     setShowResetConfirm(false); setShowStuckModal(false);
   }, [resetLevelTimer]);
 
+  const handleNameSave = async () => {
+    if (!playerName.trim()) return;
+    localStorage.setItem("ll_name", playerName);
+    setEditingName(false);
+    if (!isGuest && user) await updatePlayerName(user.id, playerName);
+  };
+
+  // ── Submit ─────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
     setValidating(true);
@@ -621,19 +984,18 @@ export default function App() {
     setSubmitted(newSubmitted);
     if (valid) {
       const newTotal = totalRef.current + score;
-      totalRef.current = newTotal;
-      setTotalScore(newTotal);
+      totalRef.current = newTotal; setTotalScore(newTotal);
       const newLevelScore = levelScoreRef.current + score;
-      levelScoreRef.current = newLevelScore;
-      setLevelScore(newLevelScore);
-      const newLifetime = addLifetimePoints(score);
-      setLifetimePoints(newLifetime);
+      levelScoreRef.current = newLevelScore; setLevelScore(newLevelScore);
+      // Update lifetime
+      const newLifetime = lifetimeRef.current + score;
+      lifetimeRef.current = newLifetime; setLifetimePoints(newLifetime);
+      if (isGuest) saveLocalLifetime(newLifetime);
       const newTiles = tiles.map(t => selected.includes(t.id) ? { ...t, used: true } : t);
       setTiles(newTiles);
       const ats = getAllTimeStats();
-      ats.words += 1; ats.score += score;
-      saveAllTimeStats(ats);
-      const updated = updateStats({ score: newTotal, wordScore: score, word: currentWord, source: result.source, ...(longBonus > 0 ? { longWordBonus: longBonus, wordLength: currentWord.length } : {}) });
+      ats.words += 1; ats.score += score; saveAllTimeStats(ats);
+      const updated = updateLocalStats({ score: newTotal, wordScore: score, word: currentWord, source: result.source, ...(longBonus > 0 ? { longWordBonus: longBonus, wordLength: currentWord.length } : {}) });
       setStatsData(updated);
       if (currentWord.length > (longestWordToday.length||0)) { setLongestWordToday(currentWord); awardBadge("longest_day"); }
       if (currentWord.length > (longestWordAllTime.length||0)) { setLongestWordAllTime(currentWord); localStorage.setItem("ll_longest", currentWord); }
@@ -668,28 +1030,33 @@ export default function App() {
         const bonus = 100 * level;
         totalRef.current += bonus; setTotalScore(totalRef.current);
         levelScoreRef.current += bonus; setLevelScore(levelScoreRef.current);
-        const newLifetime2 = addLifetimePoints(bonus);
-        setLifetimePoints(newLifetime2);
+        lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
+        if (isGuest) saveLocalLifetime(lifetimeRef.current);
         setFlash({ word: "BOARD CLEAR!", score: bonus, valid: true });
         setConfetti(true); setTimeout(() => setConfetti(false), 4000);
         stopTimer();
         const clearedTime = levelTimeRef.current;
         clearedLevelsRef.current[level] = clearedTime;
-        const updatedStats = updateStats({ levelTime: clearedTime, levelNum: level, score: totalRef.current });
+        const updatedStats = updateLocalStats({ levelTime: clearedTime, levelNum: level, score: totalRef.current });
         setStatsData(updatedStats);
-        if (playerName.trim()) { const updatedTimes = addLevelTime(playerName, level, clearedTime); setTimeLeaderboard(updatedTimes); }
+        const updatedTimes = addLocalLevelTime(playerName || "You", level, clearedTime);
+        setTimeLeaderboard(updatedTimes);
         if (level < 5) setTimeout(() => setLevelComplete(true), 1200);
         else {
           localStorage.setItem("ll_completed_today", getTodayKey());
           if (perfectDay) {
             setPerfectDayAchieved(true); awardBadge("perfect_day");
             setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
-            const perfStats = updateStats({ perfectDay: true }); setStatsData(perfStats);
-            if (playerName.trim()) { const updatedTimes = addPerfectTime(playerName, totalTimeRef.current); setTimeLeaderboard(updatedTimes); }
+            const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
+            const updatedTimes2 = addLocalPerfectTime(playerName || "You", totalTimeRef.current);
+            setTimeLeaderboard(updatedTimes2);
             setTimeout(() => setShowNameInput(true), 1000);
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
+        // Sync immediately on major events
+        if (!isGuest && user) await syncToCloud();
       } else {
+        scheduleSyncToCloud();
         setCheckingStuck(true);
         const hasWords = await hasValidWordsRemaining(newTiles);
         setCheckingStuck(false);
@@ -736,19 +1103,16 @@ export default function App() {
     setSelected([]); setShowStuckModal(false); startTimer();
   };
 
-  const handleSaveScore = () => {
+  const handleSaveScore = async () => {
     if (!playerName.trim()) return;
     localStorage.setItem("ll_name", playerName);
-    if (Object.keys(clearedLevelsRef.current).length > 0) {
-      let updatedTimes = getTimeLeaderboard();
-      Object.entries(clearedLevelsRef.current).forEach(([lvl, secs]) => { updatedTimes = addLevelTime(playerName, parseInt(lvl), secs); });
-      if (perfectDay) updatedTimes = addPerfectTime(playerName, totalTimeRef.current);
-      setTimeLeaderboard(updatedTimes);
+    if (!isGuest && user) {
+      await updatePlayerName(user.id, playerName);
+      await syncToCloud();
     }
-    setShowNameInput(false); clearSession();
+    setShowNameInput(false); clearLocalSession();
   };
 
-  const handleNameSave = () => { if (playerName.trim()) { localStorage.setItem("ll_name", playerName); setEditingName(false); } };
   const medalFor = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
 
   return (
@@ -842,6 +1206,9 @@ export default function App() {
       {/* Checking */}
       {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>{checkingStuck?"🔎":"🔍"}</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div></div>}
 
+      {/* Cloud sync indicator */}
+      {cloudSyncing&&<div style={{position:"fixed",top:12,right:12,zIndex:9995,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#a78bfa"}}>☁️ Syncing…</div>}
+
       {/* Paused */}
       {paused&&<div style={{position:"fixed",inset:0,zIndex:8000,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={handlePause}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"40px",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
         <div style={{fontSize:52}}>⏸️</div>
@@ -901,7 +1268,7 @@ export default function App() {
         <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
         <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
         <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
-        {timeLeaderboard.levels[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
+        {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
         <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
         <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
       </div></div>}
@@ -913,12 +1280,13 @@ export default function App() {
         <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
         <div style={{fontSize:13,color:"#6ee7b7",marginTop:4}}>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
         <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · ⏱️ {formatTime(totalTimeRef.current)}</div>
-        <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:16,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
-        <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
-        <button className="ll-btn replay-btn" onClick={()=>{setShowNameInput(false);handleFullReset();}} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#fff",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
+        {!isGuest&&<div style={{fontSize:11,color:"#a78bfa",marginTop:4}}>☁️ Progress saved to your account</div>}
+        <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:14,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
+        <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
+        <button className="ll-btn replay-btn" onClick={()=>{setShowNameInput(false);handleFullReset();}} style={{marginTop:10,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#fff",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
           🎮 WOW! That was SO Close.<br/>Want to Try Again?
         </button>
-        <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:10,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
+        <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
       </div></div>}
 
       {/* ── HEADER ── */}
@@ -929,59 +1297,63 @@ export default function App() {
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             {editingName?(
               <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                <input value={playerName} onChange={e=>setPlayerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleNameSave()} placeholder="Your name…" style={{padding:"4px 10px",borderRadius:16,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:11,fontFamily:"Georgia,serif",outline:"none",width:130,textAlign:"center"}}/>
-                <button className="ll-btn" onClick={handleNameSave} style={{padding:"4px 10px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:10,fontWeight:"bold"}}>Save</button>
+                <input value={playerName} onChange={e=>setPlayerName(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleNameSave()} placeholder="Your name…" style={{padding:"4px 10px",borderRadius:16,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:11,fontFamily:"Georgia,serif",outline:"none",width:120,textAlign:"center"}}/>
+                <button className="ll-btn" onClick={handleNameSave} style={{padding:"4px 8px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:10,fontWeight:"bold"}}>Save</button>
+                <button className="ll-btn" onClick={()=>setEditingName(false)} style={{padding:"4px 8px",borderRadius:16,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",fontSize:10}}>✕</button>
               </div>
             ):(
               <div style={{cursor:"pointer",display:"flex",alignItems:"center",gap:4}} onClick={()=>setEditingName(true)}>
                 <span style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>👤 {playerName||"Set Name"}</span>
+                {!isGuest&&<span style={{fontSize:8,color:"#a78bfa"}}>☁️</span>}
                 <span style={{fontSize:9,color:"rgba(255,255,255,0.35)"}}>✏️</span>
               </div>
             )}
           </div>
 
-          {/* LetterLoot title — bright white, bright purple box */}
+          {/* LetterLoot title */}
           <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"4px 14px"}}>
             <span style={{fontSize:22,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85),0 0 4px rgba(255,255,255,0.5)"}}>LetterLoot</span>
           </div>
 
-          <div style={{display:"flex",alignItems:"center",gap:5}}>
-            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:10,color:musicOn?"#f6d365":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif"}}>{musicOn?"🎸":"🎸"}</button>
+          <div style={{display:"flex",alignItems:"center",gap:4}}>
+            <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:10,color:musicOn?"#f6d365":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif"}}>🎸</button>
             <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2px solid rgba(255,255,255,0.9)",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#ffffff",fontWeight:"bold",background:"rgba(255,255,255,0.18)",cursor:"pointer",fontFamily:"Georgia,serif"}}>?</button>
+            <button onClick={onSignOut} style={{background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"rgba(255,255,255,0.4)",fontFamily:"Georgia,serif"}}>{isGuest?"Login":"Sign Out"}</button>
           </div>
         </div>
 
-        {/* Date + perfect day */}
-        <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1,marginBottom:6,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+        {/* Date + status */}
+        <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1,marginBottom:5,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           <span>{today} · Day #{dayNum}</span>
           {perfectDay&&<span style={{color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</span>}
+          {isGuest&&<span style={{color:"rgba(255,255,255,0.35)"}}>· Guest Mode</span>}
         </div>
 
-        {/* ROW 2: Level progress */}
+        {/* Level progress */}
         <div style={{background:"rgba(255,255,255,0.12)",borderRadius:8,height:5,overflow:"hidden",marginBottom:3}}>
           <div style={{height:"100%",width:`${((level-1)/5)*100}%`,background:"linear-gradient(90deg,#f6d365,#fda085)",borderRadius:8,transition:"width 0.5s ease"}}/>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",padding:"0 2px",marginBottom:7}}>
+        <div style={{display:"flex",justifyContent:"space-between",padding:"0 2px",marginBottom:6}}>
           {[1,2,3,4,5].map(l=>(<div key={l} style={{fontSize:8,color:l<=level?"#f6d365":"rgba(255,255,255,0.35)",fontWeight:l===level?"bold":"normal"}}>L{l}</div>))}
         </div>
 
-        {/* ROW 3: Points — This Level / Today / Lifetime */}
+        {/* Points row */}
         <div style={{display:"flex",gap:5,marginBottom:5}}>
           <div style={{flex:1,background:"rgba(246,211,101,0.12)",border:"1px solid rgba(246,211,101,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
             <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365"}}>{levelScore.toLocaleString()}</div>
-            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)",letterSpacing:0.5}}>THIS LEVEL</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)"}}>THIS LEVEL</div>
           </div>
           <div style={{flex:1,background:"rgba(253,160,133,0.12)",border:"1px solid rgba(253,160,133,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
             <div style={{fontSize:14,fontWeight:"bold",color:"#fda085"}}>{totalScore.toLocaleString()}</div>
-            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)",letterSpacing:0.5}}>TODAY</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)"}}>TODAY</div>
           </div>
           <div style={{flex:1,background:"rgba(110,231,183,0.12)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
             <div style={{fontSize:14,fontWeight:"bold",color:"#6ee7b7"}}>{lifetimePoints.toLocaleString()}</div>
-            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)",letterSpacing:0.5}}>💰 LIFETIME</div>
+            <div style={{fontSize:7,color:"rgba(255,255,255,0.75)"}}>💰 LIFETIME</div>
           </div>
         </div>
 
-        {/* ROW 4: Badges / Remaining Letters / Vowels / Consonants */}
+        {/* Stats row */}
         <div style={{display:"flex",gap:5,marginBottom:5}}>
           <div style={{flex:1,background:"rgba(240,147,251,0.1)",border:"1px solid rgba(240,147,251,0.4)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
             <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb"}}>{badges.length}/{BADGE_DEFS.length}</div>
@@ -1001,7 +1373,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* ROW 5: TIME / Level / Total / Pause */}
+        {/* Timer row */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,255,255,0.07)",borderRadius:10,padding:"5px 10px",marginBottom:5,border:"1px solid rgba(255,255,255,0.2)"}}>
           <div style={{fontSize:10,color:"#ffffff",letterSpacing:2,fontWeight:"bold"}}>TIME</div>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -1020,7 +1392,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* ROW 6: Tabs + Level badge */}
+        {/* Tabs + Level badge */}
         <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginBottom:5,flexWrap:"nowrap"}}>
           <button className="ll-tab" onClick={()=>setTab("play")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="play"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="play"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="play"?"bold":"normal",border:tab==="play"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>🎮 Play</button>
           <div style={{padding:"4px 10px",borderRadius:16,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1}}>✦ L{level} ✦</div>
@@ -1033,7 +1405,6 @@ export default function App() {
       {/* ── PLAY TAB ── */}
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-
           {/* Action buttons */}
           <div style={{display:"flex",gap:4,marginBottom:5}}>
             <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":"Submit Word"}</button>
@@ -1042,8 +1413,8 @@ export default function App() {
             {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1}</button>}
           </div>
 
-          {/* Word strip — bright white border */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:9,padding:"5px 10px",marginBottom:4,border:"2px solid rgba(255,255,255,0.9)",minHeight:38}}>
+          {/* Word strip */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:9,padding:"5px 10px",marginBottom:4,border:"2px solid rgba(255,255,255,0.9)",minHeight:38,animation:shake?"shake 0.4s ease":"none"}}>
             <div style={{display:"flex",gap:4,alignItems:"center",flex:1,flexWrap:"wrap"}}>
               {selected.length===0
                 ?<div style={{color:"rgba(255,255,255,0.35)",fontSize:11,fontStyle:"italic"}}>Tap tiles to build a word…</div>
@@ -1063,7 +1434,7 @@ export default function App() {
           </div>
 
           {/* Tile grid */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative",animation:shake?"shake 0.4s ease":"none"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative"}}>
             {paused&&<div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2}}><div style={{fontSize:24,color:"rgba(255,255,255,0.4)"}}>⏸️ PAUSED</div></div>}
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:3,marginBottom:3}}>
@@ -1078,6 +1449,14 @@ export default function App() {
           </div>
 
           {longestWordToday&&<div style={{textAlign:"center",marginTop:6,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters)</div>}
+
+          {/* Guest upgrade prompt */}
+          {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.1)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(167,139,250,0.3)",textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#a78bfa",fontWeight:"bold"}}>☁️ Playing as Guest</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>Create a free account to save progress across devices</div>
+            <button className="ll-btn" onClick={onSignOut} style={{marginTop:6,padding:"5px 14px",borderRadius:16,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:10,fontWeight:"bold"}}>Create Account →</button>
+          </div>}
+
           <div style={{textAlign:"center",marginTop:8}}>
             <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
           </div>
@@ -1137,17 +1516,18 @@ export default function App() {
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
 
           {/* Lifetime Points hero */}
-          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:9,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
+          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
             <div style={{fontSize:44,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:3}}>Accumulates every day you play</div>
-            <div style={{marginTop:7,background:"rgba(220,38,38,0.12)",borderRadius:8,padding:"6px 10px",border:"1px solid rgba(220,38,38,0.25)"}}>
+            <div style={{marginTop:6,background:"rgba(220,38,38,0.12)",borderRadius:8,padding:"6px 10px",border:"1px solid rgba(220,38,38,0.25)"}}>
               <div style={{fontSize:10,color:"#ef4444",fontWeight:"bold"}}>⚠️ Miss a day = Reset to ZERO</div>
             </div>
+            {!isGuest&&<div style={{marginTop:6,fontSize:10,color:"#a78bfa"}}>☁️ Saved to your account</div>}
           </div>
 
           {/* Days & Streaks */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📅 DAYS & STREAKS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Total Days</div></div>
@@ -1163,7 +1543,7 @@ export default function App() {
           </div>
 
           {/* Perfect Days */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAYS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
@@ -1173,7 +1553,7 @@ export default function App() {
           </div>
 
           {/* Daily Scores */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📈 DAILY SCORES</div>
             <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
@@ -1199,7 +1579,7 @@ export default function App() {
           </div>
 
           {/* Highest Word Score */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
@@ -1210,16 +1590,16 @@ export default function App() {
             </div>
           </div>
 
-          {/* Fastest Level Times — merged from Times tab */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          {/* Fastest Times */}
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>⏱️ FASTEST LEVEL TIMES</div>
             <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:10}}>
               {[1,2,3,4,5].map(l=>(
                 <button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:36,height:36,borderRadius:8,fontSize:11,fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.6)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>
               ))}
             </div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginBottom:6,textAlign:"center"}}>Personal Best: <span style={{color:"#60a5fa",fontWeight:"bold",fontFamily:"monospace"}}>{statsData.fastestLevels[selectedLevelView]?formatTime(statsData.fastestLevels[selectedLevelView]):"—"}</span></div>
-            {!timeLeaderboard.levels[selectedLevelView]?.length
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginBottom:6,textAlign:"center"}}>Personal Best: <span style={{color:"#60a5fa",fontWeight:"bold",fontFamily:"monospace"}}>{statsData.fastestLevels?.[selectedLevelView]?formatTime(statsData.fastestLevels[selectedLevelView]):"—"}</span></div>
+            {!timeLeaderboard.levels?.[selectedLevelView]?.length
               ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>No times yet — clear the board to record!</div>
               :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(
                 <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:5}}>
@@ -1245,7 +1625,7 @@ export default function App() {
           </div>
 
           {/* Dictionary */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📚 DICTIONARY BREAKDOWN</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#6ee7b7"}}>{statsData.collegiateWords||0}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>📖 Collegiate</div></div>
@@ -1257,7 +1637,7 @@ export default function App() {
           </div>
 
           {/* Longest Words */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>📏 LONGEST WORDS</div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
               <div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>Today's Best</div>
@@ -1270,7 +1650,7 @@ export default function App() {
           </div>
 
           {/* Long Word Bonuses */}
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:8,border:"1px solid rgba(255,255,255,0.14)"}}>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>🌟 LONG WORD BONUSES</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center"}}>
               {[["8","+1"],["9","+3"],["10","+6"],["11","+10"],["12","+15"],["13","+25"],["14+","+35+"]].map(([len,bonus])=>(
@@ -1283,8 +1663,8 @@ export default function App() {
             </div>
           </div>
 
-          <div style={{textAlign:"center",marginTop:4,marginBottom:8}}>
-            <button onClick={()=>{const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}};saveStats(def);setStatsData(def);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
+          <div style={{textAlign:"center",marginBottom:8}}>
+            <button onClick={()=>{const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}};saveLocalStats(def);setStatsData(def);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
           </div>
         </div>
       )}

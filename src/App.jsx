@@ -13,20 +13,10 @@ const SCORE_MAP = {
 const MW_COLLEGIATE_KEY = "6c41ef2c-8c1d-440a-b04a-24e623cf68e1";
 const MW_MEDICAL_KEY    = "05a10875-f553-43f6-be64-6dafcdb4152e";
 
+// ── Date helpers — all calendar dates, no Day # ───────────────
 function getDailySeed() {
   const d = new Date();
   return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
-}
-function getDayOfYear() {
-  const now = new Date();
-  const start = new Date(Date.UTC(now.getUTCFullYear(), 0, 0));
-  return Math.floor((now - start) / 86400000);
-}
-function getWeekKey() {
-  const now = new Date();
-  const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() - ((now.getUTCDay() + 6) % 7));
-  return `${monday.getUTCFullYear()}-${monday.getUTCMonth()+1}-${monday.getUTCDate()}`;
 }
 function getTodayKey() {
   const d = new Date();
@@ -36,6 +26,18 @@ function getYesterdayKey() {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - 1);
   return `${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`;
+}
+function getWeekKey() {
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setUTCDate(now.getUTCDate() - ((now.getUTCDay() + 6) % 7));
+  return `${monday.getUTCFullYear()}-${monday.getUTCMonth()+1}-${monday.getUTCDate()}`;
+}
+function getCalendarDate() {
+  return new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric" });
+}
+function getShortDate() {
+  return new Date().toLocaleDateString("en-US", { month:"long", day:"numeric", year:"numeric" });
 }
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -139,10 +141,15 @@ const BADGE_DEFS = [
   { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",  cat:"alltime" },
 ];
 
+// ── Dictionary ─────────────────────────────────────────────────
 const wordCache = {};
 async function validateWord(word) {
   const key = word.toLowerCase();
   if (wordCache[key] !== undefined) return wordCache[key];
+  if (!navigator.onLine) {
+    wordCache[key] = { valid: false, source: "offline" };
+    return wordCache[key];
+  }
   try {
     const collRes = await fetch(`https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`);
     const collData = await collRes.json();
@@ -180,6 +187,7 @@ async function hasValidWordsRemaining(tiles) {
   return false;
 }
 
+// ── Guitar music ───────────────────────────────────────────────
 function createGuitar(ctx) {
   function pluck(freq, time, duration = 2.0, gain = 0.35) {
     const bufferSize = Math.round(ctx.sampleRate / freq);
@@ -215,6 +223,7 @@ const MELODY = [
 const BEAT_DUR = 0.32;
 const LOOP_DUR = 16 * BEAT_DUR;
 
+// ── Confetti ───────────────────────────────────────────────────
 function ConfettiCanvas({ active, rainbow }) {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
@@ -254,22 +263,97 @@ function ConfettiCanvas({ active, rainbow }) {
   return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:9999, pointerEvents:"none" }} />;
 }
 
-// ── Local storage fallbacks for guests ────────────────────────
-function getLocalLifetime() {
+// ── Pencil + Eraser Logo SVG ───────────────────────────────────
+function PencilLogo({ size = 80 }) {
+  return (
+    <svg viewBox="0 0 200 200" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
+      <rect x="72" y="124" width="80" height="30" rx="3" fill="#E8857A"/>
+      <rect x="72" y="124" width="80" height="5" rx="3" fill="#F0A090"/>
+      <rect x="72" y="149" width="80" height="5" rx="3" fill="#C06055" opacity="0.7"/>
+      <polygon points="72,124 79,124 79,154 72,154" fill="#D07268"/>
+      <polygon points="152,124 145,124 145,154 152,154" fill="#C06055"/>
+      <text x="112" y="135" textAnchor="middle" fontFamily="Georgia,serif" fontSize="6" fontWeight="bold" fill="#fff" opacity="0.9" letterSpacing="0.5">LetterLoot</text>
+      <text x="112" y="145" textAnchor="middle" fontFamily="Georgia,serif" fontSize="8" fontStyle="italic" fontWeight="bold" fill="#fff" opacity="0.9">Pink Pearl</text>
+      <text x="112" y="152" textAnchor="middle" fontFamily="Arial,sans-serif" fontSize="4" fill="#fff" opacity="0.5">Latex FREE!</text>
+      <ellipse cx="112" cy="156" rx="42" ry="4" fill="rgba(0,0,0,0.35)"/>
+      <g transform="translate(-38, -18) rotate(-25, 95, 95)">
+        <rect x="86" y="14" width="18" height="115" rx="2" fill="#F5C518"/>
+        <rect x="86" y="14" width="5" height="115" rx="2" fill="#F9D84A" opacity="0.5"/>
+        <rect x="99" y="14" width="5" height="115" rx="2" fill="#D4A017" opacity="0.4"/>
+        <rect x="86" y="14" width="18" height="14" rx="2" fill="#2D8B4E"/>
+        <rect x="86" y="14" width="18" height="4" rx="2" fill="#3CAD62"/>
+        <rect x="87" y="30" width="16" height="60" rx="1" fill="#F0B800"/>
+        <text x="95" y="47" textAnchor="middle" fontFamily="Georgia,serif" fontSize="7" fontWeight="bold" fill="#7A5C10">No.2</text>
+        <text x="95" y="83" textAnchor="middle" fontFamily="Georgia,serif" fontSize="5" fontWeight="bold" fill="#7A5C10" letterSpacing="1.8" transform="rotate(90, 95, 83)">TICONDEROGA</text>
+        <rect x="86" y="112" width="18" height="12" rx="1" fill="#B8B8B8"/>
+        <rect x="86" y="112" width="18" height="4" rx="1" fill="#E0E0E0"/>
+        <rect x="86" y="124" width="18" height="8" rx="2" fill="#F4A7B9"/>
+        <polygon points="86,132 104,132 100,150 90,150" fill="#DEB887"/>
+        <polygon points="90,150 100,150 95,162" fill="#3a3a3a"/>
+      </g>
+    </svg>
+  );
+}
+
+// ── Static Starfield ───────────────────────────────────────────
+function Starfield() {
+  const stars = [
+    [23,45,1,0.6],[67,18,1.5,0.8],[120,55,1,0.5],[180,22,1,0.7],[240,40,1.5,0.6],
+    [310,28,1,0.9],[360,55,1,0.5],[45,88,1,0.5],[95,105,1.5,0.7],[155,78,1,0.6],
+    [205,95,1,0.8],[265,68,2,0.5],[335,90,1,0.7],[375,112,1.5,0.8],[30,145,1,0.6],
+    [80,168,1,0.5],[140,142,1.5,0.7],[290,135,1,0.6],[350,158,1,0.8],[60,220,1,0.5],
+    [110,240,1.5,0.7],[200,195,1,0.8],[330,210,1,0.6],[370,235,2,0.5],[20,300,1,0.7],
+    [170,310,1,0.6],[280,295,1.5,0.8],[340,320,1,0.5],[50,380,1,0.7],[130,395,1.5,0.8],
+    [220,370,1,0.6],[310,390,1,0.5],[380,410,1.5,0.7],[90,450,1,0.6],[195,465,1,0.8],
+    [270,445,2,0.5],[355,470,1,0.7],[25,520,1.5,0.8],[115,535,1,0.6],[230,510,1,0.5],
+    [320,545,1.5,0.7],[375,525,1,0.8],[60,600,1,0.6],[160,615,1.5,0.5],[250,590,1,0.7],
+    [345,635,1,0.8],[38,335,1,0.6],[152,488,1.5,0.5],[298,478,1,0.8],[185,132,1.5,0.5],
+    [142,312,1,0.8],[258,158,1,0.6],[8,192,1.5,0.5],[362,562,1,0.5],[108,668,1.5,0.6],
+    [285,648,1,0.8],[15,65,1,0.4],[325,175,1.5,0.6],[88,388,1,0.7],[418,95,1,0.5],
+  ];
+  return (
+    <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0,overflow:"hidden"}}>
+      {stars.map(([x,y,r,o],i)=>(
+        <div key={i} style={{position:"absolute",width:r*2,height:r*2,borderRadius:"50%",background:"#fff",opacity:o,left:`${(x/420)*100}%`,top:`${(y/680)*100}%`}}/>
+      ))}
+    </div>
+  );
+}
+
+// ── Lifetime points helpers ────────────────────────────────────
+function getLifetimeData() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_lifetime") || "null");
-    if (!data) return { total: 0, lastPlayedDate: null };
+    if (!data) return { total: 0, lastPlayedDate: null, missedDays: 0 };
     const todayKey = getTodayKey();
     const yesterdayKey = getYesterdayKey();
-    if (data.lastPlayedDate && data.lastPlayedDate !== todayKey && data.lastPlayedDate !== yesterdayKey) {
-      return { total: 0, lastPlayedDate: null, wasReset: true };
+    if (!data.lastPlayedDate || data.lastPlayedDate === todayKey || data.lastPlayedDate === yesterdayKey) {
+      return { ...data, missedDays: 0 };
     }
-    return data;
-  } catch { return { total: 0, lastPlayedDate: null }; }
+    // Calculate missed days
+    const last = new Date(data.lastPlayedDate);
+    const today = new Date(todayKey);
+    const diffDays = Math.floor((today - last) / 86400000);
+    const missedDays = diffDays - 1;
+    if (missedDays >= 3) {
+      return { total: 0, lastPlayedDate: null, missedDays: 3, wasReset: true, originalTotal: data.total };
+    }
+    if (missedDays === 2) {
+      const newTotal = Math.floor(data.total * (1/3));
+      return { total: newTotal, lastPlayedDate: data.lastPlayedDate, missedDays: 2, wasDecayed: true, originalTotal: data.total };
+    }
+    if (missedDays === 1) {
+      const newTotal = Math.floor(data.total * (2/3));
+      return { total: newTotal, lastPlayedDate: data.lastPlayedDate, missedDays: 1, wasDecayed: true, originalTotal: data.total };
+    }
+    return { ...data, missedDays: 0 };
+  } catch { return { total: 0, lastPlayedDate: null, missedDays: 0 }; }
 }
-function saveLocalLifetime(total) {
+function saveLifetimeData(total) {
   try { localStorage.setItem("ll_lifetime", JSON.stringify({ total, lastPlayedDate: getTodayKey() })); } catch {}
 }
+
+// ── Local storage helpers ──────────────────────────────────────
 function getLocalStats() {
   const def = {
     daysPlayed:0, lastPlayedDate:null,
@@ -277,6 +361,7 @@ function getLocalStats() {
     perfectDaysAllTime:0, perfectDaysWeek:{}, weekKey:"",
     highScoreAllTime:0, highScoreWeek:{}, highScoreToday:0,
     highWordAllTime:0, highWordWeek:{}, highWordToday:0,
+    highWordTodayWord:"", highWordAllTimeWord:"",
     fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},
     dailyScores:{}, collegiateWords:0, medicalWords:0,
     longestWordToday:"", longestWordAllTime:"",
@@ -287,9 +372,7 @@ function getLocalStats() {
     return data ? {...def, ...data} : def;
   } catch { return def; }
 }
-function saveLocalStats(stats) {
-  try { localStorage.setItem("ll_stats", JSON.stringify(stats)); } catch {}
-}
+function saveLocalStats(stats) { try { localStorage.setItem("ll_stats", JSON.stringify(stats)); } catch {} }
 function updateLocalStats(updates) {
   const stats = getLocalStats();
   const todayKey = getTodayKey();
@@ -302,7 +385,10 @@ function updateLocalStats(updates) {
     if (stats.currentStreak > stats.longestStreak) stats.longestStreak = stats.currentStreak;
     stats.lastStreakDate = todayKey;
     stats.lastPlayedDate = todayKey;
-    stats.highScoreToday = 0; stats.highWordToday = 0; stats.longestWordToday = "";
+    stats.highScoreToday = 0;
+    stats.highWordToday = 0;
+    stats.highWordTodayWord = "";
+    stats.longestWordToday = "";
   }
   if (stats.weekKey !== weekKey) {
     stats.weekKey = weekKey; stats.perfectDaysWeek = {}; stats.highScoreWeek = {}; stats.highWordWeek = {};
@@ -314,10 +400,16 @@ function updateLocalStats(updates) {
     stats.dailyScores = stats.dailyScores || {};
     if (!stats.dailyScores[todayKey] || updates.score > stats.dailyScores[todayKey]) stats.dailyScores[todayKey] = updates.score;
   }
-  if (updates.wordScore !== undefined) {
-    if (updates.wordScore > stats.highWordToday) stats.highWordToday = updates.wordScore;
+  if (updates.wordScore !== undefined && updates.word !== undefined) {
+    if (updates.wordScore > stats.highWordToday) {
+      stats.highWordToday = updates.wordScore;
+      stats.highWordTodayWord = updates.word;
+    }
     if (updates.wordScore > (stats.highWordWeek[todayKey]||0)) stats.highWordWeek[todayKey] = updates.wordScore;
-    if (updates.wordScore > stats.highWordAllTime) stats.highWordAllTime = updates.wordScore;
+    if (updates.wordScore > stats.highWordAllTime) {
+      stats.highWordAllTime = updates.wordScore;
+      stats.highWordAllTimeWord = updates.word;
+    }
   }
   if (updates.word) {
     if (!stats.longestWordToday || updates.word.length > stats.longestWordToday.length) stats.longestWordToday = updates.word;
@@ -350,9 +442,7 @@ function getLocalTimeLeaderboard() {
     return data;
   } catch { return { levels:{"1":[],"2":[],"3":[],"4":[],"5":[]}, perfect:[] }; }
 }
-function saveLocalTimeLeaderboard(board) {
-  try { localStorage.setItem("ll_times", JSON.stringify(board)); } catch {}
-}
+function saveLocalTimeLeaderboard(board) { try { localStorage.setItem("ll_times", JSON.stringify(board)); } catch {} }
 function addLocalLevelTime(name, level, seconds) {
   const board = getLocalTimeLeaderboard();
   if (!board.levels[level]) board.levels[level] = [];
@@ -382,28 +472,24 @@ function clearLocalSession() { try { localStorage.removeItem("ll_session"); } ca
 function getAllTimeStats() {
   try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; }
 }
-function saveAllTimeStats(stats) {
-  try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {}
-}
+function saveAllTimeStats(stats) { try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {} }
 
+// ── Notifications ──────────────────────────────────────────────
 function scheduleNotifications() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const now = new Date();
-  const midnight = new Date();
-  midnight.setHours(24, 0, 0, 0);
-  const msToMidnight = midnight - now;
-  const offsets = [12 * 3600000, 9 * 3600000, 6 * 3600000];
-  const messages = [
-    "⏰ 12 hours left! Don't let your points disappear at midnight!",
-    "⚠️ 9 hours left! Play LetterLoot before midnight or lose your points!",
-    "🚨 Only 6 hours left! Play now or all your points reset to ZERO!",
+  const noon = new Date(); noon.setHours(12, 0, 0, 0);
+  const sixPM = new Date(); sixPM.setHours(18, 0, 0, 0);
+  const reminders = [
+    { time: noon, msg: "🎮 Your daily LetterLoot puzzle is waiting! Every letter has a value — do you? Play today before midnight!" },
+    { time: sixPM, msg: "⚠️ 6 hours left! Don't let your lifetime points decay — play LetterLoot before midnight tonight!" },
   ];
-  offsets.forEach((offset, i) => {
-    const msUntil = msToMidnight - offset;
+  reminders.forEach(({ time, msg }) => {
+    const msUntil = time - now;
     if (msUntil > 0) {
       setTimeout(() => {
         const todayDone = localStorage.getItem("ll_completed_today") === getTodayKey();
-        if (!todayDone) new Notification("🎮 LetterLoot", { body: messages[i], icon: "/favicon.svg" });
+        if (!todayDone) new Notification("🎮 LetterLoot", { body: msg, icon: "/favicon.svg" });
       }, msUntil);
     }
   });
@@ -417,6 +503,7 @@ async function requestNotificationPermission() {
   return false;
 }
 
+// ── Tour steps ─────────────────────────────────────────────────
 const TOUR_STEPS = [
   { emoji:"🎮", title:"Welcome to LetterLoot!", body:"A daily word puzzle where every letter has a point value. Fresh tiles every day at midnight — same board for every player worldwide!", warning:false },
   { emoji:"✨", title:"Letters Don't Need to Connect!", body:"Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!", warning:false },
@@ -426,11 +513,73 @@ const TOUR_STEPS = [
   { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
 ];
 
-// ══════════════════════════════════════════════════════════════
-// AUTH SCREEN COMPONENT
-// ══════════════════════════════════════════════════════════════
+// ── Farewell Screen ────────────────────────────────────────────
+function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone }) {
+  const [opacity, setOpacity] = useState(1);
+
+  useEffect(() => {
+    // After 6 seconds start fading to auth screen
+    const timer = setTimeout(() => {
+      let op = 1;
+      const fade = setInterval(() => {
+        op -= 0.02;
+        setOpacity(op);
+        if (op <= 0) { clearInterval(fade); onDone(); }
+      }, 30);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:99999, background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"30px 24px", fontFamily:"Georgia,serif", color:"#f5f0e8", opacity, transition:"opacity 0.5s" }}>
+      <Starfield/>
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360}}>
+
+        {/* LetterLoot title — top third */}
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <PencilLogo size={70}/>
+          <div style={{marginTop:12,display:"inline-block",background:"rgba(139,92,246,0.28)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:14,padding:"10px 28px",boxShadow:"0 0 28px rgba(139,92,246,0.6),0 0 60px rgba(139,92,246,0.25)"}}>
+            <span style={{fontSize:32,fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 20px rgba(167,139,250,0.9)"}}>LetterLoot</span>
+          </div>
+        </div>
+
+        {/* Message */}
+        <div style={{textAlign:"center",width:"100%"}}>
+          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:16}}>Great effort today! 🎉</div>
+
+          {/* Best word + score card */}
+          <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:14,padding:"16px",marginBottom:20,width:"100%"}}>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:8}}>Highest scoring word:</div>
+            <div style={{fontSize:24,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>{bestWord||"—"}</div>
+            <div style={{fontSize:15,color:"#fda085",fontWeight:"bold",marginBottom:12}}>{bestWordScore||0} points</div>
+            <div style={{height:1,background:"rgba(255,255,255,0.12)",marginBottom:12}}/>
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Total Score Today</div>
+            <div style={{fontSize:34,fontWeight:"bold",color:"#f6d365"}}>{totalScore||0}</div>
+          </div>
+
+          {/* Come back tomorrow */}
+          <div style={{background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.3)",borderRadius:14,padding:"18px",marginBottom:20}}>
+            <div style={{fontSize:16,color:"#ffffff",lineHeight:1.9,fontWeight:"bold"}}>
+              Come back tomorrow for a brand new<br/>
+              LetterLoot challenge —<br/>
+              fresh tiles, fresh start,<br/>
+              same great game!
+            </div>
+          </div>
+
+          <div style={{fontSize:28,marginBottom:10}}>🌅</div>
+          <div style={{fontSize:20,fontWeight:"bold",color:"#6ee7b7",marginBottom:8}}>See you tomorrow!</div>
+          <div style={{fontSize:15,color:"#ffffff",fontWeight:"bold",letterSpacing:1}}>{getShortDate()}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:12}}>Fading to home screen…</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Auth Screen ────────────────────────────────────────────────
 function AuthScreen({ onGuest, onLogin }) {
-  const [mode, setMode] = useState("welcome"); // welcome | login | signup | forgot
+  const [mode, setMode] = useState("welcome");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
@@ -445,8 +594,8 @@ function AuthScreen({ onGuest, onLogin }) {
     const { error } = await signUp(email, password, name);
     setLoading(false);
     if (error) { setError(error.message); return; }
-    setSuccess("Account created! Signing you in…");
-    setTimeout(() => onLogin(), 1500);
+    setSuccess("Account created! Please check your email to confirm, then sign in.");
+    setTimeout(() => setMode("login"), 3000);
   };
 
   const handleSignIn = async () => {
@@ -454,7 +603,7 @@ function AuthScreen({ onGuest, onLogin }) {
     setLoading(true); setError("");
     const { error } = await signIn(email, password);
     setLoading(false);
-    if (error) { setError("Invalid email or password"); return; }
+    if (error) { setError("Invalid email or password. Have you confirmed your email?"); return; }
     onLogin();
   };
 
@@ -480,93 +629,88 @@ function AuthScreen({ onGuest, onLogin }) {
   });
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px", fontFamily:"Georgia,serif", color:"#f5f0e8" }}>
-      {/* Stars */}
-      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0}}>
-        {[...Array(50)].map((_,i)=>(
-          <div key={i} style={{ position:"absolute", width:(i%4===0?2:1)+"px", height:(i%4===0?2:1)+"px", background:"#fff", borderRadius:"50%", opacity:0.1+((i*7)%5)*0.1, top:((i*37)%100)+"%", left:((i*53)%100)+"%", animation:`twinkle ${2+(i%4)}s infinite alternate`, animationDelay:`${(i%5)*0.4}s` }}/>
-        ))}
-      </div>
+    <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px", fontFamily:"Georgia,serif", color:"#f5f0e8", position:"relative" }}>
+      <Starfield/>
       <style>{`@keyframes twinkle{from{opacity:0.08}to{opacity:0.7}}`}</style>
 
       <div style={{zIndex:1, width:"100%", maxWidth:360}}>
-        {/* Title */}
+        {/* Logo + Title */}
         <div style={{textAlign:"center", marginBottom:28}}>
-          <div style={{display:"inline-block", background:"rgba(139,92,246,0.25)", border:"2.5px solid rgba(167,139,250,0.95)", borderRadius:12, padding:"6px 20px", marginBottom:12}}>
-            <span style={{fontSize:28, fontWeight:"bold", letterSpacing:4, color:"#ffffff", textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+          <PencilLogo size={90}/>
+          <div style={{marginTop:14,display:"inline-block",background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"8px 24px",boxShadow:"0 0 28px rgba(139,92,246,0.5)"}}>
+            <span style={{fontSize:30,fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
           </div>
-          <div style={{fontSize:12, color:"rgba(255,255,255,0.5)"}}>Daily word puzzle · Every letter has a value</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.5)",marginTop:8}}>Daily word puzzle · Every letter has a value</div>
         </div>
 
-        {/* Welcome screen */}
+        {/* Welcome */}
         {mode==="welcome"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center", marginBottom:20}}>
-              <div style={{fontSize:40, marginBottom:8}}>🎮</div>
-              <div style={{fontSize:16, fontWeight:"bold", color:"#f6d365"}}>Welcome!</div>
-              <div style={{fontSize:12, color:"rgba(255,255,255,0.6)", marginTop:6, lineHeight:1.6}}>Sign in to save your progress across devices, or play as a guest to try it out.</div>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center",marginBottom:20}}>
+              <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365",marginBottom:8}}>Welcome!</div>
+              <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.6}}>Sign in to save your progress across devices, or play as a guest to try it out.</div>
             </div>
             <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={()=>setMode("login")}>Sign In</button>
             <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={()=>setMode("signup")}>Create Account</button>
-            <button style={{...btnStyle("rgba(255,255,255,0.08)","rgba(255,255,255,0.7)"), border:"1px solid rgba(255,255,255,0.2)"}} onClick={onGuest}>
+            <button style={{...btnStyle("rgba(255,255,255,0.08)","rgba(255,255,255,0.7)"),border:"1px solid rgba(255,255,255,0.2)"}} onClick={onGuest}>
               Play as Guest
-              <div style={{fontSize:10, color:"rgba(255,255,255,0.4)", fontWeight:"normal", marginTop:2}}>Progress saved on this device only</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",fontWeight:"normal",marginTop:2}}>Progress saved on this device only</div>
             </button>
           </div>
         )}
 
         {/* Sign In */}
         {mode==="login"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center", marginBottom:18}}>
-              <div style={{fontSize:13, fontWeight:"bold", color:"#f6d365", letterSpacing:2}}>SIGN IN</div>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center",marginBottom:18}}>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>SIGN IN</div>
             </div>
-            {error&&<div style={{background:"rgba(220,38,38,0.2)", border:"1px solid rgba(220,38,38,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:10}}>{error}</div>}
-            {success&&<div style={{background:"rgba(34,197,94,0.2)", border:"1px solid rgba(34,197,94,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#86efac", marginBottom:10}}>{success}</div>}
+            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSignIn()}/>
             <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSignIn()}/>
             <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={handleSignIn} disabled={loading}>{loading?"Signing in…":"Sign In"}</button>
-            <div style={{textAlign:"center", marginTop:4}}>
-              <span style={{fontSize:11, color:"rgba(255,255,255,0.4)", cursor:"pointer"}} onClick={()=>{setMode("forgot");setError("");}}>Forgot password?</span>
+            <div style={{textAlign:"center",marginTop:4}}>
+              <span style={{fontSize:11,color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>{setMode("forgot");setError("");}}>Forgot password?</span>
             </div>
-            <div style={{textAlign:"center", marginTop:12, fontSize:12, color:"rgba(255,255,255,0.4)"}}>
-              Don't have an account? <span style={{color:"#a78bfa", cursor:"pointer"}} onClick={()=>{setMode("signup");setError("");}}>Sign up</span>
+            <div style={{textAlign:"center",marginTop:12,fontSize:12,color:"rgba(255,255,255,0.4)"}}>
+              Don't have an account? <span style={{color:"#a78bfa",cursor:"pointer"}} onClick={()=>{setMode("signup");setError("");}}>Sign up</span>
             </div>
-            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"), border:"none", fontSize:12, marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:12,marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
           </div>
         )}
 
         {/* Sign Up */}
         {mode==="signup"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center", marginBottom:18}}>
-              <div style={{fontSize:13, fontWeight:"bold", color:"#a78bfa", letterSpacing:2}}>CREATE ACCOUNT</div>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center",marginBottom:18}}>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>CREATE ACCOUNT</div>
             </div>
-            {error&&<div style={{background:"rgba(220,38,38,0.2)", border:"1px solid rgba(220,38,38,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:10}}>{error}</div>}
-            {success&&<div style={{background:"rgba(34,197,94,0.2)", border:"1px solid rgba(34,197,94,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#86efac", marginBottom:10}}>{success}</div>}
+            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
             <input style={inputStyle} type="text" placeholder="Your name" value={name} onChange={e=>setName(e.target.value)}/>
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
             <input style={inputStyle} type="password" placeholder="Password (6+ characters)" value={password} onChange={e=>setPassword(e.target.value)}/>
             <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={handleSignUp} disabled={loading}>{loading?"Creating account…":"Create Account"}</button>
-            <div style={{textAlign:"center", marginTop:8, fontSize:12, color:"rgba(255,255,255,0.4)"}}>
-              Already have an account? <span style={{color:"#f6d365", cursor:"pointer"}} onClick={()=>{setMode("login");setError("");}}>Sign in</span>
+            <div style={{textAlign:"center",marginTop:8,fontSize:12,color:"rgba(255,255,255,0.4)"}}>
+              Already have an account? <span style={{color:"#f6d365",cursor:"pointer"}} onClick={()=>{setMode("login");setError("");}}>Sign in</span>
             </div>
-            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"), border:"none", fontSize:12, marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:12,marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
           </div>
         )}
 
-        {/* Forgot Password */}
+        {/* Forgot */}
         {mode==="forgot"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)", borderRadius:20, padding:"28px 24px", border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center", marginBottom:18}}>
-              <div style={{fontSize:13, fontWeight:"bold", color:"#60a5fa", letterSpacing:2}}>RESET PASSWORD</div>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center",marginBottom:18}}>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#60a5fa",letterSpacing:2}}>RESET PASSWORD</div>
             </div>
-            {error&&<div style={{background:"rgba(220,38,38,0.2)", border:"1px solid rgba(220,38,38,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#fca5a5", marginBottom:10}}>{error}</div>}
-            {success&&<div style={{background:"rgba(34,197,94,0.2)", border:"1px solid rgba(34,197,94,0.4)", borderRadius:8, padding:"8px 12px", fontSize:12, color:"#86efac", marginBottom:10}}>{success}</div>}
-            <div style={{fontSize:12, color:"rgba(255,255,255,0.6)", marginBottom:14, lineHeight:1.6}}>Enter your email and we'll send you a reset link.</div>
+            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
+            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:14,lineHeight:1.6}}>Enter your email and we'll send you a reset link.</div>
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
             <button style={btnStyle("linear-gradient(135deg,#60a5fa,#3b82f6)","#fff")} onClick={handleForgot} disabled={loading}>{loading?"Sending…":"Send Reset Link"}</button>
-            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"), border:"none", fontSize:12, marginTop:4}} onClick={()=>setMode("login")}>← Back to Sign In</button>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:12,marginTop:4}} onClick={()=>setMode("login")}>← Back to Sign In</button>
           </div>
         )}
       </div>
@@ -578,122 +722,104 @@ function AuthScreen({ onGuest, onLogin }) {
 // MAIN APP
 // ══════════════════════════════════════════════════════════════
 export default function App() {
-  const [authState, setAuthState] = useState("loading"); // loading | auth | guest | playing
+  const [authState, setAuthState] = useState("loading");
   const [user, setUser] = useState(null);
-  const [playerName, setPlayerName] = useState("");
-  const [editingName, setEditingName] = useState(false);
-  const [showTour, setShowTour] = useState(false);
-  const [tourStep, setTourStep] = useState(0);
-  const [showResetWarning, setShowResetWarning] = useState(false);
+  const [showFarewell, setShowFarewell] = useState(false);
+  const [farewellData, setFarewellData] = useState({ totalScore:0, bestWord:"", bestWordScore:0 });
 
-  // ── Check for existing session on load ────────────────────
   useEffect(() => {
     getSession().then(session => {
-      if (session) {
-        setUser(session.user);
-        setAuthState("playing");
-      } else {
-        // Check if guest
+      if (session) { setUser(session.user); setAuthState("playing"); }
+      else {
         const isGuest = localStorage.getItem("ll_guest") === "1";
         if (isGuest) setAuthState("playing");
         else setAuthState("auth");
       }
     });
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) {
-        setUser(session.user);
-        setAuthState("playing");
-      }
-      if (event === "SIGNED_OUT") {
-        setUser(null);
-        setAuthState("auth");
-      }
+      if (event === "SIGNED_IN" && session) { setUser(session.user); setAuthState("playing"); }
+      if (event === "SIGNED_OUT") { setUser(null); setAuthState("auth"); }
     });
     return () => subscription.unsubscribe();
   }, []);
 
-  const handleGuest = () => {
-    localStorage.setItem("ll_guest", "1");
-    setAuthState("playing");
-    const tourDone = localStorage.getItem("ll_tour_done");
-    if (!tourDone) setShowTour(true);
-  };
+  const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
+  const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
+  const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
+  const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
+  const handleFarewellDone = () => { setShowFarewell(false); setAuthState("auth"); };
 
-  const handleLogin = async () => {
-    const session = await getSession();
-    if (session) {
-      setUser(session.user);
-      setAuthState("playing");
-    }
-  };
-
-  const handleSignOut = async () => {
-    await signOut();
-    localStorage.removeItem("ll_guest");
-    setAuthState("auth");
-  };
+  if (showFarewell) {
+    return <FarewellScreen {...farewellData} onDone={handleFarewellDone}/>;
+  }
 
   if (authState === "loading") {
     return (
-      <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif" }}>
-        <div style={{textAlign:"center"}}>
-          <div style={{display:"inline-block", background:"rgba(139,92,246,0.25)", border:"2.5px solid rgba(167,139,250,0.95)", borderRadius:12, padding:"6px 20px", marginBottom:16}}>
-            <span style={{fontSize:28, fontWeight:"bold", letterSpacing:4, color:"#ffffff", textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+      <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", position:"relative" }}>
+        <Starfield/>
+        <div style={{textAlign:"center",zIndex:1}}>
+          <PencilLogo size={80}/>
+          <div style={{marginTop:14,display:"inline-block",background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"8px 24px"}}>
+            <span style={{fontSize:28,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
           </div>
-          <div style={{fontSize:12, color:"rgba(255,255,255,0.4)", letterSpacing:2}}>LOADING…</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",letterSpacing:2,marginTop:12}}>LOADING…</div>
         </div>
       </div>
     );
   }
 
-  if (authState === "auth") {
-    return <AuthScreen onGuest={handleGuest} onLogin={handleLogin} />;
-  }
+  if (authState === "auth") return <AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>;
 
-  return (
-    <GameScreen
-      user={user}
-      onSignOut={handleSignOut}
-      showTour={showTour}
-      setShowTour={setShowTour}
-      showResetWarning={showResetWarning}
-      setShowResetWarning={setShowResetWarning}
-    />
-  );
+  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell}/>;
 }
 
 // ══════════════════════════════════════════════════════════════
-// GAME SCREEN COMPONENT
+// GAME SCREEN
 // ══════════════════════════════════════════════════════════════
-function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, setShowResetWarning }) {
+function GameScreen({ user, onSignOut, onFarewell }) {
   const isGuest = !user;
   const [playerName, setPlayerName] = useState("");
   const [editingName, setEditingName] = useState(false);
+  const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
+  const [online, setOnline] = useState(navigator.onLine);
 
-  const completeTour = () => {
-    localStorage.setItem("ll_tour_done", "1");
-    setShowTour(false);
-    requestNotificationPermission();
-  };
+  const completeTour = () => { localStorage.setItem("ll_tour_done","1"); setShowTour(false); requestNotificationPermission(); };
 
-  // ── Game state ─────────────────────────────────────────────
-  const [level, setLevel] = useState(1);
-  const [levelScore, setLevelScore] = useState(0);
+  // Online/offline detection
+  useEffect(() => {
+    const handleOnline = () => setOnline(true);
+    const handleOffline = () => setOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => { window.removeEventListener("online", handleOnline); window.removeEventListener("offline", handleOffline); };
+  }, []);
+
+  // ── Lifetime points with decay ─────────────────────────────
+  const lifetimeData = useRef(getLifetimeData());
+  const [lifetimePoints, setLifetimePoints] = useState(lifetimeData.current.total || 0);
+  const [showDecayWarning, setShowDecayWarning] = useState(
+    lifetimeData.current.wasReset || lifetimeData.current.wasDecayed || false
+  );
+  const decayInfo = lifetimeData.current;
+
+  // ── Restore session ────────────────────────────────────────
+  const ss = useRef(loadLocalSession()).current;
+  const [level, setLevel] = useState(ss?.level || 1);
+  const [levelScore, setLevelScore] = useState(ss?.levelScore || 0);
   const [tiles, setTiles] = useState(() => {
+    if (ss?.tiles) return ss.tiles;
     const rng = seededRandom(getDailySeed());
     const bp = getBonusPositions(42, getBonusCount(1), rng);
     return generateLevelTiles(1, 0, rng, bp);
   });
-  const tileCountRef = useRef(42);
+  const tileCountRef = useRef(ss?.tileCount || 42);
   const levelResetCount = useRef(0);
   const [selected, setSelected] = useState([]);
-  const [submitted, setSubmitted] = useState([]);
-  const [totalScore, setTotalScore] = useState(0);
-  const [lifetimePoints, setLifetimePoints] = useState(0);
-  const [badges, setBadges] = useState([]);
-  const [streak, setStreak] = useState(0);
+  const [submitted, setSubmitted] = useState(ss?.submitted || []);
+  const [totalScore, setTotalScore] = useState(ss?.totalScore || 0);
+  const [badges, setBadges] = useState(ss?.badges || []);
+  const [streak, setStreak] = useState(ss?.streak || 0);
   const [validating, setValidating] = useState(false);
   const [checkingStuck, setCheckingStuck] = useState(false);
   const [shake, setShake] = useState(false);
@@ -711,30 +837,28 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
   const [statsData, setStatsData] = useState(() => getLocalStats());
   const [timeLeaderboard, setTimeLeaderboard] = useState(() => getLocalTimeLeaderboard());
   const [showNameInput, setShowNameInput] = useState(false);
-  const [perfectDay, setPerfectDay] = useState(true);
-  const [longestWordToday, setLongestWordToday] = useState("");
+  const [perfectDay, setPerfectDay] = useState(ss?.perfectDay ?? true);
+  const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
-  const [levelTime, setLevelTime] = useState(0);
-  const [totalTime, setTotalTime] = useState(0);
+  const [levelTime, setLevelTime] = useState(ss?.levelTime || 0);
+  const [totalTime, setTotalTime] = useState(ss?.totalTime || 0);
   const [selectedLevelView, setSelectedLevelView] = useState(1);
   const [cloudSyncing, setCloudSyncing] = useState(false);
 
   const timerRef = useRef(null);
-  const levelTimeRef = useRef(0);
-  const totalTimeRef = useRef(0);
-  const submittedRef = useRef([]);
-  const totalRef = useRef(0);
-  const levelScoreRef = useRef(0);
-  const lifetimeRef = useRef(0);
+  const levelTimeRef = useRef(ss?.levelTime || 0);
+  const totalTimeRef = useRef(ss?.totalTime || 0);
+  const submittedRef = useRef(ss?.submitted || []);
+  const totalRef = useRef(ss?.totalScore || 0);
+  const levelScoreRef = useRef(ss?.levelScore || 0);
+  const lifetimeRef = useRef(lifetimeData.current.total || 0);
   const audioCtxRef = useRef(null);
   const musicLoopRef = useRef(null);
   const nextLoopRef = useRef(0);
   const clearedLevelsRef = useRef({});
   const syncTimerRef = useRef(null);
 
-  const today = new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" });
-  const dayNum = getDayOfYear();
   const availableTiles = tiles.filter(t => !t.used);
   const vowelsRemaining = availableTiles.filter(t => VOWELS.has(t.letter)).length;
   const consonantsRemaining = availableTiles.filter(t => !VOWELS.has(t.letter)).length;
@@ -757,97 +881,47 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
   const allTimeTotal = Object.values(statsData.dailyScores || {}).reduce((a,b)=>a+b,0);
   const avgDaily = statsData.daysPlayed > 0 ? Math.round(allTimeTotal / statsData.daysPlayed) : 0;
 
-  // ── Load data on mount ─────────────────────────────────────
+  // ── Init ───────────────────────────────────────────────────
   useEffect(() => {
     const init = async () => {
-      const todayKey = getTodayKey();
-
       if (!isGuest && user) {
-        // Load from cloud
         setCloudSyncing(true);
         const [gameState, dailySession] = await Promise.all([
           loadGameState(user.id),
-          loadDailySession(user.id, todayKey),
+          loadDailySession(user.id, getTodayKey()),
         ]);
         setCloudSyncing(false);
-
         if (gameState) {
-          // Check missed day
-          const yesterday = getYesterdayKey();
-          if (gameState.last_played_date && gameState.last_played_date !== todayKey && gameState.last_played_date !== yesterday) {
-            lifetimeRef.current = 0;
-            setLifetimePoints(0);
-            setShowResetWarning(true);
-            await saveGameState(user.id, { ...gameState, lifetimePoints: 0, lastPlayedDate: todayKey });
-          } else {
-            lifetimeRef.current = gameState.lifetime_points || 0;
-            setLifetimePoints(gameState.lifetime_points || 0);
-          }
+          lifetimeRef.current = gameState.lifetime_points || 0;
+          setLifetimePoints(gameState.lifetime_points || 0);
           setBadges(gameState.badges || []);
           setStatsData(prev => ({...prev, ...(gameState.stats || {})}));
-          setTimeLeaderboard(prev => ({ ...prev, ...(gameState.time_records || {}) }));
-          setPlayerName(gameState.stats?.playerName || "");
+          setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
         }
-
         if (dailySession) {
-          // Restore today's session
           setLevel(dailySession.level || 1);
-          setTotalScore(dailySession.total_score || 0);
-          totalRef.current = dailySession.total_score || 0;
-          setLevelScore(dailySession.level_score || 0);
-          levelScoreRef.current = dailySession.level_score || 0;
+          setTotalScore(dailySession.total_score || 0); totalRef.current = dailySession.total_score || 0;
+          setLevelScore(dailySession.level_score || 0); levelScoreRef.current = dailySession.level_score || 0;
           if (dailySession.tiles) setTiles(dailySession.tiles);
           tileCountRef.current = dailySession.tile_count || 42;
-          setSubmitted(dailySession.submitted || []);
-          submittedRef.current = dailySession.submitted || [];
+          setSubmitted(dailySession.submitted || []); submittedRef.current = dailySession.submitted || [];
           setPerfectDay(dailySession.perfect_day ?? true);
           setLongestWordToday(dailySession.longest_word_today || "");
-          levelTimeRef.current = dailySession.level_time || 0;
-          totalTimeRef.current = dailySession.total_time || 0;
-          setLevelTime(dailySession.level_time || 0);
-          setTotalTime(dailySession.total_time || 0);
+          levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
+          setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
         }
-
-        // Load player name
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
         if (playerData?.name) setPlayerName(playerData.name);
-
       } else {
-        // Guest — load from localStorage
-        const localLifetime = getLocalLifetime();
-        if (localLifetime.wasReset) setShowResetWarning(true);
-        lifetimeRef.current = localLifetime.total || 0;
-        setLifetimePoints(localLifetime.total || 0);
-
-        const session = loadLocalSession();
-        if (session) {
-          setLevel(session.level || 1);
-          setTotalScore(session.totalScore || 0);
-          totalRef.current = session.totalScore || 0;
-          setLevelScore(session.levelScore || 0);
-          levelScoreRef.current = session.levelScore || 0;
-          if (session.tiles) setTiles(session.tiles);
-          tileCountRef.current = session.tileCount || 42;
-          setSubmitted(session.submitted || []);
-          submittedRef.current = session.submitted || [];
-          setPerfectDay(session.perfectDay ?? true);
-          setLongestWordToday(session.longestWordToday || "");
-          levelTimeRef.current = session.levelTime || 0;
-          totalTimeRef.current = session.totalTime || 0;
-          setLevelTime(session.levelTime || 0);
-          setTotalTime(session.totalTime || 0);
-        }
         setPlayerName(localStorage.getItem("ll_name") || "");
       }
-
-      const tourDone = localStorage.getItem("ll_tour_done");
-      if (!tourDone) { setShowTour(true); }
+      if (!localStorage.getItem("ll_tour_done")) setShowTour(true);
       if (Notification.permission === "granted") scheduleNotifications();
     };
     init();
   }, [user, isGuest]);
 
-  // ── Auto-sync to cloud ─────────────────────────────────────
+  // ── Save session ───────────────────────────────────────────
   const syncToCloud = useCallback(async () => {
     if (isGuest || !user) return;
     const todayKey = getTodayKey();
@@ -862,20 +936,17 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
         currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
         lastStreakDate: statsData.lastStreakDate, badges,
-        stats: {...statsData, playerName},
-        timeRecords: timeLeaderboard,
+        stats: {...statsData, playerName}, timeRecords: timeLeaderboard,
       }),
     ]);
   }, [user, isGuest, level, tiles, perfectDay, longestWordToday, badges, statsData, timeLeaderboard, playerName]);
 
-  // Debounced auto-sync — fires 3 seconds after last change
   const scheduleSyncToCloud = useCallback(() => {
     if (isGuest || !user) return;
     clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(syncToCloud, 3000);
   }, [syncToCloud, isGuest, user]);
 
-  // Save session locally always
   useEffect(() => {
     saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges, streak, perfectDay, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current });
     scheduleSyncToCloud();
@@ -960,9 +1031,20 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
     if (!isGuest && user) await updatePlayerName(user.id, playerName);
   };
 
+  // ── Trigger farewell ───────────────────────────────────────
+  const triggerFarewell = useCallback(() => {
+    const bestEntry = submittedRef.current.filter(s => s.valid).reduce((best, s) => !best || s.score > best.score ? s : best, null);
+    onFarewell({
+      totalScore: totalRef.current,
+      bestWord: bestEntry?.word || "",
+      bestWordScore: bestEntry?.score || 0,
+    });
+  }, [onFarewell]);
+
   // ── Submit ─────────────────────────────────────────────────
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
+    if (!online) { setFlash({ word: "No internet connection!", score: 0, valid: false }); setTimeout(() => setFlash(null), 2000); return; }
     setValidating(true);
     const result = await validateWord(currentWord);
     const valid = result.valid;
@@ -987,10 +1069,9 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
       totalRef.current = newTotal; setTotalScore(newTotal);
       const newLevelScore = levelScoreRef.current + score;
       levelScoreRef.current = newLevelScore; setLevelScore(newLevelScore);
-      // Update lifetime
       const newLifetime = lifetimeRef.current + score;
       lifetimeRef.current = newLifetime; setLifetimePoints(newLifetime);
-      if (isGuest) saveLocalLifetime(newLifetime);
+      if (isGuest) saveLifetimeData(newLifetime);
       const newTiles = tiles.map(t => selected.includes(t.id) ? { ...t, used: true } : t);
       setTiles(newTiles);
       const ats = getAllTimeStats();
@@ -1031,7 +1112,7 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         totalRef.current += bonus; setTotalScore(totalRef.current);
         levelScoreRef.current += bonus; setLevelScore(levelScoreRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
-        if (isGuest) saveLocalLifetime(lifetimeRef.current);
+        if (isGuest) saveLifetimeData(lifetimeRef.current);
         setFlash({ word: "BOARD CLEAR!", score: bonus, valid: true });
         setConfetti(true); setTimeout(() => setConfetti(false), 4000);
         stopTimer();
@@ -1039,7 +1120,7 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         clearedLevelsRef.current[level] = clearedTime;
         const updatedStats = updateLocalStats({ levelTime: clearedTime, levelNum: level, score: totalRef.current });
         setStatsData(updatedStats);
-        const updatedTimes = addLocalLevelTime(playerName || "You", level, clearedTime);
+        const updatedTimes = addLocalLevelTime(playerName||"You", level, clearedTime);
         setTimeLeaderboard(updatedTimes);
         if (level < 5) setTimeout(() => setLevelComplete(true), 1200);
         else {
@@ -1048,12 +1129,11 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
             setPerfectDayAchieved(true); awardBadge("perfect_day");
             setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
             const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
-            const updatedTimes2 = addLocalPerfectTime(playerName || "You", totalTimeRef.current);
+            const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
             setTimeLeaderboard(updatedTimes2);
             setTimeout(() => setShowNameInput(true), 1000);
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
-        // Sync immediately on major events
         if (!isGuest && user) await syncToCloud();
       } else {
         scheduleSyncToCloud();
@@ -1106,11 +1186,18 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
   const handleSaveScore = async () => {
     if (!playerName.trim()) return;
     localStorage.setItem("ll_name", playerName);
-    if (!isGuest && user) {
-      await updatePlayerName(user.id, playerName);
-      await syncToCloud();
-    }
+    if (!isGuest && user) { await updatePlayerName(user.id, playerName); await syncToCloud(); }
     setShowNameInput(false); clearLocalSession();
+  };
+
+  const handleGiveUp = () => {
+    setShowStuckModal(false);
+    setShowNameInput(true);
+  };
+
+  const handleAfterSave = () => {
+    setShowNameInput(false);
+    triggerFarewell();
   };
 
   const medalFor = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
@@ -1118,11 +1205,7 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:40, position:"relative", overflow:"hidden" }}>
 
-      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:0}}>
-        {[...Array(50)].map((_,i)=>(
-          <div key={i} style={{ position:"absolute", width:(i%4===0?2:1)+"px", height:(i%4===0?2:1)+"px", background:"#fff", borderRadius:"50%", opacity:0.1+((i*7)%5)*0.1, top:((i*37)%100)+"%", left:((i*53)%100)+"%", animation:`twinkle ${2+(i%4)}s infinite alternate`, animationDelay:`${(i%5)*0.4}s` }}/>
-        ))}
-      </div>
+      <Starfield/>
 
       <style>{`
         @keyframes twinkle{from{opacity:0.08}to{opacity:0.7}}
@@ -1135,6 +1218,7 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
         @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         @keyframes warningPulse{0%,100%{background:rgba(220,38,38,0.2)}50%{background:rgba(220,38,38,0.4)}}
+        @keyframes purseGlow{0%,100%{box-shadow:0 0 18px rgba(139,92,246,0.7)}50%{box-shadow:0 0 32px rgba(167,139,250,0.95)}}
         .ll-tile{transition:all 0.14s ease;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .ll-tile:active{transform:scale(0.88)!important;}
         .ll-tile.sel{transform:translateY(-6px) scale(1.12);}
@@ -1148,20 +1232,38 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         .perfect-text{animation:rainbow 2s linear infinite;}
         .replay-btn{animation:provethat 2s ease-in-out infinite;}
         .warning-box{animation:warningPulse 2s ease-in-out infinite;}
+        .tour-btn{animation:purseGlow 2s ease-in-out infinite;}
       `}</style>
 
-      <ConfettiCanvas active={confetti && !rainbowConfetti} rainbow={false} />
-      <ConfettiCanvas active={rainbowConfetti} rainbow={true} />
+      <ConfettiCanvas active={confetti && !rainbowConfetti} rainbow={false}/>
+      <ConfettiCanvas active={rainbowConfetti} rainbow={true}/>
 
-      {/* Points Reset Warning */}
-      {showResetWarning&&(
+      {/* Offline banner */}
+      {!online&&<div style={{position:"fixed",top:0,left:0,right:0,zIndex:99990,background:"rgba(220,38,38,0.95)",padding:"8px",textAlign:"center",fontSize:12,color:"#fff",fontFamily:"Georgia,serif"}}>
+        📡 No internet connection — dictionary validation unavailable. Please reconnect to play.
+      </div>}
+
+      {/* Cloud syncing */}
+      {cloudSyncing&&<div style={{position:"fixed",top:12,right:12,zIndex:9995,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#a78bfa"}}>☁️ Syncing…</div>}
+
+      {/* Decay/Reset Warning */}
+      {showDecayWarning&&(
         <div style={{position:"fixed",inset:0,zIndex:99998,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a0a0a,#3d1010)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(220,38,38,0.6)",maxWidth:340,width:"90%"}}>
-            <div style={{fontSize:56}}>😱</div>
-            <div style={{fontSize:24,fontWeight:"bold",color:"#ef4444",marginTop:10}}>You Missed a Day!</div>
-            <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>Your lifetime points have been<br/>reset back to <span style={{color:"#ef4444",fontWeight:"bold",fontSize:20}}>ZERO</span>.</div>
-            <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:10,lineHeight:1.6}}>Don't let this happen again!<br/>Play every day to protect your points.</div>
-            <button className="ll-btn" onClick={()=>setShowResetWarning(false)} style={{marginTop:24,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>I'll Play Every Day! 💪</button>
+          <div style={{background:decayInfo.wasReset?"linear-gradient(135deg,#1a0a0a,#3d1010)":"linear-gradient(135deg,#1a0a0a,#2d1a10)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:`2px solid ${decayInfo.wasReset?"rgba(220,38,38,0.6)":"rgba(251,146,60,0.6)"}`,maxWidth:340,width:"90%"}}>
+            <div style={{fontSize:56}}>{decayInfo.wasReset?"😱":"⚠️"}</div>
+            <div style={{fontSize:22,fontWeight:"bold",color:decayInfo.wasReset?"#ef4444":"#fb923c",marginTop:10}}>
+              {decayInfo.wasReset?"Points Reset to Zero!":decayInfo.missedDays===1?"You Missed 1 Day!":"You Missed 2 Days!"}
+            </div>
+            <div style={{fontSize:14,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>
+              {decayInfo.wasReset
+                ?<>Your lifetime points have reset to <span style={{color:"#ef4444",fontWeight:"bold",fontSize:18}}>ZERO</span>.<br/>Play every day to protect your points!</>
+                :decayInfo.missedDays===1
+                  ?<>You lost <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span> of your lifetime points.<br/>Don't miss another day or you'll lose more!</>
+                  :<>You've lost <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span> of your lifetime points.<br/>One more missed day and everything resets to <span style={{color:"#ef4444",fontWeight:"bold"}}>ZERO</span>!</>
+              }
+            </div>
+            {!decayInfo.wasReset&&<div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:8}}>Remaining: <span style={{color:"#f6d365",fontWeight:"bold"}}>{lifetimePoints.toLocaleString()} pts</span></div>}
+            <button className="ll-btn" onClick={()=>setShowDecayWarning(false)} style={{marginTop:24,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>I'll Play Every Day! 💪</button>
           </div>
         </div>
       )}
@@ -1174,11 +1276,12 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
             <div style={{fontSize:20,fontWeight:"bold",color:TOUR_STEPS[tourStep].warning?"#ef4444":"#f6d365",marginTop:12,lineHeight:1.3}}>{TOUR_STEPS[tourStep].title}</div>
             {TOUR_STEPS[tourStep].warning?(
               <div style={{marginTop:12}}>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>Points you earn carry over <span style={{color:"#6ee7b7",fontWeight:"bold"}}>every single day</span> — building your lifetime total.</div>
-                <div className="warning-box" style={{marginTop:14,borderRadius:14,padding:"16px",border:"1px solid rgba(220,38,38,0.4)"}}>
-                  <div style={{fontSize:15,fontWeight:"bold",color:"#ef4444"}}>⚠️ Miss just one day...</div>
-                  <div style={{fontSize:20,fontWeight:"bold",color:"#fff",marginTop:6}}>All your points → <span style={{color:"#ef4444"}}>ZERO</span></div>
-                  <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:6}}>We'll send reminders before midnight so you never lose your streak.</div>
+                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>Points carry over <span style={{color:"#6ee7b7",fontWeight:"bold"}}>every single day</span> — building your lifetime total.</div>
+                <div style={{marginTop:10,fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.7}}>Miss a day and you lose <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span> of your points. Miss two days and lose <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span>.</div>
+                <div className="warning-box" style={{marginTop:12,borderRadius:14,padding:"14px",border:"1px solid rgba(220,38,38,0.4)"}}>
+                  <div style={{fontSize:14,fontWeight:"bold",color:"#ef4444"}}>⚠️ Miss 3 days in a row...</div>
+                  <div style={{fontSize:18,fontWeight:"bold",color:"#fff",marginTop:4}}>ALL points → <span style={{color:"#ef4444"}}>ZERO</span></div>
+                  <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:6}}>We'll send reminders at noon and 6PM so you never forget!</div>
                 </div>
               </div>
             ):(
@@ -1206,9 +1309,6 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
       {/* Checking */}
       {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>{checkingStuck?"🔎":"🔍"}</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div></div>}
 
-      {/* Cloud sync indicator */}
-      {cloudSyncing&&<div style={{position:"fixed",top:12,right:12,zIndex:9995,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#a78bfa"}}>☁️ Syncing…</div>}
-
       {/* Paused */}
       {paused&&<div style={{position:"fixed",inset:0,zIndex:8000,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={handlePause}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"40px",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
         <div style={{fontSize:52}}>⏸️</div>
@@ -1234,7 +1334,7 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:13,fontWeight:"bold"}}>🔄 Try Level {level} Again</button>
         {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
         {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
-        <button className="ll-btn" onClick={()=>{setShowStuckModal(false);setShowNameInput(true);}} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — Save Score":"📊 End & Save Score"}</button>
+        <button className="ll-btn" onClick={handleGiveUp} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — See Summary":"📊 End & Save Score"}</button>
       </div></div>}
 
       {/* Buy Level Modal */}
@@ -1254,8 +1354,8 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         <div style={{fontSize:56}}>🌈</div>
         <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
         <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>All 5 levels cleared without buying!</div>
-        <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"} — Day #{dayNum}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
-        <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nAll 5 levels cleared, no buys!\nDay #${dayNum} · Score: ${totalScore} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\nPlay free at letterloot-6k6v.vercel.app`);setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
+        <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+        <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nAll 5 levels cleared, no buys!\n${getShortDate()} · Score: ${totalScore} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\nPlay free at letterloot.net`);setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
         <button className="ll-btn replay-btn" onClick={()=>{setPerfectDayAchieved(false);handleFullReset();}} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
           🧠 WOW! You're a Smart One!<br/>Want to Do it Again?
         </button>
@@ -1279,10 +1379,10 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
         <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:8}}>{perfectDay?"Perfect Day!":"Game Complete!"}</div>
         <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
         <div style={{fontSize:13,color:"#6ee7b7",marginTop:4}}>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
-        <div style={{fontSize:12,color:"#aaa",marginTop:4}}>Level {level} · Day #{dayNum} · ⏱️ {formatTime(totalTimeRef.current)}</div>
+        <div style={{fontSize:12,color:"#aaa",marginTop:4}}>{getShortDate()} · ⏱️ {formatTime(totalTimeRef.current)}</div>
         {!isGuest&&<div style={{fontSize:11,color:"#a78bfa",marginTop:4}}>☁️ Progress saved to your account</div>}
         <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:14,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
-        <button className="ll-btn" onClick={handleSaveScore} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
+        <button className="ll-btn" onClick={async()=>{ await handleSaveScore(); triggerFarewell(); }} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
         <button className="ll-btn replay-btn" onClick={()=>{setShowNameInput(false);handleFullReset();}} style={{marginTop:10,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#2979ff,#00b0ff)",color:"#fff",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
           🎮 WOW! That was SO Close.<br/>Want to Try Again?
         </button>
@@ -1292,7 +1392,7 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
       {/* ── HEADER ── */}
       <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"10px 12px 0"}}>
 
-        {/* ROW 1: Name + Title + Music + ? */}
+        {/* ROW 1: Name + Title + Music + Tour + SignOut */}
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             {editingName?(
@@ -1310,21 +1410,22 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
             )}
           </div>
 
-          {/* LetterLoot title */}
-          <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"4px 14px"}}>
-            <span style={{fontSize:22,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85),0 0 4px rgba(255,255,255,0.5)"}}>LetterLoot</span>
+          {/* Title */}
+          <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"4px 14px",boxShadow:"0 0 18px rgba(139,92,246,0.5)"}}>
+            <span style={{fontSize:22,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
           </div>
 
           <div style={{display:"flex",alignItems:"center",gap:4}}>
             <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:10,color:musicOn?"#f6d365":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif"}}>🎸</button>
-            <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2px solid rgba(255,255,255,0.9)",borderRadius:"50%",width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,color:"#ffffff",fontWeight:"bold",background:"rgba(255,255,255,0.18)",cursor:"pointer",fontFamily:"Georgia,serif"}}>?</button>
+            {/* Bright pulsing ? tour button */}
+            <button className="tour-btn" onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#ffffff",fontWeight:"bold",background:"rgba(139,92,246,0.4)",cursor:"pointer",fontFamily:"Georgia,serif"}}>?</button>
             <button onClick={onSignOut} style={{background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"rgba(255,255,255,0.4)",fontFamily:"Georgia,serif"}}>{isGuest?"Login":"Sign Out"}</button>
           </div>
         </div>
 
         {/* Date + status */}
         <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1,marginBottom:5,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          <span>{today} · Day #{dayNum}</span>
+          <span>{getCalendarDate()}</span>
           {perfectDay&&<span style={{color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</span>}
           {isGuest&&<span style={{color:"rgba(255,255,255,0.35)"}}>· Guest Mode</span>}
         </div>
@@ -1405,9 +1506,8 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
       {/* ── PLAY TAB ── */}
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          {/* Action buttons */}
           <div style={{display:"flex",gap:4,marginBottom:5}}>
-            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":"Submit Word"}</button>
+            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
             <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
             <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>🔄 ReTry L{level}</button>
             {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1}</button>}
@@ -1441,7 +1541,8 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; return(
                   <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:38,height:44,background:tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)"}}>
                     <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
-                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
+                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"
+                    #ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
                   </div>
                 );})}
               </div>
@@ -1449,6 +1550,11 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
           </div>
 
           {longestWordToday&&<div style={{textAlign:"center",marginTop:6,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters)</div>}
+
+          {/* Replay Tour link */}
+          <div style={{textAlign:"center",marginTop:8}}>
+            <span onClick={()=>{setTourStep(0);setShowTour(true);}} style={{fontSize:10,color:"rgba(167,139,250,0.7)",cursor:"pointer",textDecoration:"underline"}}>↺ Replay Tour</span>
+          </div>
 
           {/* Guest upgrade prompt */}
           {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.1)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(167,139,250,0.3)",textAlign:"center"}}>
@@ -1515,13 +1621,13 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
       {tab==="stats"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
 
-          {/* Lifetime Points hero */}
+          {/* Lifetime Points */}
           <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
             <div style={{fontSize:44,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:3}}>Accumulates every day you play</div>
             <div style={{marginTop:6,background:"rgba(220,38,38,0.12)",borderRadius:8,padding:"6px 10px",border:"1px solid rgba(220,38,38,0.25)"}}>
-              <div style={{fontSize:10,color:"#ef4444",fontWeight:"bold"}}>⚠️ Miss a day = Reset to ZERO</div>
+              <div style={{fontSize:10,color:"#ef4444",fontWeight:"bold"}}>⚠️ Lose 1/3 per missed day — Zero after 3 missed days</div>
             </div>
             {!isGuest&&<div style={{marginTop:6,fontSize:10,color:"#a78bfa"}}>☁️ Saved to your account</div>}
           </div>
@@ -1558,12 +1664,12 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
             <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week Best</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Week Best</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Best Day Ever</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Best Ever</div></div>
             </div>
             <div style={{display:"flex",justifyContent:"space-around",paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Daily Average</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Daily Avg</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#6ee7b7"}}>{allTimeTotal.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All-Time Total</div></div>
             </div>
@@ -1582,11 +1688,19 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div>
+                {statsData.highWordTodayWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordTodayWord}</div>}
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div>
+              </div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div></div>
+              <div style={{textAlign:"center"}}>
+                <div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div>
+                {statsData.highWordAllTimeWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordAllTimeWord}</div>}
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div>
+              </div>
             </div>
           </div>
 
@@ -1663,8 +1777,13 @@ function GameScreen({ user, onSignOut, showTour, setShowTour, showResetWarning, 
             </div>
           </div>
 
+          {/* Replay Tour */}
           <div style={{textAlign:"center",marginBottom:8}}>
-            <button onClick={()=>{const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}};saveLocalStats(def);setStatsData(def);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
+            <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(139,92,246,0.15)",border:"1px solid rgba(167,139,250,0.4)",color:"#a78bfa",padding:"8px 20px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>↺ Replay Tour</button>
+          </div>
+
+          <div style={{textAlign:"center",marginBottom:8}}>
+            <button onClick={()=>{const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,highWordTodayWord:"",highWordAllTimeWord:"",fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}};saveLocalStats(def);setStatsData(def);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
           </div>
         </div>
       )}

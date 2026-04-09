@@ -1541,8 +1541,7 @@ function GameScreen({ user, onSignOut, onFarewell }) {
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; return(
                   <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:38,height:44,background:tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)"}}>
                     <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
-                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"
-                    #ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
+                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
                   </div>
                 );})}
               </div>

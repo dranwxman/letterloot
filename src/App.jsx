@@ -13,7 +13,6 @@ const SCORE_MAP = {
 const MW_COLLEGIATE_KEY = "6c41ef2c-8c1d-440a-b04a-24e623cf68e1";
 const MW_MEDICAL_KEY    = "05a10875-f553-43f6-be64-6dafcdb4152e";
 
-// ── Date helpers ───────────────────────────────────────────────
 function getDailySeed() {
   const d = new Date();
   return d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate();
@@ -106,43 +105,91 @@ function calcWordScore(tileIds, tiles) {
 const VOWELS = new Set(["A","E","I","O","U"]);
 const LEVEL_BUY_COST = [0, 250, 500, 750, 1000, 1000];
 
+// ── Badge definitions ─────────────────────────────────────────
+// scope: "lifetime" | "weekly" | "daily" | "all" (appears in all three)
 const BADGE_DEFS = [
-  { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",           cat:"core" },
-  { id:"score_50",     icon:"🔥", label:"On Fire",         desc:"Score 50+ in one word",            cat:"core" },
-  { id:"score_100",    icon:"💯", label:"Century",         desc:"Score 100+ in one word",           cat:"core" },
-  { id:"score_200",    icon:"🚀", label:"Rocket",          desc:"Score 200+ in one word",           cat:"core" },
-  { id:"long_word",    icon:"📏", label:"Long Haul",       desc:"Use 7+ letters in a word",         cat:"core" },
-  { id:"streak_3",     icon:"⚡", label:"Streak x3",      desc:"3 valid words in a row",           cat:"core" },
-  { id:"streak_5",     icon:"🌪️", label:"Streak x5",      desc:"5 valid words in a row",           cat:"core" },
-  { id:"daily_500",    icon:"🏆", label:"Loot Master",     desc:"500+ total daily score",           cat:"core" },
-  { id:"daily_1000",   icon:"💰", label:"Treasure Chest",  desc:"1000+ total daily score",          cat:"core" },
-  { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                 cat:"core" },
-  { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",              cat:"core" },
-  { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",    cat:"core" },
-  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",           cat:"core" },
-  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",           cat:"core" },
-  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",         cat:"core" },
-  { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                    cat:"level" },
-  { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                    cat:"level" },
-  { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                    cat:"level" },
-  { id:"level_5",      icon:"💎", label:"Diamond",         desc:"Reach Level 5",                    cat:"level" },
-  { id:"all_tiles_1",  icon:"🌟", label:"Clear L1",        desc:"Use all tiles on Level 1",         cat:"level" },
-  { id:"all_tiles_2",  icon:"🌟", label:"Clear L2",        desc:"Use all tiles on Level 2",         cat:"level" },
-  { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",         cat:"level" },
-  { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",         cat:"level" },
-  { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",         cat:"level" },
-  { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",   cat:"level" },
-  { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min",  cat:"word" },
-  { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting", cat:"word" },
-  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",     cat:"word" },
-  { id:"points_1k",    icon:"💫", label:"1K Points",       desc:"Accumulate 1,000 lifetime points", cat:"alltime" },
-  { id:"points_5k",    icon:"⭐", label:"5K Points",       desc:"Accumulate 5,000 lifetime points", cat:"alltime" },
-  { id:"points_10k",   icon:"🌠", label:"10K Points",      desc:"Accumulate 10,000 lifetime points",cat:"alltime" },
-  { id:"streak_7",     icon:"🔥", label:"Week Streak",     desc:"Play 7 days in a row",             cat:"alltime" },
-  { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",            cat:"alltime" },
-  { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",   cat:"alltime" },
-  { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",  cat:"alltime" },
+  { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",           cat:"core",    scope:"lifetime" },
+  { id:"score_50",     icon:"🔥", label:"On Fire",         desc:"Score 50+ in one word",            cat:"core",    scope:"lifetime" },
+  { id:"century",      icon:"💰", label:"Century",         desc:"Score 100+ in one word",           cat:"core",    scope:"all" },
+  { id:"score_200",    icon:"🚀", label:"Rocket",          desc:"Score 200+ in one word",           cat:"core",    scope:"lifetime" },
+  { id:"long_word",    icon:"📏", label:"Long Haul",       desc:"Use 7+ letters in a word",         cat:"core",    scope:"lifetime" },
+  { id:"streak_3",     icon:"⚡", label:"Streak x3",      desc:"3 valid words in a row",           cat:"core",    scope:"daily" },
+  { id:"streak_5",     icon:"🌪️", label:"Streak x5",      desc:"5 valid words in a row",           cat:"core",    scope:"daily" },
+  { id:"daily_500",    icon:"🏆", label:"Loot Master",     desc:"500+ total daily score",           cat:"core",    scope:"lifetime" },
+  { id:"daily_1000",   icon:"💰", label:"Treasure Chest",  desc:"1000+ total daily score",          cat:"core",    scope:"lifetime" },
+  { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                 cat:"core",    scope:"daily" },
+  { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",              cat:"core",    scope:"lifetime" },
+  { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",    cat:"core",    scope:"lifetime" },
+  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",           cat:"core",    scope:"daily" },
+  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",           cat:"core",    scope:"daily" },
+  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",         cat:"core",    scope:"daily" },
+  { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                    cat:"level",   scope:"lifetime" },
+  { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                    cat:"level",   scope:"lifetime" },
+  { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                    cat:"level",   scope:"lifetime" },
+  { id:"level_5",      icon:"💎", label:"Diamond",         desc:"Reach Level 5",                    cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_1",  icon:"🌟", label:"Clear L1",        desc:"Use all tiles on Level 1",         cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_2",  icon:"🌟", label:"Clear L2",        desc:"Use all tiles on Level 2",         cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",         cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",         cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",         cat:"level",   scope:"lifetime" },
+  { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",   cat:"level",   scope:"lifetime" },
+  { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min",  cat:"word",    scope:"lifetime" },
+  { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting", cat:"word",    scope:"lifetime" },
+  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",     cat:"word",    scope:"lifetime" },
+  { id:"points_1k",    icon:"💫", label:"1K Points",       desc:"Accumulate 1,000 lifetime points", cat:"alltime", scope:"lifetime" },
+  { id:"points_5k",    icon:"⭐", label:"5K Points",       desc:"Accumulate 5,000 lifetime points", cat:"alltime", scope:"lifetime" },
+  { id:"points_10k",   icon:"🌠", label:"10K Points",      desc:"Accumulate 10,000 lifetime points",cat:"alltime", scope:"lifetime" },
+  { id:"streak_7",     icon:"🔥", label:"Week Streak",     desc:"Play 7 days in a row",             cat:"alltime", scope:"lifetime" },
+  { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",            cat:"alltime", scope:"lifetime" },
+  { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",   cat:"alltime", scope:"lifetime" },
+  { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",  cat:"alltime", scope:"lifetime" },
 ];
+
+// ── Doubloon SVG icon ─────────────────────────────────────────
+function DoubloonIcon({ size = 40 }) {
+  return (
+    <svg viewBox="0 0 200 200" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="df" cx="50%" cy="40%" r="55%">
+          <stop offset="0%" stopColor="#FFE566"/>
+          <stop offset="60%" stopColor="#F5C518"/>
+          <stop offset="100%" stopColor="#C8920A"/>
+        </radialGradient>
+        <radialGradient id="dr" cx="50%" cy="35%" r="60%">
+          <stop offset="0%" stopColor="#D4A017"/>
+          <stop offset="100%" stopColor="#7A5200"/>
+        </radialGradient>
+        <radialGradient id="ds" cx="35%" cy="28%" r="42%">
+          <stop offset="0%" stopColor="#FFF9C0" stopOpacity="0.75"/>
+          <stop offset="100%" stopColor="#F5C518" stopOpacity="0"/>
+        </radialGradient>
+      </defs>
+      <circle cx="100" cy="100" r="98" fill="url(#dr)"/>
+      <circle cx="100" cy="100" r="91" fill="none" stroke="#6B4400" strokeWidth="2"/>
+      {[0,15,30,45,60,75,90,105,120,135,150,165,180,195,210,225,240,255,270,285,300,315,330,345].map((deg,i) => {
+        const rad = deg * Math.PI / 180;
+        return <circle key={i} cx={100 + 95*Math.cos(rad)} cy={100 + 95*Math.sin(rad)} r="3" fill="#6B4400"/>;
+      })}
+      <circle cx="100" cy="100" r="82" fill="url(#df)"/>
+      <circle cx="100" cy="100" r="75" fill="none" stroke="#6B4400" strokeWidth="2"/>
+      <circle cx="100" cy="100" r="70" fill="none" stroke="#4A2E00" strokeWidth="1"/>
+      <text x="100" y="78" textAnchor="middle" fontFamily="Georgia,serif" fontSize="20" fontWeight="bold" fill="#2A1400" letterSpacing="5">LL</text>
+      <rect x="67" y="90" width="52" height="16" rx="2" fill="#2A1400"/>
+      <rect x="67" y="90" width="48" height="16" rx="2" fill="#E8A800"/>
+      <rect x="67" y="90" width="48" height="5" rx="2" fill="#F5C518" opacity="0.8"/>
+      <rect x="67" y="90" width="9" height="16" rx="1" fill="#B0B0B0"/>
+      <polygon points="115,90 128,98 115,106" fill="#C8922A"/>
+      <polygon points="128,95 136,98 128,101" fill="#2A1400"/>
+      <rect x="67" y="90" width="5" height="16" rx="1" fill="#1A6E35"/>
+      <text x="100" y="136" textAnchor="middle" fontFamily="Georgia,serif" fontSize="22" fontWeight="bold" fill="#2A1400">100</text>
+      <path id="darc" d="M 43,72 A 60 60 0 0 1 157,72" fill="none"/>
+      <text fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="#2A1400" letterSpacing="3">
+        <textPath href="#darc" startOffset="50%" textAnchor="middle">CENTURY</textPath>
+      </text>
+      <circle cx="100" cy="100" r="82" fill="url(#ds)"/>
+    </svg>
+  );
+}
 
 // ── Dictionary ─────────────────────────────────────────────────
 const wordCache = {};
@@ -173,17 +220,41 @@ async function validateWord(word) {
 async function hasValidWordsRemaining(tiles) {
   const available = tiles.filter(t => !t.used).map(t => t.letter);
   if (available.length < 3) return false;
+  // FIX item 12: skip check entirely if more than 15 tiles remain
+  if (available.length > 15) return true;
   const letters = [...available];
   const combos = new Set();
-  for (let i = 0; i < letters.length && combos.size < 50; i++)
-    for (let j = 0; j < letters.length && combos.size < 50; j++) {
+  const cap = Math.max(200, available.length * 12);
+  // Check 3, 4, and 5-letter combos
+  for (let i = 0; i < letters.length && combos.size < cap; i++)
+    for (let j = 0; j < letters.length && combos.size < cap; j++) {
       if (j === i) continue;
-      for (let k = 0; k < letters.length && combos.size < 50; k++) {
+      for (let k = 0; k < letters.length && combos.size < cap; k++) {
         if (k === i || k === j) continue;
         combos.add(letters[i] + letters[j] + letters[k]);
+        // 4-letter
+        for (let m = 0; m < letters.length && combos.size < cap; m++) {
+          if (m === i || m === j || m === k) continue;
+          combos.add(letters[i] + letters[j] + letters[k] + letters[m]);
+        }
       }
     }
   for (const combo of combos) {
+    const result = await validateWord(combo);
+    if (result.valid) return true;
+  }
+  // FIX item 12: second-pass confirmation before declaring stuck
+  const combos2 = new Set();
+  const shuffled = [...letters].sort(() => Math.random() - 0.5);
+  for (let i = 0; i < shuffled.length && combos2.size < cap; i++)
+    for (let j = 0; j < shuffled.length && combos2.size < cap; j++) {
+      if (j === i) continue;
+      for (let k = 0; k < shuffled.length && combos2.size < cap; k++) {
+        if (k === i || k === j) continue;
+        combos2.add(shuffled[i] + shuffled[j] + shuffled[k]);
+      }
+    }
+  for (const combo of combos2) {
     const result = await validateWord(combo);
     if (result.valid) return true;
   }
@@ -266,38 +337,27 @@ function ConfettiCanvas({ active, rainbow }) {
   return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:9999, pointerEvents:"none" }} />;
 }
 
-// ── Horizontal Pencil Logo — "LetterLoot" label, dark black ───
 function PencilLogo({ size = 120 }) {
   const w = size;
   const h = Math.round(size * 0.28);
   return (
     <svg viewBox="0 0 300 68" width={w} height={h} xmlns="http://www.w3.org/2000/svg">
-      {/* Ferrule / metal band at left end */}
       <rect x="0" y="16" width="18" height="36" rx="2" fill="#C8C8C8"/>
       <rect x="0" y="16" width="18" height="8" rx="2" fill="#E0E0E0"/>
       <rect x="0" y="44" width="18" height="8" rx="2" fill="#B0B0B0"/>
-      {/* Pencil body — yellow */}
       <rect x="18" y="14" width="226" height="40" rx="2" fill="#F5C518"/>
-      {/* Top highlight stripe */}
       <rect x="18" y="14" width="226" height="8" rx="2" fill="#F9D84A" opacity="0.7"/>
-      {/* Bottom shadow stripe */}
       <rect x="18" y="46" width="226" height="8" rx="2" fill="#D4A017" opacity="0.5"/>
-      {/* Wood exposed near tip */}
       <polygon points="244,14 268,34 244,54" fill="#DEB887"/>
-      {/* Graphite tip */}
       <polygon points="268,28 300,34 268,40" fill="#5a5a5a"/>
       <polygon points="268,30 298,34 268,38" fill="#3a3a3a"/>
-      {/* LetterLoot label — dark black, centered on body */}
       <text x="131" y="30" textAnchor="middle" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="#1a1100">LetterLoot</text>
-      {/* No.2 label */}
       <text x="55" y="42" textAnchor="middle" fontFamily="Georgia,serif" fontSize="10" fontWeight="bold" fill="#1a1100">No.2</text>
-      {/* Green end cap stripe */}
       <rect x="0" y="16" width="6" height="36" rx="2" fill="#2D8B4E"/>
     </svg>
   );
 }
 
-// ── Inline pencil icon (small) — "LetterLoot" label, dark black
 function PencilIcon({ size = 32 }) {
   const w = size;
   const h = Math.round(size * 0.28);
@@ -310,7 +370,6 @@ function PencilIcon({ size = 32 }) {
       <polygon points="244,14 268,34 244,54" fill="#DEB887"/>
       <polygon points="268,28 300,34 268,40" fill="#5a5a5a"/>
       <polygon points="268,30 298,34 268,38" fill="#3a3a3a"/>
-      {/* LetterLoot label — dark black */}
       <text x="131" y="30" textAnchor="middle" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="#1a1100">LetterLoot</text>
       <text x="55" y="42" textAnchor="middle" fontFamily="Georgia,serif" fontSize="10" fontWeight="bold" fill="#1a1100">No.2</text>
       <rect x="0" y="16" width="6" height="36" rx="2" fill="#2D8B4E"/>
@@ -318,7 +377,6 @@ function PencilIcon({ size = 32 }) {
   );
 }
 
-// ── LetterLoot Logo Block: pencil above title box ──────────────
 function LetterLootLogo({ titleFontSize = 28, boxPadding = "8px 24px", showSubtitle = false }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
@@ -349,7 +407,6 @@ function LetterLootLogo({ titleFontSize = 28, boxPadding = "8px 24px", showSubti
   );
 }
 
-// ── Static Starfield ───────────────────────────────────────────
 function Starfield() {
   const stars = [
     [23,45,1,0.6],[67,18,1.5,0.8],[120,55,1,0.5],[180,22,1,0.7],[240,40,1.5,0.6],
@@ -374,7 +431,6 @@ function Starfield() {
   );
 }
 
-// ── Lifetime points helpers ────────────────────────────────────
 function getLifetimeData() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_lifetime") || "null");
@@ -406,7 +462,6 @@ function saveLifetimeData(total) {
   try { localStorage.setItem("ll_lifetime", JSON.stringify({ total, lastPlayedDate: getTodayKey() })); } catch {}
 }
 
-// ── Local storage helpers ──────────────────────────────────────
 function getLocalStats() {
   const def = {
     daysPlayed:0, lastPlayedDate:null,
@@ -433,12 +488,7 @@ function getLocalStats() {
         else { migratedFastest[k] = v; }
       });
     }
-    return {
-      ...def,
-      ...data,
-      fastestLevels: migratedFastest,
-      bestScorePerLevel: data.bestScorePerLevel || def.bestScorePerLevel,
-    };
+    return { ...def, ...data, fastestLevels: migratedFastest, bestScorePerLevel: data.bestScorePerLevel || def.bestScorePerLevel };
   } catch { return def; }
 }
 function saveLocalStats(stats) { try { localStorage.setItem("ll_stats", JSON.stringify(stats)); } catch {} }
@@ -470,15 +520,9 @@ function updateLocalStats(updates) {
     if (!stats.dailyScores[todayKey] || updates.score > stats.dailyScores[todayKey]) stats.dailyScores[todayKey] = updates.score;
   }
   if (updates.wordScore !== undefined && updates.word !== undefined) {
-    if (updates.wordScore > stats.highWordToday) {
-      stats.highWordToday = updates.wordScore;
-      stats.highWordTodayWord = updates.word;
-    }
+    if (updates.wordScore > stats.highWordToday) { stats.highWordToday = updates.wordScore; stats.highWordTodayWord = updates.word; }
     if (updates.wordScore > (stats.highWordWeek[todayKey]||0)) stats.highWordWeek[todayKey] = updates.wordScore;
-    if (updates.wordScore > stats.highWordAllTime) {
-      stats.highWordAllTime = updates.wordScore;
-      stats.highWordAllTimeWord = updates.word;
-    }
+    if (updates.wordScore > stats.highWordAllTime) { stats.highWordAllTime = updates.wordScore; stats.highWordAllTimeWord = updates.word; }
   }
   if (updates.word) {
     if (!stats.longestWordToday || updates.word.length > stats.longestWordToday.length) stats.longestWordToday = updates.word;
@@ -513,6 +557,47 @@ function updateLocalStats(updates) {
   }
   saveLocalStats(stats); return stats;
 }
+
+// ── Badge storage helpers ──────────────────────────────────────
+function getBadgeStore() {
+  try {
+    const data = JSON.parse(localStorage.getItem("ll_badges_v2") || "null");
+    if (data) return data;
+    // Migrate from old flat badges array
+    const oldBadges = JSON.parse(localStorage.getItem("ll_stats") || "{}").badges || [];
+    return { lifetime: oldBadges, weekly: {}, daily: {} };
+  } catch { return { lifetime: [], weekly: {}, daily: {} }; }
+}
+function saveBadgeStore(store) {
+  try { localStorage.setItem("ll_badges_v2", JSON.stringify(store)); } catch {}
+}
+function hasBadge(store, id, scope) {
+  const todayKey = getTodayKey();
+  const weekKey = getWeekKey();
+  if (scope === "lifetime") return store.lifetime.includes(id);
+  if (scope === "weekly") return (store.weekly[weekKey] || []).includes(id);
+  if (scope === "daily") return (store.daily[todayKey] || []).includes(id);
+  if (scope === "all") return store.lifetime.includes(id) || (store.weekly[weekKey] || []).includes(id) || (store.daily[todayKey] || []).includes(id);
+  return false;
+}
+function awardBadgeToStore(store, id, scope) {
+  const todayKey = getTodayKey();
+  const weekKey = getWeekKey();
+  const updated = { ...store, lifetime: [...store.lifetime], weekly: {...store.weekly}, daily: {...store.daily} };
+  if (scope === "lifetime" || scope === "all") {
+    if (!updated.lifetime.includes(id)) updated.lifetime.push(id);
+  }
+  if (scope === "weekly" || scope === "all") {
+    if (!updated.weekly[weekKey]) updated.weekly[weekKey] = [];
+    if (!updated.weekly[weekKey].includes(id)) updated.weekly[weekKey].push(id);
+  }
+  if (scope === "daily" || scope === "all") {
+    if (!updated.daily[todayKey]) updated.daily[todayKey] = [];
+    if (!updated.daily[todayKey].includes(id)) updated.daily[todayKey].push(id);
+  }
+  return updated;
+}
+
 function getLocalTimeLeaderboard() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_times") || "null");
@@ -555,7 +640,6 @@ function getAllTimeStats() {
 }
 function saveAllTimeStats(stats) { try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {} }
 
-// ── Notifications ──────────────────────────────────────────────
 function scheduleNotifications() {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
   const now = new Date();
@@ -584,7 +668,6 @@ async function requestNotificationPermission() {
   return false;
 }
 
-// ── Tour steps ─────────────────────────────────────────────────
 const TOUR_STEPS = [
   { emoji:"✏️", title:"Welcome to LetterLoot!", body:"A daily word puzzle where every letter has a point value. Fresh tiles every day at midnight — same board for every player worldwide!", warning:false },
   { emoji:"✨", title:"Letters Don't Need to Connect!", body:"Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!", warning:false },
@@ -594,11 +677,13 @@ const TOUR_STEPS = [
   { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
 ];
 
-// ── Farewell Screen ────────────────────────────────────────────
-function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone }) {
+function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats }) {
   const [opacity, setOpacity] = useState(1);
-  useEffect(() => {
-    const timer = setTimeout(() => {
+  const [showingStats, setShowingStats] = useState(false);
+  const fadeTimerRef = useRef(null);
+
+  const startFade = useCallback(() => {
+    fadeTimerRef.current = setTimeout(() => {
       let op = 1;
       const fade = setInterval(() => {
         op -= 0.02;
@@ -606,8 +691,18 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone }) {
         if (op <= 0) { clearInterval(fade); onDone(); }
       }, 30);
     }, 6000);
-    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  useEffect(() => {
+    startFade();
+    return () => clearTimeout(fadeTimerRef.current);
   }, []);
+
+  const handleViewStats = () => {
+    clearTimeout(fadeTimerRef.current);
+    setOpacity(1);
+    onViewStats();
+  };
 
   return (
     <div style={{ position:"fixed", inset:0, zIndex:99999, background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"30px 24px", fontFamily:"Georgia,serif", color:"#f5f0e8", opacity, transition:"opacity 0.5s" }}>
@@ -634,6 +729,10 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone }) {
               same great game!
             </div>
           </div>
+          {/* FIX item 9: Stats button on farewell screen */}
+          <button onClick={handleViewStats} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer",marginBottom:12}}>
+            📊 View My Stats
+          </button>
           <div style={{fontSize:28,marginBottom:10}}>🌅</div>
           <div style={{fontSize:20,fontWeight:"bold",color:"#6ee7b7",marginBottom:8}}>See you tomorrow!</div>
           <div style={{fontSize:15,color:"#ffffff",fontWeight:"bold",letterSpacing:1}}>{getShortDate()}</div>
@@ -644,7 +743,6 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone }) {
   );
 }
 
-// ── Auth Screen ────────────────────────────────────────────────
 function AuthScreen({ onGuest, onLogin }) {
   const [mode, setMode] = useState("welcome");
   const [email, setEmail] = useState("");
@@ -757,14 +855,12 @@ function AuthScreen({ onGuest, onLogin }) {
   );
 }
 
-// ══════════════════════════════════════════════════════════════
-// MAIN APP
-// ══════════════════════════════════════════════════════════════
 export default function App() {
   const [authState, setAuthState] = useState("loading");
   const [user, setUser] = useState(null);
   const [showFarewell, setShowFarewell] = useState(false);
   const [farewellData, setFarewellData] = useState({ totalScore:0, bestWord:"", bestWordScore:0 });
+  const [postFarewellTab, setPostFarewellTab] = useState(null);
 
   useEffect(() => {
     getSession().then(session => {
@@ -787,8 +883,9 @@ export default function App() {
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
   const handleFarewellDone = () => { setShowFarewell(false); setAuthState("auth"); };
+  const handleFarewellStats = () => { setShowFarewell(false); setPostFarewellTab("stats"); };
 
-  if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone}/>;
+  if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats}/>;
 
   if (authState === "loading") {
     return (
@@ -804,19 +901,17 @@ export default function App() {
 
   if (authState === "auth") return <AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>;
 
-  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell}/>;
+  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)}/>;
 }
 
-// ══════════════════════════════════════════════════════════════
-// GAME SCREEN
-// ══════════════════════════════════════════════════════════════
-function GameScreen({ user, onSignOut, onFarewell }) {
+function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) {
   const isGuest = !user;
   const [playerName, setPlayerName] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
   const [online, setOnline] = useState(navigator.onLine);
+  const [savedIndicator, setSavedIndicator] = useState(false);
 
   const completeTour = () => { localStorage.setItem("ll_tour_done","1"); setShowTour(false); requestNotificationPermission(); };
 
@@ -830,9 +925,7 @@ function GameScreen({ user, onSignOut, onFarewell }) {
 
   const lifetimeData = useRef(getLifetimeData());
   const [lifetimePoints, setLifetimePoints] = useState(lifetimeData.current.total || 0);
-  const [showDecayWarning, setShowDecayWarning] = useState(
-    lifetimeData.current.wasReset || lifetimeData.current.wasDecayed || false
-  );
+  const [showDecayWarning, setShowDecayWarning] = useState(lifetimeData.current.wasReset || lifetimeData.current.wasDecayed || false);
   const decayInfo = lifetimeData.current;
 
   const ss = useRef(loadLocalSession()).current;
@@ -849,17 +942,23 @@ function GameScreen({ user, onSignOut, onFarewell }) {
   const [selected, setSelected] = useState([]);
   const [submitted, setSubmitted] = useState(ss?.submitted || []);
   const [totalScore, setTotalScore] = useState(ss?.totalScore || 0);
-  const [badges, setBadges] = useState(ss?.badges || []);
+
+  // FIX item 10: badge store
+  const [badgeStore, setBadgeStore] = useState(() => getBadgeStore());
+  // Keep a flat array for backward compat display
+  const badges = badgeStore.lifetime;
+
   const [streak, setStreak] = useState(ss?.streak || 0);
   const [validating, setValidating] = useState(false);
   const [checkingStuck, setCheckingStuck] = useState(false);
   const [shake, setShake] = useState(false);
   const [flash, setFlash] = useState(null);
   const [showBadge, setShowBadge] = useState(null);
-  const [tab, setTab] = useState("play");
+  const [tab, setTab] = useState(initialTab || "play");
   const [confetti, setConfetti] = useState(false);
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
-  const [levelComplete, setLevelComplete] = useState(false);
+  // FIX item 6: restore levelComplete from session
+  const [levelComplete, setLevelComplete] = useState(ss?.levelComplete || false);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
@@ -872,6 +971,8 @@ function GameScreen({ user, onSignOut, onFarewell }) {
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
+  // FIX item 4: repeat perfect day modal
+  const [showRepeatPerfect, setShowRepeatPerfect] = useState(false);
   const [levelTime, setLevelTime] = useState(ss?.levelTime || 0);
   const [totalTime, setTotalTime] = useState(ss?.totalTime || 0);
   const [selectedLevelView, setSelectedLevelView] = useState(1);
@@ -879,6 +980,15 @@ function GameScreen({ user, onSignOut, onFarewell }) {
   const [newRecord, setNewRecord] = useState(null);
   const [pulseScore, setPulseScore] = useState(false);
   const [pulseTime, setPulseTime] = useState(false);
+  // FIX item 3: new best time state
+  const [newBestTime, setNewBestTime] = useState(ss?.newBestTime || false);
+  // FIX item 1: copy confirmation state
+  const [shareCopied, setShareCopied] = useState(false);
+
+  // FIX item 9: consume initialTab
+  useEffect(() => {
+    if (initialTab) { setTab(initialTab); onTabConsumed?.(); }
+  }, [initialTab]);
 
   const timerRef = useRef(null);
   const levelTimeRef = useRef(ss?.levelTime || 0);
@@ -924,24 +1034,27 @@ function GameScreen({ user, onSignOut, onFarewell }) {
           loadDailySession(user.id, getTodayKey()),
         ]);
         setCloudSyncing(false);
-        if (gameState) {
+        // FIX item 5: guard against empty cloud data overwriting valid local session
+        if (gameState && gameState.lifetime_points != null) {
           lifetimeRef.current = gameState.lifetime_points || 0;
           setLifetimePoints(gameState.lifetime_points || 0);
-          setBadges(gameState.badges || []);
+          setBadgeStore(prev => ({ ...prev, lifetime: gameState.badges || prev.lifetime }));
           setStatsData(prev => ({...prev, ...(gameState.stats || {})}));
           setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
         }
-        if (dailySession) {
+        if (dailySession && dailySession.level != null) {
           setLevel(dailySession.level || 1);
           setTotalScore(dailySession.total_score || 0); totalRef.current = dailySession.total_score || 0;
           setLevelScore(dailySession.level_score || 0); levelScoreRef.current = dailySession.level_score || 0;
-          if (dailySession.tiles) setTiles(dailySession.tiles);
+          if (dailySession.tiles && dailySession.tiles.length > 0) setTiles(dailySession.tiles);
           tileCountRef.current = dailySession.tile_count || 42;
           setSubmitted(dailySession.submitted || []); submittedRef.current = dailySession.submitted || [];
           setPerfectDay(dailySession.perfect_day ?? true);
           setLongestWordToday(dailySession.longest_word_today || "");
           levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
           setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
+          // FIX item 6: restore levelComplete
+          if (dailySession.level_complete) setLevelComplete(true);
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
         if (playerData?.name) setPlayerName(playerData.name);
@@ -963,15 +1076,16 @@ function GameScreen({ user, onSignOut, onFarewell }) {
         tiles, submitted: submittedRef.current, perfectDay,
         tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
         totalTime: totalTimeRef.current, longestWordToday,
+        levelComplete, newBestTime,
       }),
       saveGameState(user.id, {
         lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
         currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
-        lastStreakDate: statsData.lastStreakDate, badges,
+        lastStreakDate: statsData.lastStreakDate, badges: badgeStore.lifetime,
         stats: {...statsData, playerName}, timeRecords: timeLeaderboard,
       }),
     ]);
-  }, [user, isGuest, level, tiles, perfectDay, longestWordToday, badges, statsData, timeLeaderboard, playerName]);
+  }, [user, isGuest, level, tiles, perfectDay, longestWordToday, badgeStore, statsData, timeLeaderboard, playerName, levelComplete, newBestTime]);
 
   const scheduleSyncToCloud = useCallback(() => {
     if (isGuest || !user) return;
@@ -979,10 +1093,18 @@ function GameScreen({ user, onSignOut, onFarewell }) {
     syncTimerRef.current = setTimeout(syncToCloud, 3000);
   }, [syncToCloud, isGuest, user]);
 
+  // FIX item 5: show saved indicator
+  const showSavedIndicator = useCallback(() => {
+    setSavedIndicator(true);
+    setTimeout(() => setSavedIndicator(false), 2000);
+  }, []);
+
   useEffect(() => {
-    saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges, streak, perfectDay, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current });
+    // FIX item 6: include levelComplete and newBestTime in session save
+    saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime });
+    showSavedIndicator();
     scheduleSyncToCloud();
-  }, [level, tiles, badges, streak, perfectDay, longestWordToday]);
+  }, [level, tiles, badgeStore, streak, perfectDay, longestWordToday, levelComplete, newBestTime]);
 
   const startTimer = useCallback(() => {
     if (timerRef.current) return;
@@ -1021,12 +1143,17 @@ function GameScreen({ user, onSignOut, onFarewell }) {
   }, []);
   useEffect(() => { if (musicOn && !paused) startMusic(); else stopMusic(); return () => stopMusic(); }, [musicOn, paused]);
 
+  // FIX item 10: scoped awardBadge
   const awardBadge = useCallback((id) => {
-    setBadges(prev => {
-      if (prev.includes(id)) return prev;
+    const def = BADGE_DEFS.find(b => b.id === id);
+    if (!def) return;
+    setBadgeStore(prev => {
+      if (hasBadge(prev, id, def.scope)) return prev;
       setShowBadge(id);
       setTimeout(() => setShowBadge(null), 2800);
-      return [...prev, id];
+      const updated = awardBadgeToStore(prev, id, def.scope);
+      saveBadgeStore(updated);
+      return updated;
     });
   }, []);
 
@@ -1048,10 +1175,13 @@ function GameScreen({ user, onSignOut, onFarewell }) {
     setSubmitted([]); submittedRef.current = [];
     setTotalScore(0); totalRef.current = 0;
     setLevelScore(0); levelScoreRef.current = 0;
-    setStreak(0); setBadges([]); setShowBadge(null);
+    setStreak(0); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
     setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
     setPerfectDay(true); setPerfectDayAchieved(false); setLongestWordToday("");
+    setShowRepeatPerfect(false);
+    // FIX item 3: reset newBestTime on full reset
+    setNewBestTime(false);
     levelResetCount.current = 0; clearedLevelsRef.current = {};
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
@@ -1059,11 +1189,20 @@ function GameScreen({ user, onSignOut, onFarewell }) {
   }, [startTimer, stopTimer]);
 
   const doLevelReset = useCallback(() => {
+    // FIX item 11: Level 5 retry costs 1000 pts
+    if (level === 5) {
+      if (totalRef.current < 1000) return;
+      totalRef.current -= 1000;
+      setTotalScore(totalRef.current);
+      setPerfectDay(false);
+    }
     levelResetCount.current += 1;
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
     setSelected([]); resetLevelTimer();
     setShowResetConfirm(false); setShowStuckModal(false);
-  }, [resetLevelTimer]);
+    // FIX item 3: reset newBestTime on level reset
+    setNewBestTime(false);
+  }, [resetLevelTimer, level]);
 
   const handleNameSave = async () => {
     if (!playerName.trim()) return;
@@ -1131,7 +1270,7 @@ function GameScreen({ user, onSignOut, onFarewell }) {
       const validCount = newSubmitted.filter(s => s.valid).length;
       if (validCount === 1) awardBadge("first_word");
       if (score >= 50) awardBadge("score_50");
-      if (score >= 100) awardBadge("score_100");
+      if (score >= 100) awardBadge("century");
       if (score >= 200) awardBadge("score_200");
       if (currentWord.length >= 7) awardBadge("long_word");
       if (currentWord.length >= 8) awardBadge("long_8");
@@ -1169,6 +1308,8 @@ function GameScreen({ user, onSignOut, onFarewell }) {
         const existingTime = statsData.fastestLevels?.[String(level)];
         const existingSecs = existingTime ? existingTime.seconds : null;
         const isNewTimeRecord = existingSecs === null || clearedTime < existingSecs;
+        // FIX item 3: set newBestTime state
+        if (isNewTimeRecord) setNewBestTime(true);
         const updatedStats = updateLocalStats({
           levelTime: clearedTime, levelNum: level,
           score: totalRef.current, levelScore: clearedLevelScore,
@@ -1179,24 +1320,35 @@ function GameScreen({ user, onSignOut, onFarewell }) {
         if (isNewTimeRecord) {
           setTimeout(() => flashNewRecord("time", clearedTime, level), 1500);
         }
-        if (level < 5) setTimeout(() => setLevelComplete(true), 1200);
-        else {
+        if (level < 5) {
+          setTimeout(() => setLevelComplete(true), 1200);
+        } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
           if (perfectDay) {
-            setPerfectDayAchieved(true); awardBadge("perfect_day");
-            setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
-            const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
-            const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
-            setTimeLeaderboard(updatedTimes2);
-            setTimeout(() => setShowNameInput(true), 1000);
+            // FIX item 4: check if already earned perfect day today
+            const alreadyPerfectToday = (statsData.perfectDaysWeek?.[getTodayKey()] || 0) >= 1;
+            if (alreadyPerfectToday) {
+              setTimeout(() => setShowRepeatPerfect(true), 1000);
+            } else {
+              setPerfectDayAchieved(true); awardBadge("perfect_day");
+              setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
+              const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
+              const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
+              setTimeLeaderboard(updatedTimes2);
+              setTimeout(() => setShowNameInput(true), 1000);
+            }
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
         if (!isGuest && user) await syncToCloud();
       } else {
         scheduleSyncToCloud();
+        // FIX item 8: stop timer during scanning
+        stopTimer();
         setCheckingStuck(true);
         const hasWords = await hasValidWordsRemaining(newTiles);
         setCheckingStuck(false);
+        // FIX item 8: restart timer after scan (only if not paused)
+        if (!paused) startTimer();
         if (!hasWords) setTimeout(() => setShowStuckModal(true), 600);
       }
     }
@@ -1215,6 +1367,8 @@ function GameScreen({ user, onSignOut, onFarewell }) {
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
     levelResetCount.current = 0; resetLevelTimer(); startTimer();
+    // FIX item 3: reset newBestTime on level advance
+    setNewBestTime(false);
     if (newLevel === 2) awardBadge("level_2");
     if (newLevel === 3) awardBadge("level_3");
     if (newLevel === 4) awardBadge("level_4");
@@ -1250,6 +1404,18 @@ function GameScreen({ user, onSignOut, onFarewell }) {
   const handleGiveUp = () => { setShowStuckModal(false); setShowNameInput(true); };
   const medalFor = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
 
+  // FIX item 10: badge rendering helpers
+  const todayKey = getTodayKey();
+  const weekKey = getWeekKey();
+  const dailyBadgeIds = badgeStore.daily?.[todayKey] || [];
+  const weeklyBadgeIds = badgeStore.weekly?.[weekKey] || [];
+  const lifetimeBadgeIds = badgeStore.lifetime || [];
+
+  const renderBadgeIcon = (b) => {
+    if (b.id === "century") return <DoubloonIcon size={36}/>;
+    return <div style={{fontSize:24}}>{b.icon}</div>;
+  };
+
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:40, position:"relative", overflow:"hidden" }}>
 
@@ -1269,6 +1435,7 @@ function GameScreen({ user, onSignOut, onFarewell }) {
         @keyframes purseGlow{0%,100%{box-shadow:0 0 18px rgba(139,92,246,0.7)}50%{box-shadow:0 0 32px rgba(167,139,250,0.95)}}
         @keyframes recordFade{0%{opacity:1;transform:translateX(-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) scale(0.92)}}
         @keyframes pulseBig{0%,100%{transform:scale(1);filter:brightness(1)}40%{transform:scale(1.22);filter:brightness(1.5)}70%{transform:scale(1.1);filter:brightness(1.3)}}
+        @keyframes savedFade{0%{opacity:1}80%{opacity:1}100%{opacity:0}}
         .ll-tile{transition:all 0.14s ease;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;}
         .ll-tile:active{transform:scale(0.88)!important;}
         .ll-tile.sel{transform:translateY(-6px) scale(1.12);}
@@ -1284,6 +1451,7 @@ function GameScreen({ user, onSignOut, onFarewell }) {
         .warning-box{animation:warningPulse 2s ease-in-out infinite;}
         .tour-btn{animation:purseGlow 2s ease-in-out infinite;}
         .pulse-big{animation:pulseBig 0.6s ease-out 3;}
+        .saved-indicator{animation:savedFade 2s ease forwards;}
       `}</style>
 
       <ConfettiCanvas active={confetti && !rainbowConfetti} rainbow={false}/>
@@ -1294,6 +1462,9 @@ function GameScreen({ user, onSignOut, onFarewell }) {
       </div>}
 
       {cloudSyncing&&<div style={{position:"fixed",top:12,right:12,zIndex:9995,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#a78bfa"}}>☁️ Syncing…</div>}
+
+      {/* FIX item 5: saved indicator */}
+      {savedIndicator&&<div className="saved-indicator" style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9994,background:"rgba(110,231,183,0.2)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#6ee7b7",pointerEvents:"none"}}>✓ Progress saved</div>}
 
       {newRecord && (
         <div style={{
@@ -1364,64 +1535,119 @@ function GameScreen({ user, onSignOut, onFarewell }) {
         </div>
       )}
 
-      {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}><div style={{fontSize:28}}>{b.icon}</div><div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div><div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}</div></div>):null; })()}
+      {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
+        {b.id==="century"?<DoubloonIcon size={36}/>:<div style={{fontSize:28}}>{b.icon}</div>}
+        <div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div>
+        <div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}</div>
+      </div>):null; })()}
 
       {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?16:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}` :"Not a valid word!"}</div></div>}
 
       {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>{checkingStuck?"🔎":"🔍"}</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div></div>}
 
-      {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
-        <div style={{fontSize:40}}>🔄</div>
-        <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Try Level {level} Again?</div>
-        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Your progress on Level {level} will be lost.<br/>Total score is kept · Same tiles used.</div>
-        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:14,fontWeight:"bold"}}>Yes, Try Level {level} Again</button>
-        <button className="ll-btn" onClick={()=>setShowResetConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
-      </div></div>}
+      {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
+          <div style={{fontSize:40}}>🔄</div>
+          <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Try Level {level} Again?</div>
+          {/* FIX item 11: show cost for level 5 */}
+          {level === 5 ? (
+            <>
+              <div style={{fontSize:13,color:"#fb7185",marginTop:8,lineHeight:1.6,fontWeight:"bold"}}>⚠️ Retrying Level 5 costs 1,000 pts</div>
+              <div style={{fontSize:12,color:"#bbb",marginTop:4}}>Your balance: {totalScore} pts · {totalScore >= 1000 ? <span style={{color:"#6ee7b7"}}>✓ Enough</span> : <span style={{color:"#fb7185"}}>✗ Not enough</span>}</div>
+            </>
+          ) : (
+            <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Your progress on Level {level} will be lost.<br/>Total score is kept · Same tiles used.</div>
+          )}
+          <button className="ll-btn" onClick={doLevelReset} disabled={level === 5 && totalScore < 1000} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:level===5&&totalScore<1000?"rgba(255,255,255,0.1)":"linear-gradient(135deg,#fb7185,#e11d48)",color:level===5&&totalScore<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:14,fontWeight:"bold",cursor:level===5&&totalScore<1000?"default":"pointer"}}>
+            {level === 5 ? `🔄 ReTry L5 — 1,000 pts` : `Yes, Try Level ${level} Again`}
+          </button>
+          <button className="ll-btn" onClick={()=>setShowResetConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
+        </div>
+      </div>}
 
-      {showStuckModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
-        <div style={{fontSize:52}}>😬</div>
-        <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
-        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
-        <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
-        <button className="ll-btn" onClick={doLevelReset} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:13,fontWeight:"bold"}}>🔄 Try Level {level} Again</button>
-        {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
-        {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
-        <button className="ll-btn" onClick={handleGiveUp} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — See Summary":"📊 End & Save Score"}</button>
-      </div></div>}
+      {showStuckModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
+          <div style={{fontSize:52}}>😬</div>
+          <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
+          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
+          <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
+          {/* FIX item 11: level 5 retry cost in stuck modal */}
+          <button className="ll-btn" onClick={doLevelReset} disabled={level===5&&totalRef.current<1000} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:level===5&&totalRef.current<1000?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#60a5fa,#3b82f6)",color:level===5&&totalRef.current<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:13,fontWeight:"bold",cursor:level===5&&totalRef.current<1000?"default":"pointer"}}>
+            {level===5 ? `🔄 ReTry L5 — 1,000 pts${totalRef.current<1000?" (not enough)":""}` : `🔄 Try Level ${level} Again`}
+          </button>
+          {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
+          {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
+          <button className="ll-btn" onClick={handleGiveUp} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — See Summary":"📊 End & Save Score"}</button>
+        </div>
+      </div>}
 
-      {showBuyModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
-        <div style={{fontSize:44}}>🔓</div>
-        <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
-        <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Spend points to unlock the next level.</div>
-        <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
-        <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
-        <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits Perfect Day and time records</div>
-        <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
-        <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
-      </div></div>}
+      {showBuyModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
+          <div style={{fontSize:44}}>🔓</div>
+          <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
+          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Spend points to unlock the next level.</div>
+          <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
+          <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
+          <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits Perfect Day and time records</div>
+          <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
+          <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
+        </div>
+      </div>}
 
-      {perfectDayAchieved&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
-        <div style={{fontSize:56}}>🌈</div>
-        <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
-        <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>All 5 levels cleared without buying!</div>
-        <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
-        <button className="ll-btn" onClick={()=>{navigator.clipboard?.writeText(`🌈 PERFECT DAY on LetterLoot!\nAll 5 levels cleared, no buys!\n${getShortDate()} · Score: ${totalScore} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\nPlay free at letterloot.net`);setPerfectDayAchieved(false);}} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>📋 Copy & Share!</button>
-        <button className="ll-btn replay-btn" onClick={()=>{setPerfectDayAchieved(false);handleFullReset();}} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
-          🧠 WOW! You're a Smart One!<br/>Want to Do it Again?
-        </button>
-      </div></div>}
+      {perfectDayAchieved&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
+          <div style={{fontSize:56}}>🌈</div>
+          <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
+          <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>All 5 levels cleared without buying!</div>
+          <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+          {/* FIX items 1 & 2: updated share message and 4-second copy confirmation */}
+          <button className="ll-btn" onClick={()=>{
+            const msg = `🌈 It's a PERFECT DAY on LetterLoot!\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n____________________________\nCheck it out. Play free at: letterloot-6k6v.vercel.app/ 🌈`;
+            navigator.clipboard?.writeText(msg);
+            setShareCopied(true);
+            setTimeout(() => setShareCopied(false), 4000);
+          }} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>
+            {shareCopied ? "✓ Copied!" : "📋 Save & Share!"}
+          </button>
+          {shareCopied && <div style={{fontSize:11,color:"#6ee7b7",marginTop:6}}>Your results have been copied! Paste into a text or email to share.</div>}
+          <button className="ll-btn replay-btn" onClick={()=>{setPerfectDayAchieved(false);handleFullReset();}} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
+            🧠 WOW! You're a Smart One!<br/>Want to Do it Again?
+          </button>
+        </div>
+      </div>}
 
-      {levelComplete&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}><div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
-        <div style={{fontSize:52}}>🎉</div>
-        <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
-        <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
-        <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
-        <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
-        {(()=>{ const existing = statsData.fastestLevels?.[String(level)]; const isNew = existing && existing.date === getShortDateCompact(); return isNew ? <div style={{fontSize:12,color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div> : null; })()}
-        {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
-        <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
-        <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
-      </div></div>}
+      {/* FIX item 4: repeat perfect day modal */}
+      {showRepeatPerfect&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
+          <div style={{fontSize:56}}>🌈</div>
+          <div style={{fontSize:22,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY Again!</div>
+          <div style={{fontSize:14,color:"#f5f0e8",marginTop:14,lineHeight:1.8}}>
+            Congratulations again on your LetterLoot <strong>PERFECT DAY</strong> Achievement!<br/><br/>
+            You scored <span style={{color:"#f6d365",fontWeight:"bold"}}>{totalRef.current} points</span> in <span style={{color:"#60a5fa",fontWeight:"bold"}}>{formatTime(totalTimeRef.current)}</span>.<br/><br/>
+            As a reminder, only <strong>1 "Perfect Day"</strong> will be included in your final count per day. For all your game statistics go to the <strong>"Stats"</strong> button on any LetterLoot level.<br/><br/>
+            <span style={{fontSize:15,color:"#6ee7b7",fontWeight:"bold"}}>Would you like to play again now?</span>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:20}}>
+            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{flex:1,padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:15,fontWeight:"bold",border:"none"}}>Yes! 🎮</button>
+            <button className="ll-btn" onClick={()=>{setShowRepeatPerfect(false);triggerFarewell();}} style={{flex:1,padding:"14px",borderRadius:14,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.3)",color:"#f5f0e8",fontSize:15,fontWeight:"bold"}}>No Thanks</button>
+          </div>
+        </div>
+      </div>}
+
+      {levelComplete&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
+          <div style={{fontSize:52}}>🎉</div>
+          <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
+          <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
+          <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
+          <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
+          {/* FIX item 3: use newBestTime state instead of date comparison */}
+          {newBestTime && <div style={{fontSize:12,color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
+          {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
+          <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
+          <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
+        </div>
+      </div>}
 
       {showNameInput&&(
         <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -1436,6 +1662,8 @@ function GameScreen({ user, onSignOut, onFarewell }) {
             {!isGuest&&<div style={{fontSize:11,color:"#a78bfa",marginTop:4}}>☁️ Progress saved to your account</div>}
             <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:14,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
             <button className="ll-btn" onClick={async()=>{ await handleSaveScore(); triggerFarewell(); }} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
+            {/* FIX item 9: stats button on end-of-game modal */}
+            <button className="ll-btn" onClick={()=>{setShowNameInput(false);setTab("stats");}} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:13,fontWeight:"bold"}}>📊 View My Stats</button>
             <button className="ll-btn replay-btn" onClick={()=>{setShowNameInput(false);handleFullReset();}} style={{marginTop:10,width:"100%",padding:"20px",borderRadius:16,background:perfectDay?"linear-gradient(135deg,#00c853,#00e676)":"linear-gradient(135deg,#2979ff,#00b0ff)",color:perfectDay?"#003300":"#fff",fontSize:18,fontWeight:"bold",boxShadow:perfectDay?"0 0 28px rgba(0,200,83,0.6)":"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
               {perfectDay ? "🧠 WOW! You're a Smart One!\nWant to Do it Again?" : "✏️ Want to Try Again?"}
             </button>
@@ -1463,7 +1691,6 @@ function GameScreen({ user, onSignOut, onFarewell }) {
             )}
           </div>
 
-          {/* Title — pencil above LetterLoot box */}
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
             <PencilLogo size={90}/>
             <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"4px 14px",boxShadow:"0 0 18px rgba(139,92,246,0.5)"}}>
@@ -1508,7 +1735,7 @@ function GameScreen({ user, onSignOut, onFarewell }) {
 
         <div style={{display:"flex",gap:5,marginBottom:5}}>
           <div style={{flex:1,background:"rgba(240,147,251,0.1)",border:"1px solid rgba(240,147,251,0.4)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
-            <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb"}}>{badges.length}/{BADGE_DEFS.length}</div>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb"}}>{lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length}</div>
             <div style={{fontSize:6.5,color:"rgba(255,255,255,0.75)"}}>BADGES</div>
           </div>
           <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
@@ -1543,7 +1770,8 @@ function GameScreen({ user, onSignOut, onFarewell }) {
           </button>
         </div>
 
-        <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginBottom:5,flexWrap:"nowrap"}}>
+        {/* FIX item 7: tab bar has explicit pointerEvents:all to prevent pause overlay bleed */}
+        <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginBottom:5,flexWrap:"nowrap",position:"relative",zIndex:10,pointerEvents:"all"}}>
           <button className="ll-tab" onClick={()=>setTab("play")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="play"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="play"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="play"?"bold":"normal",border:tab==="play"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>✏️ Play</button>
           <div style={{padding:"4px 10px",borderRadius:16,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1}}>✦ L{level} ✦</div>
           <button className="ll-tab" onClick={()=>setTab("badges")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="badges"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="badges"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="badges"?"bold":"normal",border:tab==="badges"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>🏅 Badges</button>
@@ -1558,7 +1786,10 @@ function GameScreen({ user, onSignOut, onFarewell }) {
           <div style={{display:"flex",gap:4,marginBottom:5}}>
             <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
             <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>🔄 ReTry L{level}</button>
+            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>
+              {/* FIX item 11: show cost for level 5 retry button */}
+              {level===5?"🔄 ReTry L5":"🔄 ReTry L"+level}
+            </button>
             {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1}</button>}
           </div>
 
@@ -1581,10 +1812,9 @@ function GameScreen({ user, onSignOut, onFarewell }) {
             )}
           </div>
 
-          {/* Tile grid — pause overlay covers tiles only */}
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative"}}>
             {paused&&(
-              <div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.82)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:20,backdropFilter:"blur(2px)"}}>
+              <div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.82)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:5,backdropFilter:"blur(2px)"}}>
                 <div style={{fontSize:40,marginBottom:8}}>⏸️</div>
                 <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>PAUSED</div>
                 <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:6}}>Tap Resume above to continue</div>
@@ -1620,21 +1850,70 @@ function GameScreen({ user, onSignOut, onFarewell }) {
         </div>
       )}
 
-      {/* ── BADGES TAB ── */}
+      {/* ── BADGES TAB ── FIX item 10: three sections */}
       {tab==="badges"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
-            <div key={cat} style={{marginBottom:14}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:7,paddingLeft:4}}>{title}</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-                {BADGE_DEFS.filter(b=>b.cat===cat).map(b=>{ const earned=badges.includes(b.id); return(
-                  <div key={b.id} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-                    <div style={{fontSize:24,filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22}}>{b.icon}</div>
+
+          {/* Daily Badges */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>☀️ DAILY BADGES</div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:7,paddingLeft:4}}>Reset each day — earn them fresh every session</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+              {BADGE_DEFS.filter(b=>b.scope==="daily"||b.scope==="all").map(b=>{
+                const earned = b.scope==="all" ? dailyBadgeIds.includes(b.id) : dailyBadgeIds.includes(b.id);
+                return(
+                  <div key={b.id+"_daily"} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+                    <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>
+                      {renderBadgeIcon(b)}
+                    </div>
                     <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
                     <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
-                    {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ EARNED</div>}
+                    {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ TODAY</div>}
                   </div>
-                );})}
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Weekly Badges */}
+          <div style={{marginBottom:14}}>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>📅 WEEKLY BADGES</div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:7,paddingLeft:4}}>Reset each week — earn them again every week</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+              {BADGE_DEFS.filter(b=>b.scope==="weekly"||b.scope==="all").map(b=>{
+                const earned = weeklyBadgeIds.includes(b.id);
+                return(
+                  <div key={b.id+"_weekly"} style={{background:earned?"linear-gradient(135deg,rgba(96,165,250,0.18),rgba(139,92,246,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(96,165,250,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+                    <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>
+                      {renderBadgeIcon(b)}
+                    </div>
+                    <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#60a5fa":"rgba(255,255,255,0.4)"}}>{b.label}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
+                    {earned&&<div style={{marginTop:3,fontSize:8,color:"#60a5fa",letterSpacing:2}}>✓ THIS WEEK</div>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Lifetime Badges */}
+          {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
+            <div key={cat} style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>🏆 LIFETIME — {title}</div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
+                {BADGE_DEFS.filter(b=>(b.scope==="lifetime"||b.scope==="all")&&b.cat===cat).map(b=>{
+                  const earned = lifetimeBadgeIds.includes(b.id);
+                  return(
+                    <div key={b.id+"_life"} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+                      <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>
+                        {renderBadgeIcon(b)}
+                      </div>
+                      <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
+                      {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ EARNED</div>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}

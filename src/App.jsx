@@ -106,63 +106,57 @@ const VOWELS = new Set(["A","E","I","O","U"]);
 const LEVEL_BUY_COST = [0, 250, 500, 750, 1000, 1000];
 
 // ── Badge definitions ─────────────────────────────────────────
-// scope: "lifetime" | "weekly" | "daily" | "all" (appears in all three)
 const BADGE_DEFS = [
-  { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",           cat:"core",    scope:"lifetime" },
-  { id:"score_50",     icon:"🔥", label:"On Fire",         desc:"Score 50+ in one word",            cat:"core",    scope:"lifetime" },
-  { id:"century",      icon:"💰", label:"Century",         desc:"Score 100+ in one word",           cat:"core",    scope:"all" },
-  { id:"score_200",    icon:"🚀", label:"Rocket",          desc:"Score 200+ in one word",           cat:"core",    scope:"lifetime" },
-  { id:"long_word",    icon:"📏", label:"Long Haul",       desc:"Use 7+ letters in a word",         cat:"core",    scope:"lifetime" },
-  { id:"streak_3",     icon:"⚡", label:"Streak x3",      desc:"3 valid words in a row",           cat:"core",    scope:"daily" },
-  { id:"streak_5",     icon:"🌪️", label:"Streak x5",      desc:"5 valid words in a row",           cat:"core",    scope:"daily" },
-  { id:"daily_500",    icon:"🏆", label:"Loot Master",     desc:"500+ total daily score",           cat:"core",    scope:"lifetime" },
-  { id:"daily_1000",   icon:"💰", label:"Treasure Chest",  desc:"1000+ total daily score",          cat:"core",    scope:"lifetime" },
-  { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                 cat:"core",    scope:"daily" },
-  { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",              cat:"core",    scope:"lifetime" },
-  { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",    cat:"core",    scope:"lifetime" },
-  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",           cat:"core",    scope:"daily" },
-  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",           cat:"core",    scope:"daily" },
-  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",         cat:"core",    scope:"daily" },
-  { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                    cat:"level",   scope:"lifetime" },
-  { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                    cat:"level",   scope:"lifetime" },
-  { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                    cat:"level",   scope:"lifetime" },
-  { id:"level_5",      icon:"💎", label:"Diamond",         desc:"Reach Level 5",                    cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_1",  icon:"🌟", label:"Clear L1",        desc:"Use all tiles on Level 1",         cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_2",  icon:"🌟", label:"Clear L2",        desc:"Use all tiles on Level 2",         cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",         cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",         cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",         cat:"level",   scope:"lifetime" },
-  { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",   cat:"level",   scope:"lifetime" },
-  { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min",  cat:"word",    scope:"lifetime" },
-  { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting", cat:"word",    scope:"lifetime" },
-  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",     cat:"word",    scope:"lifetime" },
-  { id:"points_1k",    icon:"💫", label:"1K Points",       desc:"Accumulate 1,000 lifetime points", cat:"alltime", scope:"lifetime" },
-  { id:"points_5k",    icon:"⭐", label:"5K Points",       desc:"Accumulate 5,000 lifetime points", cat:"alltime", scope:"lifetime" },
-  { id:"points_10k",   icon:"🌠", label:"10K Points",      desc:"Accumulate 10,000 lifetime points",cat:"alltime", scope:"lifetime" },
-  { id:"streak_7",     icon:"🔥", label:"Week Streak",     desc:"Play 7 days in a row",             cat:"alltime", scope:"lifetime" },
-  { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",            cat:"alltime", scope:"lifetime" },
-  { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",   cat:"alltime", scope:"lifetime" },
-  { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",  cat:"alltime", scope:"lifetime" },
+  { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",                cat:"core",    scope:"lifetime" },
+  { id:"rocket",       icon:"🚀", label:"Rocket",          desc:"Score 100+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"shuttle",      icon:"🛸", label:"Space Shuttle",   desc:"Score 125+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"moon",         icon:"🌙", label:"Moon",            desc:"Score 150+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"mars",         icon:"🔴", label:"Mars",            desc:"Score 175+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"jupiter",      icon:"🪐", label:"Jupiter",         desc:"Score 200+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"infinity",     icon:"∞",  label:"Infinity",        desc:"Score 200+ pts — shows your best!",     cat:"core",    scope:"lifetime" },
+  { id:"century",      icon:"💰", label:"Century",         desc:"Score 100+ in one word",                cat:"core",    scope:"all" },
+  { id:"score_200",    icon:"🚀", label:"Rocket (Legacy)", desc:"Score 200+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"long_word",    icon:"📏", label:"Long Haul",       desc:"Use 7+ letters in a word",              cat:"core",    scope:"lifetime" },
+  { id:"streak_3",     icon:"⚡", label:"Streak x3",       desc:"3 valid words in a row",                cat:"core",    scope:"daily" },
+  { id:"streak_5",     icon:"🌪️", label:"Streak x5",       desc:"5 valid words in a row",                cat:"core",    scope:"daily" },
+  { id:"daily_500",    icon:"🏆", label:"Loot Master",     desc:"500+ total daily score",                cat:"core",    scope:"lifetime" },
+  { id:"daily_1000",   icon:"💰", label:"Treasure Chest",  desc:"1000+ total daily score",               cat:"core",    scope:"lifetime" },
+  { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                      cat:"core",    scope:"daily" },
+  { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",                   cat:"core",    scope:"lifetime" },
+  { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",         cat:"core",    scope:"lifetime" },
+  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",                cat:"core",    scope:"daily" },
+  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",                cat:"core",    scope:"daily" },
+  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",              cat:"core",    scope:"daily" },
+  { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                         cat:"level",   scope:"lifetime" },
+  { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                         cat:"level",   scope:"lifetime" },
+  { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                         cat:"level",   scope:"lifetime" },
+  { id:"level_5",      icon:"💎", label:"Diamond",         desc:"Reach Level 5",                         cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_1",  icon:"🌟", label:"Clear L1",        desc:"Use all tiles on Level 1",              cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_2",  icon:"🌟", label:"Clear L2",        desc:"Use all tiles on Level 2",              cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",              cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",              cat:"level",   scope:"lifetime" },
+  { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",              cat:"level",   scope:"lifetime" },
+  { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",        cat:"level",   scope:"lifetime" },
+  { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min",       cat:"word",    scope:"lifetime" },
+  { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting",      cat:"word",    scope:"lifetime" },
+  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",          cat:"word",    scope:"lifetime" },
+  { id:"points_1k",    icon:"💫", label:"1K Points",       desc:"Accumulate 1,000 lifetime points",      cat:"alltime", scope:"lifetime" },
+  { id:"points_5k",    icon:"⭐", label:"5K Points",       desc:"Accumulate 5,000 lifetime points",      cat:"alltime", scope:"lifetime" },
+  { id:"points_10k",   icon:"🌠", label:"10K Points",      desc:"Accumulate 10,000 lifetime points",     cat:"alltime", scope:"lifetime" },
+  { id:"streak_7",     icon:"🔥", label:"Week Streak",     desc:"Play 7 days in a row",                  cat:"alltime", scope:"lifetime" },
+  { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",                 cat:"alltime", scope:"lifetime" },
+  { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",        cat:"alltime", scope:"lifetime" },
+  { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",       cat:"alltime", scope:"lifetime" },
 ];
 
-// ── Doubloon SVG icon ─────────────────────────────────────────
+// ── Doubloon SVG ──────────────────────────────────────────────
 function DoubloonIcon({ size = 40 }) {
   return (
     <svg viewBox="0 0 200 200" width={size} height={size} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="df" cx="50%" cy="40%" r="55%">
-          <stop offset="0%" stopColor="#FFE566"/>
-          <stop offset="60%" stopColor="#F5C518"/>
-          <stop offset="100%" stopColor="#C8920A"/>
-        </radialGradient>
-        <radialGradient id="dr" cx="50%" cy="35%" r="60%">
-          <stop offset="0%" stopColor="#D4A017"/>
-          <stop offset="100%" stopColor="#7A5200"/>
-        </radialGradient>
-        <radialGradient id="ds" cx="35%" cy="28%" r="42%">
-          <stop offset="0%" stopColor="#FFF9C0" stopOpacity="0.75"/>
-          <stop offset="100%" stopColor="#F5C518" stopOpacity="0"/>
-        </radialGradient>
+        <radialGradient id="df" cx="50%" cy="40%" r="55%"><stop offset="0%" stopColor="#FFE566"/><stop offset="60%" stopColor="#F5C518"/><stop offset="100%" stopColor="#C8920A"/></radialGradient>
+        <radialGradient id="dr" cx="50%" cy="35%" r="60%"><stop offset="0%" stopColor="#D4A017"/><stop offset="100%" stopColor="#7A5200"/></radialGradient>
+        <radialGradient id="ds" cx="35%" cy="28%" r="42%"><stop offset="0%" stopColor="#FFF9C0" stopOpacity="0.75"/><stop offset="100%" stopColor="#F5C518" stopOpacity="0"/></radialGradient>
       </defs>
       <circle cx="100" cy="100" r="98" fill="url(#dr)"/>
       <circle cx="100" cy="100" r="91" fill="none" stroke="#6B4400" strokeWidth="2"/>
@@ -183,9 +177,7 @@ function DoubloonIcon({ size = 40 }) {
       <rect x="67" y="90" width="5" height="16" rx="1" fill="#1A6E35"/>
       <text x="100" y="136" textAnchor="middle" fontFamily="Georgia,serif" fontSize="22" fontWeight="bold" fill="#2A1400">100</text>
       <path id="darc" d="M 43,72 A 60 60 0 0 1 157,72" fill="none"/>
-      <text fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="#2A1400" letterSpacing="3">
-        <textPath href="#darc" startOffset="50%" textAnchor="middle">CENTURY</textPath>
-      </text>
+      <text fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="#2A1400" letterSpacing="3"><textPath href="#darc" startOffset="50%" textAnchor="middle">CENTURY</textPath></text>
       <circle cx="100" cy="100" r="82" fill="url(#ds)"/>
     </svg>
   );
@@ -196,23 +188,28 @@ const wordCache = {};
 async function validateWord(word) {
   const key = word.toLowerCase();
   if (wordCache[key] !== undefined) return wordCache[key];
-  if (!navigator.onLine) {
-    wordCache[key] = { valid: false, source: "offline" };
-    return wordCache[key];
-  }
+  if (!navigator.onLine) { wordCache[key] = { valid: false, source: "offline" }; return wordCache[key]; }
+  const fetchWithTimeout = (url, ms = 8000) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ms);
+    return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
+  };
   try {
-    const collRes = await fetch(`https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`);
+    const collRes = await fetchWithTimeout(`https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`);
     const collData = await collRes.json();
     if (Array.isArray(collData) && collData.length > 0 && typeof collData[0] === "object" && collData[0].shortdef) {
       wordCache[key] = { valid: true, source: "collegiate" }; return wordCache[key];
     }
-    const medRes = await fetch(`https://www.dictionaryapi.com/api/v3/references/medical/json/${encodeURIComponent(key)}?key=${MW_MEDICAL_KEY}`);
+    const medRes = await fetchWithTimeout(`https://www.dictionaryapi.com/api/v3/references/medical/json/${encodeURIComponent(key)}?key=${MW_MEDICAL_KEY}`);
     const medData = await medRes.json();
     if (Array.isArray(medData) && medData.length > 0 && typeof medData[0] === "object" && medData[0].shortdef) {
       wordCache[key] = { valid: true, source: "medical" }; return wordCache[key];
     }
     wordCache[key] = { valid: false, source: null }; return wordCache[key];
-  } catch {
+  } catch (err) {
+    if (err.name === "AbortError") {
+      wordCache[key] = { valid: false, source: "timeout" }; return wordCache[key];
+    }
     wordCache[key] = { valid: word.length >= 3, source: "fallback" }; return wordCache[key];
   }
 }
@@ -220,30 +217,23 @@ async function validateWord(word) {
 async function hasValidWordsRemaining(tiles) {
   const available = tiles.filter(t => !t.used).map(t => t.letter);
   if (available.length < 3) return false;
-  // FIX item 12: skip check entirely if more than 15 tiles remain
   if (available.length > 15) return true;
   const letters = [...available];
   const combos = new Set();
   const cap = Math.max(200, available.length * 12);
-  // Check 3, 4, and 5-letter combos
   for (let i = 0; i < letters.length && combos.size < cap; i++)
     for (let j = 0; j < letters.length && combos.size < cap; j++) {
       if (j === i) continue;
       for (let k = 0; k < letters.length && combos.size < cap; k++) {
         if (k === i || k === j) continue;
         combos.add(letters[i] + letters[j] + letters[k]);
-        // 4-letter
         for (let m = 0; m < letters.length && combos.size < cap; m++) {
           if (m === i || m === j || m === k) continue;
           combos.add(letters[i] + letters[j] + letters[k] + letters[m]);
         }
       }
     }
-  for (const combo of combos) {
-    const result = await validateWord(combo);
-    if (result.valid) return true;
-  }
-  // FIX item 12: second-pass confirmation before declaring stuck
+  for (const combo of combos) { const r = await validateWord(combo); if (r.valid) return true; }
   const combos2 = new Set();
   const shuffled = [...letters].sort(() => Math.random() - 0.5);
   for (let i = 0; i < shuffled.length && combos2.size < cap; i++)
@@ -254,10 +244,7 @@ async function hasValidWordsRemaining(tiles) {
         combos2.add(shuffled[i] + shuffled[j] + shuffled[k]);
       }
     }
-  for (const combo of combos2) {
-    const result = await validateWord(combo);
-    if (result.valid) return true;
-  }
+  for (const combo of combos2) { const r = await validateWord(combo); if (r.valid) return true; }
   return false;
 }
 
@@ -270,8 +257,7 @@ function createGuitar(ctx) {
     for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
     const source = ctx.createBufferSource();
     source.buffer = buffer; source.loop = true;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "lowpass"; filter.frequency.value = 2800;
+    const filter = ctx.createBiquadFilter(); filter.type = "lowpass"; filter.frequency.value = 2800;
     const gainNode = ctx.createGain();
     gainNode.gain.setValueAtTime(gain, time);
     gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
@@ -297,15 +283,13 @@ const MELODY = [
 const BEAT_DUR = 0.32;
 const LOOP_DUR = 16 * BEAT_DUR;
 
-// ── Confetti ───────────────────────────────────────────────────
 function ConfettiCanvas({ active, rainbow }) {
   const canvasRef = useRef(null);
   const animRef = useRef(null);
   const particles = useRef([]);
   useEffect(() => {
     if (!active) { particles.current = []; return; }
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext("2d");
     canvas.width = window.innerWidth; canvas.height = window.innerHeight;
     const colors = rainbow
@@ -338,8 +322,7 @@ function ConfettiCanvas({ active, rainbow }) {
 }
 
 function PencilLogo({ size = 120 }) {
-  const w = size;
-  const h = Math.round(size * 0.28);
+  const w = size; const h = Math.round(size * 0.28);
   return (
     <svg viewBox="0 0 300 68" width={w} height={h} xmlns="http://www.w3.org/2000/svg">
       <rect x="0" y="16" width="18" height="36" rx="2" fill="#C8C8C8"/>
@@ -359,8 +342,7 @@ function PencilLogo({ size = 120 }) {
 }
 
 function PencilIcon({ size = 32 }) {
-  const w = size;
-  const h = Math.round(size * 0.28);
+  const w = size; const h = Math.round(size * 0.28);
   return (
     <svg viewBox="0 0 300 68" width={w} height={h} xmlns="http://www.w3.org/2000/svg">
       <rect x="0" y="16" width="18" height="36" rx="2" fill="#C8C8C8"/>
@@ -381,28 +363,10 @@ function LetterLootLogo({ titleFontSize = 28, boxPadding = "8px 24px", showSubti
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
       <PencilLogo size={140} />
-      <div style={{
-        display:"inline-block",
-        background:"rgba(139,92,246,0.25)",
-        border:"2.5px solid rgba(167,139,250,0.95)",
-        borderRadius:12,
-        padding:boxPadding,
-        boxShadow:"0 0 28px rgba(139,92,246,0.5)",
-      }}>
-        <span style={{
-          fontSize:titleFontSize,
-          fontWeight:"bold",
-          letterSpacing:5,
-          color:"#ffffff",
-          textShadow:"0 0 16px rgba(167,139,250,0.85)",
-          fontFamily:"Georgia,serif",
-        }}>LetterLoot</span>
+      <div style={{ display:"inline-block", background:"rgba(139,92,246,0.25)", border:"2.5px solid rgba(167,139,250,0.95)", borderRadius:12, padding:boxPadding, boxShadow:"0 0 28px rgba(139,92,246,0.5)" }}>
+        <span style={{ fontSize:titleFontSize, fontWeight:"bold", letterSpacing:5, color:"#ffffff", textShadow:"0 0 16px rgba(167,139,250,0.85)", fontFamily:"Georgia,serif" }}>LetterLoot</span>
       </div>
-      {showSubtitle && (
-        <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>
-          Daily word puzzle · Every letter has a value
-        </div>
-      )}
+      {showSubtitle && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>Daily word puzzle · Every letter has a value</div>}
     </div>
   );
 }
@@ -435,46 +399,32 @@ function getLifetimeData() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_lifetime") || "null");
     if (!data) return { total: 0, lastPlayedDate: null, missedDays: 0 };
-    const todayKey = getTodayKey();
-    const yesterdayKey = getYesterdayKey();
-    if (!data.lastPlayedDate || data.lastPlayedDate === todayKey || data.lastPlayedDate === yesterdayKey) {
-      return { ...data, missedDays: 0 };
-    }
-    const last = new Date(data.lastPlayedDate);
-    const today = new Date(todayKey);
+    const todayKey = getTodayKey(); const yesterdayKey = getYesterdayKey();
+    if (!data.lastPlayedDate || data.lastPlayedDate === todayKey || data.lastPlayedDate === yesterdayKey) return { ...data, missedDays: 0 };
+    const last = new Date(data.lastPlayedDate); const today = new Date(todayKey);
     const diffDays = Math.floor((today - last) / 86400000);
     const missedDays = diffDays - 1;
-    if (missedDays >= 3) {
-      return { total: 0, lastPlayedDate: null, missedDays: 3, wasReset: true, originalTotal: data.total };
-    }
-    if (missedDays === 2) {
-      const newTotal = Math.floor(data.total * (1/3));
-      return { total: newTotal, lastPlayedDate: data.lastPlayedDate, missedDays: 2, wasDecayed: true, originalTotal: data.total };
-    }
-    if (missedDays === 1) {
-      const newTotal = Math.floor(data.total * (2/3));
-      return { total: newTotal, lastPlayedDate: data.lastPlayedDate, missedDays: 1, wasDecayed: true, originalTotal: data.total };
-    }
+    if (missedDays >= 3) return { total: 0, lastPlayedDate: null, missedDays: 3, wasReset: true, originalTotal: data.total };
+    if (missedDays === 2) return { total: Math.floor(data.total * (1/3)), lastPlayedDate: data.lastPlayedDate, missedDays: 2, wasDecayed: true, originalTotal: data.total };
+    if (missedDays === 1) return { total: Math.floor(data.total * (2/3)), lastPlayedDate: data.lastPlayedDate, missedDays: 1, wasDecayed: true, originalTotal: data.total };
     return { ...data, missedDays: 0 };
   } catch { return { total: 0, lastPlayedDate: null, missedDays: 0 }; }
 }
-function saveLifetimeData(total) {
-  try { localStorage.setItem("ll_lifetime", JSON.stringify({ total, lastPlayedDate: getTodayKey() })); } catch {}
-}
+function saveLifetimeData(total) { try { localStorage.setItem("ll_lifetime", JSON.stringify({ total, lastPlayedDate: getTodayKey() })); } catch {} }
 
 function getLocalStats() {
   const def = {
-    daysPlayed:0, lastPlayedDate:null,
-    currentStreak:0, longestStreak:0, lastStreakDate:null,
+    daysPlayed:0, lastPlayedDate:null, currentStreak:0, longestStreak:0, lastStreakDate:null,
     perfectDaysAllTime:0, perfectDaysWeek:{}, weekKey:"",
     highScoreAllTime:0, highScoreWeek:{}, highScoreToday:0,
-    highWordAllTime:0, highWordWeek:{}, highWordToday:0,
-    highWordTodayWord:"", highWordAllTimeWord:"",
+    highWordAllTime:0, highWordWeek:{}, highWordToday:0, highWordTodayWord:"", highWordAllTimeWord:"",
     fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},
     bestScorePerLevel:{"1":null,"2":null,"3":null,"4":null,"5":null},
     dailyScores:{}, collegiateWords:0, medicalWords:0,
     longestWordToday:"", longestWordAllTime:"",
     longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0},
+    infinityBest:0, infinityBestDate:"",
+    spaceBadgeDates:{},
   };
   try {
     const data = JSON.parse(localStorage.getItem("ll_stats") || "null");
@@ -483,9 +433,9 @@ function getLocalStats() {
     if (data.fastestLevels) {
       Object.keys(data.fastestLevels).forEach(k => {
         const v = data.fastestLevels[k];
-        if (v === null) { migratedFastest[k] = null; }
-        else if (typeof v === "number") { migratedFastest[k] = { seconds: v, date: "" }; }
-        else { migratedFastest[k] = v; }
+        if (v === null) migratedFastest[k] = null;
+        else if (typeof v === "number") migratedFastest[k] = { seconds: v, date: "" };
+        else migratedFastest[k] = v;
       });
     }
     return { ...def, ...data, fastestLevels: migratedFastest, bestScorePerLevel: data.bestScorePerLevel || def.bestScorePerLevel };
@@ -494,24 +444,16 @@ function getLocalStats() {
 function saveLocalStats(stats) { try { localStorage.setItem("ll_stats", JSON.stringify(stats)); } catch {} }
 function updateLocalStats(updates) {
   const stats = getLocalStats();
-  const todayKey = getTodayKey();
-  const weekKey = getWeekKey();
+  const todayKey = getTodayKey(); const weekKey = getWeekKey();
   if (stats.lastPlayedDate !== todayKey) {
     stats.daysPlayed += 1;
     const yesterdayKey = getYesterdayKey();
-    if (stats.lastStreakDate === yesterdayKey) { stats.currentStreak += 1; }
-    else { stats.currentStreak = 1; }
+    if (stats.lastStreakDate === yesterdayKey) stats.currentStreak += 1; else stats.currentStreak = 1;
     if (stats.currentStreak > stats.longestStreak) stats.longestStreak = stats.currentStreak;
-    stats.lastStreakDate = todayKey;
-    stats.lastPlayedDate = todayKey;
-    stats.highScoreToday = 0;
-    stats.highWordToday = 0;
-    stats.highWordTodayWord = "";
-    stats.longestWordToday = "";
+    stats.lastStreakDate = todayKey; stats.lastPlayedDate = todayKey;
+    stats.highScoreToday = 0; stats.highWordToday = 0; stats.highWordTodayWord = ""; stats.longestWordToday = "";
   }
-  if (stats.weekKey !== weekKey) {
-    stats.weekKey = weekKey; stats.perfectDaysWeek = {}; stats.highScoreWeek = {}; stats.highWordWeek = {};
-  }
+  if (stats.weekKey !== weekKey) { stats.weekKey = weekKey; stats.perfectDaysWeek = {}; stats.highScoreWeek = {}; stats.highWordWeek = {}; }
   if (updates.score !== undefined) {
     if (updates.score > stats.highScoreToday) stats.highScoreToday = updates.score;
     if (updates.score > (stats.highScoreWeek[todayKey]||0)) stats.highScoreWeek[todayKey] = updates.score;
@@ -535,67 +477,65 @@ function updateLocalStats(updates) {
     stats.longWordBonuses = stats.longWordBonuses || {};
     stats.longWordBonuses[key] = (stats.longWordBonuses[key]||0) + 1;
   }
-  if (updates.perfectDay) {
-    stats.perfectDaysAllTime += 1;
-    stats.perfectDaysWeek[todayKey] = (stats.perfectDaysWeek[todayKey]||0) + 1;
-  }
+  if (updates.perfectDay) { stats.perfectDaysAllTime += 1; stats.perfectDaysWeek[todayKey] = (stats.perfectDaysWeek[todayKey]||0) + 1; }
   if (updates.levelTime !== undefined && updates.levelNum !== undefined) {
     const lvl = String(updates.levelNum);
     const existing = stats.fastestLevels[lvl];
     const existingSecs = existing ? existing.seconds : null;
-    if (existingSecs === null || updates.levelTime < existingSecs) {
-      stats.fastestLevels[lvl] = { seconds: updates.levelTime, date: getShortDateCompact() };
-    }
+    if (existingSecs === null || updates.levelTime < existingSecs) stats.fastestLevels[lvl] = { seconds: updates.levelTime, date: getShortDateCompact() };
   }
   if (updates.levelScore !== undefined && updates.levelNum !== undefined) {
     const lvl = String(updates.levelNum);
     stats.bestScorePerLevel = stats.bestScorePerLevel || {};
     const existing = stats.bestScorePerLevel[lvl];
-    if (!existing || updates.levelScore > existing.score) {
-      stats.bestScorePerLevel[lvl] = { score: updates.levelScore, date: getShortDateCompact() };
+    if (!existing || updates.levelScore > existing.score) stats.bestScorePerLevel[lvl] = { score: updates.levelScore, date: getShortDateCompact() };
+  }
+  if (updates.infinityScore !== undefined) {
+    if (updates.infinityScore > (stats.infinityBest||0)) {
+      stats.infinityBest = updates.infinityScore;
+      stats.infinityBestDate = getShortDateCompact();
     }
+  }
+  if (updates.spaceBadge) {
+    stats.spaceBadgeDates = stats.spaceBadgeDates || {};
+    stats.spaceBadgeDates[updates.spaceBadge] = getShortDateCompact();
   }
   saveLocalStats(stats); return stats;
 }
 
-// ── Badge storage helpers ──────────────────────────────────────
+// ── Badge storage ──────────────────────────────────────────────
 function getBadgeStore() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_badges_v2") || "null");
     if (data) return data;
-    // Migrate from old flat badges array
     const oldBadges = JSON.parse(localStorage.getItem("ll_stats") || "{}").badges || [];
     return { lifetime: oldBadges, weekly: {}, daily: {} };
   } catch { return { lifetime: [], weekly: {}, daily: {} }; }
 }
-function saveBadgeStore(store) {
-  try { localStorage.setItem("ll_badges_v2", JSON.stringify(store)); } catch {}
-}
-function hasBadge(store, id, scope) {
-  const todayKey = getTodayKey();
-  const weekKey = getWeekKey();
-  if (scope === "lifetime") return store.lifetime.includes(id);
-  if (scope === "weekly") return (store.weekly[weekKey] || []).includes(id);
-  if (scope === "daily") return (store.daily[todayKey] || []).includes(id);
-  if (scope === "all") return store.lifetime.includes(id) || (store.weekly[weekKey] || []).includes(id) || (store.daily[todayKey] || []).includes(id);
-  return false;
-}
+function saveBadgeStore(store) { try { localStorage.setItem("ll_badges_v2", JSON.stringify(store)); } catch {} }
 function awardBadgeToStore(store, id, scope) {
-  const todayKey = getTodayKey();
-  const weekKey = getWeekKey();
+  const todayKey = getTodayKey(); const weekKey = getWeekKey();
   const updated = { ...store, lifetime: [...store.lifetime], weekly: {...store.weekly}, daily: {...store.daily} };
-  if (scope === "lifetime" || scope === "all") {
-    if (!updated.lifetime.includes(id)) updated.lifetime.push(id);
-  }
-  if (scope === "weekly" || scope === "all") {
-    if (!updated.weekly[weekKey]) updated.weekly[weekKey] = [];
-    if (!updated.weekly[weekKey].includes(id)) updated.weekly[weekKey].push(id);
-  }
-  if (scope === "daily" || scope === "all") {
-    if (!updated.daily[todayKey]) updated.daily[todayKey] = [];
-    if (!updated.daily[todayKey].includes(id)) updated.daily[todayKey].push(id);
-  }
+  if (scope === "lifetime" || scope === "all") { if (!updated.lifetime.includes(id)) updated.lifetime.push(id); }
+  if (scope === "weekly" || scope === "all") { if (!updated.weekly[weekKey]) updated.weekly[weekKey] = []; if (!updated.weekly[weekKey].includes(id)) updated.weekly[weekKey].push(id); }
+  if (scope === "daily" || scope === "all") { if (!updated.daily[todayKey]) updated.daily[todayKey] = []; if (!updated.daily[todayKey].includes(id)) updated.daily[todayKey].push(id); }
   return updated;
+}
+
+// ── Daily history ──────────────────────────────────────────────
+function getDailyHistory() {
+  try {
+    const data = JSON.parse(localStorage.getItem("ll_daily_history") || "null");
+    if (!data || data.date !== getTodayKey()) return { date: getTodayKey(), games: [] };
+    return data;
+  } catch { return { date: getTodayKey(), games: [] }; }
+}
+function saveDailyHistory(history) { try { localStorage.setItem("ll_daily_history", JSON.stringify(history)); } catch {} }
+function appendToDailyHistory(word, score, valid, medical, collegiate, gameIndex) {
+  const history = getDailyHistory();
+  if (!history.games[gameIndex]) history.games[gameIndex] = [];
+  history.games[gameIndex].push({ word, score, valid, medical, collegiate });
+  saveDailyHistory(history);
 }
 
 function getLocalTimeLeaderboard() {
@@ -624,20 +564,12 @@ function addLocalPerfectTime(name, seconds) {
   board.perfect = board.perfect.slice(0, 10);
   saveLocalTimeLeaderboard(board); return board;
 }
-function saveLocalSession(state) {
-  try { localStorage.setItem("ll_session", JSON.stringify({ ...state, savedDate: getTodayKey() })); } catch {}
-}
+function saveLocalSession(state) { try { localStorage.setItem("ll_session", JSON.stringify({ ...state, savedDate: getTodayKey() })); } catch {} }
 function loadLocalSession() {
-  try {
-    const data = JSON.parse(localStorage.getItem("ll_session") || "null");
-    if (!data || data.savedDate !== getTodayKey()) return null;
-    return data;
-  } catch { return null; }
+  try { const data = JSON.parse(localStorage.getItem("ll_session") || "null"); if (!data || data.savedDate !== getTodayKey()) return null; return data; } catch { return null; }
 }
 function clearLocalSession() { try { localStorage.removeItem("ll_session"); } catch {} }
-function getAllTimeStats() {
-  try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; }
-}
+function getAllTimeStats() { try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; } }
 function saveAllTimeStats(stats) { try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {} }
 
 function scheduleNotifications() {
@@ -645,18 +577,9 @@ function scheduleNotifications() {
   const now = new Date();
   const noon = new Date(); noon.setHours(12, 0, 0, 0);
   const sixPM = new Date(); sixPM.setHours(18, 0, 0, 0);
-  const reminders = [
-    { time: noon, msg: "✏️ Your daily LetterLoot puzzle is waiting! Every letter has a value — do you? Play today before midnight!" },
-    { time: sixPM, msg: "⚠️ 6 hours left! Don't let your lifetime points decay — play LetterLoot before midnight tonight!" },
-  ];
-  reminders.forEach(({ time, msg }) => {
+  [{ time: noon, msg: "✏️ Your daily LetterLoot puzzle is waiting!" }, { time: sixPM, msg: "⚠️ 6 hours left! Play LetterLoot before midnight!" }].forEach(({ time, msg }) => {
     const msUntil = time - now;
-    if (msUntil > 0) {
-      setTimeout(() => {
-        const todayDone = localStorage.getItem("ll_completed_today") === getTodayKey();
-        if (!todayDone) new Notification("✏️ LetterLoot", { body: msg, icon: "/favicon.svg" });
-      }, msUntil);
-    }
+    if (msUntil > 0) setTimeout(() => { if (localStorage.getItem("ll_completed_today") !== getTodayKey()) new Notification("✏️ LetterLoot", { body: msg, icon: "/favicon.svg" }); }, msUntil);
   });
 }
 async function requestNotificationPermission() {
@@ -673,44 +596,27 @@ const TOUR_STEPS = [
   { emoji:"✨", title:"Letters Don't Need to Connect!", body:"Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!", warning:false },
   { emoji:"💎", title:"Every Letter Has a Value", body:"Common letters (E, T, A) score 3–5 pts. Rare letters score big — Q=20, Z=22, J=16!\n\nGold tiles = 2× your score\nPurple tiles = 3× your score!", warning:false },
   { emoji:"✏️", title:"What the Buttons Do", body:"Submit Word — checks your word\n✕ Clear — removes your selection\n🔄 ReTry Level — same tiles, fresh start\n⏸️ Pause — stops your timer\n🔓 Buy Level — spend points to advance", warning:false },
+  { emoji:"↩️", title:"The UNDO Button", body:"Find yourself in a pinch to finish a level?\n\nYou have an optional UNDO available for 1 word per game for 1,000 points.\n\nIt will keep your Perfect Day on track!", warning:false },
   { emoji:"🌟", title:"Clearing a Level", body:"Use ALL tiles to clear the board and earn a big bonus! Can't finish? Spend earned points to buy the next level, or retry with the same tiles.", warning:false },
   { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
 ];
 
 function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats }) {
   const [opacity, setOpacity] = useState(1);
-  const [showingStats, setShowingStats] = useState(false);
   const fadeTimerRef = useRef(null);
-
   const startFade = useCallback(() => {
     fadeTimerRef.current = setTimeout(() => {
       let op = 1;
-      const fade = setInterval(() => {
-        op -= 0.02;
-        setOpacity(op);
-        if (op <= 0) { clearInterval(fade); onDone(); }
-      }, 30);
+      const fade = setInterval(() => { op -= 0.02; setOpacity(op); if (op <= 0) { clearInterval(fade); onDone(); } }, 30);
     }, 6000);
   }, [onDone]);
-
-  useEffect(() => {
-    startFade();
-    return () => clearTimeout(fadeTimerRef.current);
-  }, []);
-
-  const handleViewStats = () => {
-    clearTimeout(fadeTimerRef.current);
-    setOpacity(1);
-    onViewStats();
-  };
-
+  useEffect(() => { startFade(); return () => clearTimeout(fadeTimerRef.current); }, []);
+  const handleViewStats = () => { clearTimeout(fadeTimerRef.current); setOpacity(1); onViewStats(); };
   return (
     <div style={{ position:"fixed", inset:0, zIndex:99999, background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"30px 24px", fontFamily:"Georgia,serif", color:"#f5f0e8", opacity, transition:"opacity 0.5s" }}>
       <Starfield/>
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360}}>
-        <div style={{textAlign:"center",marginBottom:28}}>
-          <LetterLootLogo titleFontSize={32} boxPadding="10px 28px"/>
-        </div>
+        <div style={{textAlign:"center",marginBottom:28}}><LetterLootLogo titleFontSize={32} boxPadding="10px 28px"/></div>
         <div style={{textAlign:"center",width:"100%"}}>
           <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:16}}>Great effort today! 🎉</div>
           <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:14,padding:"16px",marginBottom:20,width:"100%"}}>
@@ -722,17 +628,9 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewSta
             <div style={{fontSize:34,fontWeight:"bold",color:"#f6d365"}}>{totalScore||0}</div>
           </div>
           <div style={{background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.3)",borderRadius:14,padding:"18px",marginBottom:20}}>
-            <div style={{fontSize:16,color:"#ffffff",lineHeight:1.9,fontWeight:"bold"}}>
-              Come back tomorrow for a brand new<br/>
-              LetterLoot challenge —<br/>
-              fresh tiles, fresh start,<br/>
-              same great game!
-            </div>
+            <div style={{fontSize:16,color:"#ffffff",lineHeight:1.9,fontWeight:"bold"}}>Come back tomorrow for a brand new<br/>LetterLoot challenge —<br/>fresh tiles, fresh start,<br/>same great game!</div>
           </div>
-          {/* FIX item 9: Stats button on farewell screen */}
-          <button onClick={handleViewStats} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer",marginBottom:12}}>
-            📊 View My Stats
-          </button>
+          <button onClick={handleViewStats} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer",marginBottom:12}}>📊 View My Stats</button>
           <div style={{fontSize:28,marginBottom:10}}>🌅</div>
           <div style={{fontSize:20,fontWeight:"bold",color:"#6ee7b7",marginBottom:8}}>See you tomorrow!</div>
           <div style={{fontSize:15,color:"#ffffff",fontWeight:"bold",letterSpacing:1}}>{getShortDate()}</div>
@@ -745,19 +643,13 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewSta
 
 function AuthScreen({ onGuest, onLogin }) {
   const [mode, setMode] = useState("welcome");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [success, setSuccess] = useState("");
   const handleSignUp = async () => {
     if (!email || !password || !name) { setError("Please fill in all fields"); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
     setLoading(true); setError("");
-    const { error } = await signUp(email, password, name);
-    setLoading(false);
+    const { error } = await signUp(email, password, name); setLoading(false);
     if (error) { setError(error.message); return; }
     setSuccess("Account created! Please check your email to confirm, then sign in.");
     setTimeout(() => setMode("login"), 3000);
@@ -765,40 +657,24 @@ function AuthScreen({ onGuest, onLogin }) {
   const handleSignIn = async () => {
     if (!email || !password) { setError("Please enter your email and password"); return; }
     setLoading(true); setError("");
-    const { error } = await signIn(email, password);
-    setLoading(false);
+    const { error } = await signIn(email, password); setLoading(false);
     if (error) { setError("Invalid email or password. Have you confirmed your email?"); return; }
     onLogin();
   };
   const handleForgot = async () => {
     if (!email) { setError("Please enter your email address"); return; }
     setLoading(true); setError("");
-    const { error } = await resetPassword(email);
-    setLoading(false);
+    const { error } = await resetPassword(email); setLoading(false);
     if (error) { setError(error.message); return; }
     setSuccess("Reset link sent! Check your email.");
   };
-
-  const inputStyle = {
-    width:"100%", padding:"11px 14px", borderRadius:10,
-    border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.08)",
-    color:"#f5f0e8", fontSize:14, fontFamily:"Georgia,serif", outline:"none",
-    marginBottom:10, boxSizing:"border-box",
-  };
-  const btnStyle = (bg, color="#1a1a2e") => ({
-    width:"100%", padding:"13px", borderRadius:12, border:"none",
-    background:bg, color, fontSize:14, fontWeight:"bold",
-    fontFamily:"Georgia,serif", cursor:"pointer", marginBottom:8,
-  });
-
+  const inputStyle = { width:"100%", padding:"11px 14px", borderRadius:10, border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.08)", color:"#f5f0e8", fontSize:14, fontFamily:"Georgia,serif", outline:"none", marginBottom:10, boxSizing:"border-box" };
+  const btnStyle = (bg, color="#1a1a2e") => ({ width:"100%", padding:"13px", borderRadius:12, border:"none", background:bg, color, fontSize:14, fontWeight:"bold", fontFamily:"Georgia,serif", cursor:"pointer", marginBottom:8 });
   return (
     <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px", fontFamily:"Georgia,serif", color:"#f5f0e8", position:"relative" }}>
       <Starfield/>
-      <style>{`@keyframes twinkle{from{opacity:0.08}to{opacity:0.7}}`}</style>
       <div style={{zIndex:1, width:"100%", maxWidth:360}}>
-        <div style={{textAlign:"center", marginBottom:28}}>
-          <LetterLootLogo titleFontSize={30} boxPadding="8px 24px" showSubtitle={true}/>
-        </div>
+        <div style={{textAlign:"center", marginBottom:28}}><LetterLootLogo titleFontSize={30} boxPadding="8px 24px" showSubtitle={true}/></div>
         {mode==="welcome"&&(
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
             <div style={{textAlign:"center",marginBottom:20}}>
@@ -807,10 +683,7 @@ function AuthScreen({ onGuest, onLogin }) {
             </div>
             <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={()=>setMode("login")}>Sign In</button>
             <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={()=>setMode("signup")}>Create Account</button>
-            <button style={{...btnStyle("rgba(255,255,255,0.08)","rgba(255,255,255,0.7)"),border:"1px solid rgba(255,255,255,0.2)"}} onClick={onGuest}>
-              Play as Guest
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",fontWeight:"normal",marginTop:2}}>Progress saved on this device only</div>
-            </button>
+            <button style={{...btnStyle("rgba(255,255,255,0.08)","rgba(255,255,255,0.7)"),border:"1px solid rgba(255,255,255,0.2)"}} onClick={onGuest}>Play as Guest<div style={{fontSize:10,color:"rgba(255,255,255,0.4)",fontWeight:"normal",marginTop:2}}>Progress saved on this device only</div></button>
           </div>
         )}
         {mode==="login"&&(
@@ -861,15 +734,10 @@ export default function App() {
   const [showFarewell, setShowFarewell] = useState(false);
   const [farewellData, setFarewellData] = useState({ totalScore:0, bestWord:"", bestWordScore:0 });
   const [postFarewellTab, setPostFarewellTab] = useState(null);
-
   useEffect(() => {
     getSession().then(session => {
       if (session) { setUser(session.user); setAuthState("playing"); }
-      else {
-        const isGuest = localStorage.getItem("ll_guest") === "1";
-        if (isGuest) setAuthState("playing");
-        else setAuthState("auth");
-      }
+      else { const isGuest = localStorage.getItem("ll_guest") === "1"; if (isGuest) setAuthState("playing"); else setAuthState("auth"); }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) { setUser(session.user); setAuthState("playing"); }
@@ -877,30 +745,19 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
-
   const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
   const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
   const handleFarewellDone = () => { setShowFarewell(false); setAuthState("auth"); };
   const handleFarewellStats = () => { setShowFarewell(false); setPostFarewellTab("stats"); };
-
   if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats}/>;
-
-  if (authState === "loading") {
-    return (
-      <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", position:"relative" }}>
-        <Starfield/>
-        <div style={{textAlign:"center",zIndex:1}}>
-          <LetterLootLogo titleFontSize={28} boxPadding="8px 24px"/>
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.4)",letterSpacing:2,marginTop:16}}>LOADING…</div>
-        </div>
-      </div>
-    );
-  }
-
+  if (authState === "loading") return (
+    <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", position:"relative" }}>
+      <Starfield/><div style={{textAlign:"center",zIndex:1}}><LetterLootLogo titleFontSize={28} boxPadding="8px 24px"/><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",letterSpacing:2,marginTop:16}}>LOADING…</div></div>
+    </div>
+  );
   if (authState === "auth") return <AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>;
-
   return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)}/>;
 }
 
@@ -912,15 +769,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [tourStep, setTourStep] = useState(0);
   const [online, setOnline] = useState(navigator.onLine);
   const [savedIndicator, setSavedIndicator] = useState(false);
-
   const completeTour = () => { localStorage.setItem("ll_tour_done","1"); setShowTour(false); requestNotificationPermission(); };
-
   useEffect(() => {
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => { window.removeEventListener("online", handleOnline); window.removeEventListener("offline", handleOffline); };
+    const on = () => setOnline(true); const off = () => setOnline(false);
+    window.addEventListener("online", on); window.addEventListener("offline", off);
+    return () => { window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
   const lifetimeData = useRef(getLifetimeData());
@@ -942,22 +795,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [selected, setSelected] = useState([]);
   const [submitted, setSubmitted] = useState(ss?.submitted || []);
   const [totalScore, setTotalScore] = useState(ss?.totalScore || 0);
-
-  // FIX item 10: badge store
   const [badgeStore, setBadgeStore] = useState(() => getBadgeStore());
-  // Keep a flat array for backward compat display
   const badges = badgeStore.lifetime;
-
   const [streak, setStreak] = useState(ss?.streak || 0);
   const [validating, setValidating] = useState(false);
   const [checkingStuck, setCheckingStuck] = useState(false);
   const [shake, setShake] = useState(false);
   const [flash, setFlash] = useState(null);
   const [showBadge, setShowBadge] = useState(null);
+  const [showBadgeExtra, setShowBadgeExtra] = useState("");
   const [tab, setTab] = useState(initialTab || "play");
   const [confetti, setConfetti] = useState(false);
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
-  // FIX item 6: restore levelComplete from session
   const [levelComplete, setLevelComplete] = useState(ss?.levelComplete || false);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -968,11 +817,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [timeLeaderboard, setTimeLeaderboard] = useState(() => getLocalTimeLeaderboard());
   const [showNameInput, setShowNameInput] = useState(false);
   const [perfectDay, setPerfectDay] = useState(ss?.perfectDay ?? true);
+  const perfectDayRef = useRef(ss?.perfectDay ?? true);
+  const setPerfectDaySync = useCallback((val) => { perfectDayRef.current = val; setPerfectDay(val); }, []);
+  const [showRepeatPerfect, setShowRepeatPerfect] = useState(false);
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
-  // FIX item 4: repeat perfect day modal
-  const [showRepeatPerfect, setShowRepeatPerfect] = useState(false);
   const [levelTime, setLevelTime] = useState(ss?.levelTime || 0);
   const [totalTime, setTotalTime] = useState(ss?.totalTime || 0);
   const [selectedLevelView, setSelectedLevelView] = useState(1);
@@ -980,15 +830,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [newRecord, setNewRecord] = useState(null);
   const [pulseScore, setPulseScore] = useState(false);
   const [pulseTime, setPulseTime] = useState(false);
-  // FIX item 3: new best time state
   const [newBestTime, setNewBestTime] = useState(ss?.newBestTime || false);
-  // FIX item 1: copy confirmation state
   const [shareCopied, setShareCopied] = useState(false);
+  const [shareLLCopied, setShareLLCopied] = useState(false);
+  const [undoUsed, setUndoUsed] = useState(ss?.undoUsed || false);
+  const [lastValidEntry, setLastValidEntry] = useState(null);
+  const [showUndoConfirm, setShowUndoConfirm] = useState(false);
+  const [dailyHistory, setDailyHistory] = useState(() => getDailyHistory());
+  const gameIndexRef = useRef(ss?.gameIndex || 0);
 
-  // FIX item 9: consume initialTab
-  useEffect(() => {
-    if (initialTab) { setTab(initialTab); onTabConsumed?.(); }
-  }, [initialTab]);
+  useEffect(() => { if (initialTab) { setTab(initialTab); onTabConsumed?.(); } }, [initialTab]);
 
   const timerRef = useRef(null);
   const levelTimeRef = useRef(ss?.levelTime || 0);
@@ -1016,8 +867,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const weekHighScore = Math.max(0, ...Object.values(statsData.highScoreWeek || {}).concat([0]));
   const weekHighWord = Math.max(0, ...Object.values(statsData.highWordWeek || {}).concat([0]));
   const last7Days = Array.from({length:7}, (_,i) => {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - (6-i));
+    const d = new Date(); d.setUTCDate(d.getUTCDate() - (6-i));
     const key = `${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`;
     return { key, score: statsData.dailyScores?.[key] || 0, label: d.toLocaleDateString("en-US",{weekday:"short"}) };
   });
@@ -1029,12 +879,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const init = async () => {
       if (!isGuest && user) {
         setCloudSyncing(true);
-        const [gameState, dailySession] = await Promise.all([
-          loadGameState(user.id),
-          loadDailySession(user.id, getTodayKey()),
-        ]);
+        const [gameState, dailySession] = await Promise.all([loadGameState(user.id), loadDailySession(user.id, getTodayKey())]);
         setCloudSyncing(false);
-        // FIX item 5: guard against empty cloud data overwriting valid local session
         if (gameState && gameState.lifetime_points != null) {
           lifetimeRef.current = gameState.lifetime_points || 0;
           setLifetimePoints(gameState.lifetime_points || 0);
@@ -1049,12 +895,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           if (dailySession.tiles && dailySession.tiles.length > 0) setTiles(dailySession.tiles);
           tileCountRef.current = dailySession.tile_count || 42;
           setSubmitted(dailySession.submitted || []); submittedRef.current = dailySession.submitted || [];
-          setPerfectDay(dailySession.perfect_day ?? true);
+          setPerfectDaySync(dailySession.perfect_day ?? true);
           setLongestWordToday(dailySession.longest_word_today || "");
           levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
           setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
-          // FIX item 6: restore levelComplete
           if (dailySession.level_complete) setLevelComplete(true);
+          if (dailySession.undo_used) setUndoUsed(true);
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
         if (playerData?.name) setPlayerName(playerData.name);
@@ -1073,10 +919,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     await Promise.all([
       saveDailySession(user.id, todayKey, {
         level, totalScore: totalRef.current, levelScore: levelScoreRef.current,
-        tiles, submitted: submittedRef.current, perfectDay,
+        tiles, submitted: submittedRef.current, perfectDay: perfectDayRef.current,
         tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
-        totalTime: totalTimeRef.current, longestWordToday,
-        levelComplete, newBestTime,
+        totalTime: totalTimeRef.current, longestWordToday, levelComplete, newBestTime, undoUsed,
+        gameIndex: gameIndexRef.current,
       }),
       saveGameState(user.id, {
         lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
@@ -1085,7 +931,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         stats: {...statsData, playerName}, timeRecords: timeLeaderboard,
       }),
     ]);
-  }, [user, isGuest, level, tiles, perfectDay, longestWordToday, badgeStore, statsData, timeLeaderboard, playerName, levelComplete, newBestTime]);
+  }, [user, isGuest, level, tiles, longestWordToday, badgeStore, statsData, timeLeaderboard, playerName, levelComplete, newBestTime, undoUsed]);
 
   const scheduleSyncToCloud = useCallback(() => {
     if (isGuest || !user) return;
@@ -1093,25 +939,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     syncTimerRef.current = setTimeout(syncToCloud, 3000);
   }, [syncToCloud, isGuest, user]);
 
-  // FIX item 5: show saved indicator
-  const showSavedIndicator = useCallback(() => {
-    setSavedIndicator(true);
-    setTimeout(() => setSavedIndicator(false), 2000);
-  }, []);
+  const showSavedIndicator = useCallback(() => { setSavedIndicator(true); setTimeout(() => setSavedIndicator(false), 2000); }, []);
 
   useEffect(() => {
-    // FIX item 6: include levelComplete and newBestTime in session save
-    saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime });
+    saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current });
     showSavedIndicator();
     scheduleSyncToCloud();
-  }, [level, tiles, badgeStore, streak, perfectDay, longestWordToday, levelComplete, newBestTime]);
+  }, [level, tiles, badgeStore, streak, longestWordToday, levelComplete, newBestTime, undoUsed]);
 
   const startTimer = useCallback(() => {
     if (timerRef.current) return;
-    timerRef.current = setInterval(() => {
-      levelTimeRef.current += 1; totalTimeRef.current += 1;
-      setLevelTime(levelTimeRef.current); setTotalTime(totalTimeRef.current);
-    }, 1000);
+    timerRef.current = setInterval(() => { levelTimeRef.current += 1; totalTimeRef.current += 1; setLevelTime(levelTimeRef.current); setTotalTime(totalTimeRef.current); }, 1000);
   }, []);
   const stopTimer = useCallback(() => { clearInterval(timerRef.current); timerRef.current = null; }, []);
   const resetLevelTimer = useCallback(() => { levelTimeRef.current = 0; setLevelTime(0); }, []);
@@ -1124,33 +962,42 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const startMusic = useCallback(() => {
     if (!audioCtxRef.current) audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
-    const ctx = audioCtxRef.current;
-    if (ctx.state === "suspended") ctx.resume();
+    const ctx = audioCtxRef.current; if (ctx.state === "suspended") ctx.resume();
     const guitar = createGuitar(ctx);
     const loop = () => {
-      const now = ctx.currentTime;
-      const start = Math.max(now, nextLoopRef.current);
+      const now = ctx.currentTime; const start = Math.max(now, nextLoopRef.current);
       MELODY.forEach(({ freq, beat }) => guitar.pluck(freq, start + beat * BEAT_DUR, 1.8, 0.35));
       nextLoopRef.current = start + LOOP_DUR;
       musicLoopRef.current = setTimeout(loop, (nextLoopRef.current - ctx.currentTime - 0.1) * 1000);
     };
     loop();
   }, []);
-  const stopMusic = useCallback(() => {
-    clearTimeout(musicLoopRef.current);
-    if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; }
-    nextLoopRef.current = 0;
-  }, []);
+  const stopMusic = useCallback(() => { clearTimeout(musicLoopRef.current); if (audioCtxRef.current) { audioCtxRef.current.close(); audioCtxRef.current = null; } nextLoopRef.current = 0; }, []);
   useEffect(() => { if (musicOn && !paused) startMusic(); else stopMusic(); return () => stopMusic(); }, [musicOn, paused]);
 
-  // FIX item 10: scoped awardBadge
-  const awardBadge = useCallback((id) => {
+  // BUG FIX 4: Independent scope checking for "all" badges
+  const awardBadge = useCallback((id, extraLabel) => {
     const def = BADGE_DEFS.find(b => b.id === id);
     if (!def) return;
     setBadgeStore(prev => {
-      if (hasBadge(prev, id, def.scope)) return prev;
-      setShowBadge(id);
-      setTimeout(() => setShowBadge(null), 2800);
+      const todayKey = getTodayKey(); const weekKey = getWeekKey();
+      const lifetimeHas = prev.lifetime.includes(id);
+      const weeklyHas = (prev.weekly[weekKey] || []).includes(id);
+      const dailyHas = (prev.daily[todayKey] || []).includes(id);
+      let needsAward = false;
+      if (def.scope === "lifetime" && !lifetimeHas) needsAward = true;
+      if (def.scope === "daily" && !dailyHas) needsAward = true;
+      if (def.scope === "weekly" && !weeklyHas) needsAward = true;
+      if (def.scope === "all") {
+        if (!lifetimeHas || !weeklyHas || !dailyHas) needsAward = true;
+      }
+      if (!needsAward) return prev;
+      const showPopup = !lifetimeHas || (def.scope === "daily" && !dailyHas) || (def.scope === "all" && !dailyHas);
+      if (showPopup) {
+        setShowBadge(id);
+        setShowBadgeExtra(extraLabel || "");
+        setTimeout(() => { setShowBadge(null); setShowBadgeExtra(""); }, 2800);
+      }
       const updated = awardBadgeToStore(prev, id, def.scope);
       saveBadgeStore(updated);
       return updated;
@@ -1158,9 +1005,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   }, []);
 
   const flashNewRecord = useCallback((type, value, lvl) => {
-    const label = type === "score"
-      ? `🏆 New Level ${lvl} High Score: ${value.toLocaleString()} pts!`
-      : `⚡ New Level ${lvl} Best Time: ${formatTime(value)}!`;
+    const label = type === "score" ? `🏆 New Level ${lvl} High Score: ${value.toLocaleString()} pts!` : `⚡ New Level ${lvl} Best Time: ${formatTime(value)}!`;
     setNewRecord({ type, value, level: lvl, label });
     if (type === "score") { setPulseScore(true); setTimeout(() => setPulseScore(false), 2000); }
     else { setPulseTime(true); setTimeout(() => setPulseTime(false), 2000); }
@@ -1178,31 +1023,44 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setStreak(0); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
     setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
-    setPerfectDay(true); setPerfectDayAchieved(false); setLongestWordToday("");
-    setShowRepeatPerfect(false);
-    // FIX item 3: reset newBestTime on full reset
-    setNewBestTime(false);
+    setPerfectDaySync(true); setPerfectDayAchieved(false); setLongestWordToday("");
+    setShowRepeatPerfect(false); setNewBestTime(false);
+    setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
     levelResetCount.current = 0; clearedLevelsRef.current = {};
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
+    gameIndexRef.current += 1;
     clearLocalSession();
-  }, [startTimer, stopTimer]);
+  }, [startTimer, stopTimer, setPerfectDaySync]);
 
   const doLevelReset = useCallback(() => {
-    // FIX item 11: Level 5 retry costs 1000 pts
     if (level === 5) {
       if (totalRef.current < 1000) return;
-      totalRef.current -= 1000;
-      setTotalScore(totalRef.current);
-      setPerfectDay(false);
+      totalRef.current -= 1000; setTotalScore(totalRef.current);
+      setPerfectDaySync(false);
     }
     levelResetCount.current += 1;
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
-    setSelected([]); resetLevelTimer();
+    setSelected([]); resetLevelTimer(); setNewBestTime(false);
     setShowResetConfirm(false); setShowStuckModal(false);
-    // FIX item 3: reset newBestTime on level reset
-    setNewBestTime(false);
-  }, [resetLevelTimer, level]);
+  }, [resetLevelTimer, level, setPerfectDaySync]);
+
+  const handleUndo = useCallback(() => {
+    if (undoUsed || !lastValidEntry || totalRef.current < 1000) return;
+    const { word, score, tileIds, levelScoreDelta } = lastValidEntry;
+    totalRef.current -= (1000 + score); setTotalScore(totalRef.current);
+    levelScoreRef.current -= levelScoreDelta; setLevelScore(levelScoreRef.current);
+    lifetimeRef.current -= score; setLifetimePoints(lifetimeRef.current);
+    if (isGuest) saveLifetimeData(lifetimeRef.current);
+    setTiles(prev => prev.map(t => tileIds.includes(t.id) ? { ...t, used: false } : t));
+    const newSubmitted = [...submittedRef.current];
+    const lastIdx = [...newSubmitted].map(s=>s.word).lastIndexOf(word);
+    if (lastIdx !== -1) newSubmitted.splice(lastIdx, 1);
+    submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
+    setUndoUsed(true); setLastValidEntry(null); setShowUndoConfirm(false);
+    setFlash({ word: `↩️ UNDO: ${word}`, score: 0, valid: true });
+    setTimeout(() => setFlash(null), 2000);
+  }, [undoUsed, lastValidEntry, isGuest]);
 
   const handleNameSave = async () => {
     if (!playerName.trim()) return;
@@ -1213,18 +1071,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const triggerFarewell = useCallback(() => {
     const bestEntry = submittedRef.current.filter(s => s.valid).reduce((best, s) => !best || s.score > best.score ? s : best, null);
-    onFarewell({
-      totalScore: totalRef.current,
-      bestWord: bestEntry?.word || "",
-      bestWordScore: bestEntry?.score || 0,
-    });
+    onFarewell({ totalScore: totalRef.current, bestWord: bestEntry?.word || "", bestWordScore: bestEntry?.score || 0 });
   }, [onFarewell]);
+
+  const getPerfectDayShareText = useCallback(() => {
+    const allValid = submittedRef.current.filter(s => s.valid);
+    const bestWord = allValid.reduce((b, s) => !b || s.score > b.score ? s : b, null);
+    const longestW = allValid.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
+    return `🌈 It's a PERFECT DAY on LetterLoot!\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app\n🌈`;
+  }, []);
 
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
     if (!online) { setFlash({ word: "No internet connection!", score: 0, valid: false }); setTimeout(() => setFlash(null), 2000); return; }
     setValidating(true);
     const result = await validateWord(currentWord);
+    if (result.source === "timeout") {
+      setFlash({ word: "Dictionary lookup timed out — try again.", score: 0, valid: false });
+      setTimeout(() => setFlash(null), 3000);
+      setShake(true); setTimeout(() => setShake(false), 500);
+      setSelected([]); setValidating(false); return;
+    }
     const valid = result.valid;
     const isMedical = result.source === "medical";
     const isCollegiate = result.source === "collegiate";
@@ -1240,8 +1107,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     if (!valid) { setShake(true); setTimeout(() => setShake(false), 500); }
     const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate };
     const newSubmitted = [...submittedRef.current, newEntry];
-    submittedRef.current = newSubmitted;
-    setSubmitted(newSubmitted);
+    submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
+    appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current);
+    setDailyHistory(getDailyHistory());
+
     if (valid) {
       const newTotal = totalRef.current + score;
       totalRef.current = newTotal; setTotalScore(newTotal);
@@ -1252,16 +1121,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       if (isGuest) saveLifetimeData(newLifetime);
       const newTiles = tiles.map(t => selected.includes(t.id) ? { ...t, used: true } : t);
       setTiles(newTiles);
-      const ats = getAllTimeStats();
-      ats.words += 1; ats.score += score; saveAllTimeStats(ats);
+      setLastValidEntry({ word: currentWord, score, tileIds: [...selected], levelScoreDelta: score });
+      const ats = getAllTimeStats(); ats.words += 1; ats.score += score; saveAllTimeStats(ats);
       const currentBest = statsData.bestScorePerLevel?.[String(level)];
-      if (!currentBest || newLevelScore > currentBest.score) {
-        flashNewRecord("score", newLevelScore, level);
-      }
+      if (!currentBest || newLevelScore > currentBest.score) flashNewRecord("score", newLevelScore, level);
       const updated = updateLocalStats({
         score: newTotal, wordScore: score, word: currentWord, source: result.source,
         ...(longBonus > 0 ? { longWordBonus: longBonus, wordLength: currentWord.length } : {}),
         levelScore: newLevelScore, levelNum: level,
+        ...(score > 200 ? { infinityScore: score } : {}),
       });
       setStatsData(updated);
       if (currentWord.length > (longestWordToday.length||0)) { setLongestWordToday(currentWord); awardBadge("longest_day"); }
@@ -1269,9 +1137,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       if (isMedical) awardBadge("medical_word");
       const validCount = newSubmitted.filter(s => s.valid).length;
       if (validCount === 1) awardBadge("first_word");
-      if (score >= 50) awardBadge("score_50");
+      // Space badge ladder — update date on each earn
+      if (score >= 100) { awardBadge("rocket"); updateLocalStats({ spaceBadge: "rocket" }); }
+      if (score >= 125) { awardBadge("shuttle"); updateLocalStats({ spaceBadge: "shuttle" }); }
+      if (score >= 150) { awardBadge("moon"); updateLocalStats({ spaceBadge: "moon" }); }
+      if (score >= 175) { awardBadge("mars"); updateLocalStats({ spaceBadge: "mars" }); }
+      if (score >= 200) { awardBadge("jupiter"); updateLocalStats({ spaceBadge: "jupiter" }); }
+      if (score > 200) { awardBadge("infinity", `${score} pts!`); updateLocalStats({ spaceBadge: "infinity", infinityScore: score }); }
       if (score >= 100) awardBadge("century");
-      if (score >= 200) awardBadge("score_200");
       if (currentWord.length >= 7) awardBadge("long_word");
       if (currentWord.length >= 8) awardBadge("long_8");
       if (currentWord.length >= 10) awardBadge("long_10");
@@ -1308,24 +1181,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const existingTime = statsData.fastestLevels?.[String(level)];
         const existingSecs = existingTime ? existingTime.seconds : null;
         const isNewTimeRecord = existingSecs === null || clearedTime < existingSecs;
-        // FIX item 3: set newBestTime state
         if (isNewTimeRecord) setNewBestTime(true);
-        const updatedStats = updateLocalStats({
-          levelTime: clearedTime, levelNum: level,
-          score: totalRef.current, levelScore: clearedLevelScore,
-        });
+        const updatedStats = updateLocalStats({ levelTime: clearedTime, levelNum: level, score: totalRef.current, levelScore: clearedLevelScore });
         setStatsData(updatedStats);
         const updatedTimes = addLocalLevelTime(playerName||"You", level, clearedTime);
         setTimeLeaderboard(updatedTimes);
-        if (isNewTimeRecord) {
-          setTimeout(() => flashNewRecord("time", clearedTime, level), 1500);
-        }
+        if (isNewTimeRecord) setTimeout(() => flashNewRecord("time", clearedTime, level), 1500);
         if (level < 5) {
           setTimeout(() => setLevelComplete(true), 1200);
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
-          if (perfectDay) {
-            // FIX item 4: check if already earned perfect day today
+          if (perfectDayRef.current) {
             const alreadyPerfectToday = (statsData.perfectDaysWeek?.[getTodayKey()] || 0) >= 1;
             if (alreadyPerfectToday) {
               setTimeout(() => setShowRepeatPerfect(true), 1000);
@@ -1342,12 +1208,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         if (!isGuest && user) await syncToCloud();
       } else {
         scheduleSyncToCloud();
-        // FIX item 8: stop timer during scanning
         stopTimer();
         setCheckingStuck(true);
         const hasWords = await hasValidWordsRemaining(newTiles);
         setCheckingStuck(false);
-        // FIX item 8: restart timer after scan (only if not paused)
         if (!paused) startTimer();
         if (!hasWords) setTimeout(() => setShowStuckModal(true), 600);
       }
@@ -1356,7 +1220,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   };
 
   const handleNextLevel = (bought = false) => {
-    if (bought) setPerfectDay(false);
+    if (bought) setPerfectDaySync(false);
     const newLevel = level + 1;
     setLevel(newLevel); setLevelComplete(false); setShowBuyModal(false);
     levelScoreRef.current = 0; setLevelScore(0);
@@ -1366,9 +1230,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const newTiles = generateLevelTiles(newLevel, tileCountRef.current, rng, bp);
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
-    levelResetCount.current = 0; resetLevelTimer(); startTimer();
-    // FIX item 3: reset newBestTime on level advance
-    setNewBestTime(false);
+    levelResetCount.current = 0; resetLevelTimer(); startTimer(); setNewBestTime(false);
     if (newLevel === 2) awardBadge("level_2");
     if (newLevel === 3) awardBadge("level_3");
     if (newLevel === 4) awardBadge("level_4");
@@ -1381,30 +1243,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setShowBuyModal(false); setShowStuckModal(false);
     handleNextLevel(true);
   };
-
   const handleExtendLevel5 = () => {
     if (totalRef.current < 1000) return;
     totalRef.current -= 1000; setTotalScore(totalRef.current);
-    setPerfectDay(false);
+    setPerfectDaySync(false);
     const rng = seededRandom(getDailySeed() + level * 999 + Date.now());
     const count = 42 + (level - 1) * 6;
     const bp = getBonusPositions(count, getBonusCount(level), rng);
     setTiles(generateLevelTiles(level, tileCountRef.current, rng, bp));
-    tileCountRef.current += count;
-    setSelected([]); setShowStuckModal(false); startTimer();
+    tileCountRef.current += count; setSelected([]); setShowStuckModal(false); startTimer();
   };
-
   const handleSaveScore = async () => {
     if (!playerName.trim()) return;
     localStorage.setItem("ll_name", playerName);
     if (!isGuest && user) { await updatePlayerName(user.id, playerName); await syncToCloud(); }
     setShowNameInput(false); clearLocalSession();
   };
-
   const handleGiveUp = () => { setShowStuckModal(false); setShowNameInput(true); };
   const medalFor = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
 
-  // FIX item 10: badge rendering helpers
   const todayKey = getTodayKey();
   const weekKey = getWeekKey();
   const dailyBadgeIds = badgeStore.daily?.[todayKey] || [];
@@ -1413,14 +1270,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const renderBadgeIcon = (b) => {
     if (b.id === "century") return <DoubloonIcon size={36}/>;
+    if (b.id === "infinity") return <span style={{fontSize:28,fontWeight:"bold",color:"#a78bfa"}}>∞</span>;
     return <div style={{fontSize:24}}>{b.icon}</div>;
   };
 
+  // ── TIPS data (item 10) ────────────────────────────────────
+  const TIPS = [
+    { emoji:"👁️", title:"Watch Your Letters", body:"Remaining vowels and consonants are listed in the upper section of each level. Keep a close eye on these as tiles run low." },
+    { emoji:"🌈", title:"Perfect Day? Stay Relaxed", body:"Going for a Perfect Day (with rainbows!)? Don't stress the timer. Take your time, think it through, and enjoy the hunt." },
+    { emoji:"⚠️", title:"Beware of Q's", body:"Only one U is guaranteed when a Q is present. Use it wisely before it's gone — a stranded Q can cost you the level." },
+    { emoji:"💡", title:"Think Big First", body:"Start with big, high-value words. Long words with rare letters earn serious points — and long-word bonuses stack up fast." },
+    { emoji:"✨", title:"Stack Bonus Tiles", body:"Gold (2×) and purple (3×) bonus tiles multiply your letter score. Save them for your longer words to maximize your loot." },
+    { emoji:"⏸️", title:"Use Pause", body:"The Pause button stops your timer completely. Use it whenever you need a moment to plan your next move without the clock running." },
+    { emoji:"📜", title:"History Tracks Everything", body:"The History button shows all words played — and tried but not accepted — for the entire current day across all your games." },
+    { emoji:"🎯", title:"Save Your UNDO", body:"You get one UNDO per game for 1,000 pts. Save it for a strategic moment in a later level when you really need to reverse a costly mistake." },
+    { emoji:"🍀", title:"Good Luck Looting!", body:"Every tile has a value. Every word is a score. Every day is a fresh board. Now go get that loot!" },
+  ];
+
   return (
     <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:40, position:"relative", overflow:"hidden" }}>
-
       <Starfield/>
-
       <style>{`
         @keyframes twinkle{from{opacity:0.08}to{opacity:0.7}}
         @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
@@ -1457,109 +1326,95 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       <ConfettiCanvas active={confetti && !rainbowConfetti} rainbow={false}/>
       <ConfettiCanvas active={rainbowConfetti} rainbow={true}/>
 
-      {!online&&<div style={{position:"fixed",top:0,left:0,right:0,zIndex:99990,background:"rgba(220,38,38,0.95)",padding:"8px",textAlign:"center",fontSize:12,color:"#fff",fontFamily:"Georgia,serif"}}>
-        📡 No internet connection — dictionary validation unavailable. Please reconnect to play.
-      </div>}
-
+      {!online&&<div style={{position:"fixed",top:0,left:0,right:0,zIndex:99990,background:"rgba(220,38,38,0.95)",padding:"8px",textAlign:"center",fontSize:12,color:"#fff",fontFamily:"Georgia,serif"}}>📡 No internet — dictionary unavailable. Please reconnect.</div>}
       {cloudSyncing&&<div style={{position:"fixed",top:12,right:12,zIndex:9995,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#a78bfa"}}>☁️ Syncing…</div>}
-
-      {/* FIX item 5: saved indicator */}
       {savedIndicator&&<div className="saved-indicator" style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9994,background:"rgba(110,231,183,0.2)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#6ee7b7",pointerEvents:"none"}}>✓ Progress saved</div>}
 
-      {newRecord && (
-        <div style={{
-          position:"fixed", top:"35%", left:"50%", zIndex:9998,
-          animation:"recordFade 2.5s ease forwards",
-          background: newRecord.type === "score"
-            ? "linear-gradient(135deg,rgba(246,211,101,0.97),rgba(253,160,133,0.97))"
-            : "linear-gradient(135deg,rgba(96,165,250,0.97),rgba(139,92,246,0.97))",
-          borderRadius:20, padding:"16px 28px",
-          boxShadow:"0 8px 40px rgba(0,0,0,0.7)",
-          textAlign:"center", whiteSpace:"nowrap",
-          border:"2px solid rgba(255,255,255,0.5)",
-        }}>
-          <div style={{fontSize:22,fontWeight:"bold",color:"#1a1a2e",letterSpacing:1}}>{newRecord.label}</div>
-          <div style={{fontSize:11,color:"rgba(0,0,0,0.55)",marginTop:4,letterSpacing:2}}>PERSONAL BEST</div>
-        </div>
-      )}
+      {newRecord&&<div style={{position:"fixed",top:"35%",left:"50%",zIndex:9998,animation:"recordFade 2.5s ease forwards",background:newRecord.type==="score"?"linear-gradient(135deg,rgba(246,211,101,0.97),rgba(253,160,133,0.97))":"linear-gradient(135deg,rgba(96,165,250,0.97),rgba(139,92,246,0.97))",borderRadius:20,padding:"16px 28px",boxShadow:"0 8px 40px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap",border:"2px solid rgba(255,255,255,0.5)"}}>
+        <div style={{fontSize:22,fontWeight:"bold",color:"#1a1a2e",letterSpacing:1}}>{newRecord.label}</div>
+        <div style={{fontSize:11,color:"rgba(0,0,0,0.55)",marginTop:4,letterSpacing:2}}>PERSONAL BEST</div>
+      </div>}
 
-      {showDecayWarning&&(
-        <div style={{position:"fixed",inset:0,zIndex:99998,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:decayInfo.wasReset?"linear-gradient(135deg,#1a0a0a,#3d1010)":"linear-gradient(135deg,#1a0a0a,#2d1a10)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:`2px solid ${decayInfo.wasReset?"rgba(220,38,38,0.6)":"rgba(251,146,60,0.6)"}`,maxWidth:340,width:"90%"}}>
-            <div style={{fontSize:56}}>{decayInfo.wasReset?"😱":"⚠️"}</div>
-            <div style={{fontSize:22,fontWeight:"bold",color:decayInfo.wasReset?"#ef4444":"#fb923c",marginTop:10}}>
-              {decayInfo.wasReset?"Points Reset to Zero!":decayInfo.missedDays===1?"You Missed 1 Day!":"You Missed 2 Days!"}
-            </div>
-            <div style={{fontSize:14,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>
-              {decayInfo.wasReset
-                ?<>Your lifetime points have reset to <span style={{color:"#ef4444",fontWeight:"bold",fontSize:18}}>ZERO</span>.<br/>Play every day to protect your points!</>
-                :decayInfo.missedDays===1
-                  ?<>You lost <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span> of your lifetime points.<br/>Don't miss another day or you'll lose more!</>
-                  :<>You've lost <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span> of your lifetime points.<br/>One more missed day and everything resets to <span style={{color:"#ef4444",fontWeight:"bold"}}>ZERO</span>!</>
-              }
-            </div>
-            {!decayInfo.wasReset&&<div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:8}}>Remaining: <span style={{color:"#f6d365",fontWeight:"bold"}}>{lifetimePoints.toLocaleString()} pts</span></div>}
-            <button className="ll-btn" onClick={()=>setShowDecayWarning(false)} style={{marginTop:24,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>I'll Play Every Day! 💪</button>
+      {showDecayWarning&&<div style={{position:"fixed",inset:0,zIndex:99998,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:decayInfo.wasReset?"linear-gradient(135deg,#1a0a0a,#3d1010)":"linear-gradient(135deg,#1a0a0a,#2d1a10)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:`2px solid ${decayInfo.wasReset?"rgba(220,38,38,0.6)":"rgba(251,146,60,0.6)"}`,maxWidth:340,width:"90%"}}>
+          <div style={{fontSize:56}}>{decayInfo.wasReset?"😱":"⚠️"}</div>
+          <div style={{fontSize:22,fontWeight:"bold",color:decayInfo.wasReset?"#ef4444":"#fb923c",marginTop:10}}>{decayInfo.wasReset?"Points Reset to Zero!":decayInfo.missedDays===1?"You Missed 1 Day!":"You Missed 2 Days!"}</div>
+          <div style={{fontSize:14,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>
+            {decayInfo.wasReset?<>Your lifetime points have reset to <span style={{color:"#ef4444",fontWeight:"bold",fontSize:18}}>ZERO</span>.<br/>Play every day to protect your points!</>
+            :decayInfo.missedDays===1?<>You lost <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span> of your lifetime points.<br/>Don't miss another day!</>
+            :<>You've lost <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span> of your lifetime points.<br/>One more missed day → <span style={{color:"#ef4444",fontWeight:"bold"}}>ZERO</span>!</>}
           </div>
+          {!decayInfo.wasReset&&<div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:8}}>Remaining: <span style={{color:"#f6d365",fontWeight:"bold"}}>{lifetimePoints.toLocaleString()} pts</span></div>}
+          <button className="ll-btn" onClick={()=>setShowDecayWarning(false)} style={{marginTop:24,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>I'll Play Every Day! 💪</button>
         </div>
-      )}
+      </div>}
 
-      {showTour&&(
-        <div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#1a0808,#2d1010)":"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"36px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:TOUR_STEPS[tourStep].warning?"2px solid rgba(220,38,38,0.5)":"2px solid rgba(167,139,250,0.5)",maxWidth:340,width:"90%"}}>
-            <div style={{fontSize:52}}>{TOUR_STEPS[tourStep].emoji}</div>
-            <div style={{fontSize:20,fontWeight:"bold",color:TOUR_STEPS[tourStep].warning?"#ef4444":"#f6d365",marginTop:12,lineHeight:1.3}}>{TOUR_STEPS[tourStep].title}</div>
-            {TOUR_STEPS[tourStep].warning?(
-              <div style={{marginTop:12}}>
-                <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>Points carry over <span style={{color:"#6ee7b7",fontWeight:"bold"}}>every single day</span> — building your lifetime total.</div>
-                <div style={{marginTop:10,fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.7}}>Miss a day and you lose <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span> of your points. Miss two days and lose <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span>.</div>
-                <div className="warning-box" style={{marginTop:12,borderRadius:14,padding:"14px",border:"1px solid rgba(220,38,38,0.4)"}}>
-                  <div style={{fontSize:14,fontWeight:"bold",color:"#ef4444"}}>⚠️ Miss 3 days in a row...</div>
-                  <div style={{fontSize:18,fontWeight:"bold",color:"#fff",marginTop:4}}>ALL points → <span style={{color:"#ef4444"}}>ZERO</span></div>
-                  <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:6}}>We'll send reminders at noon and 6PM so you never forget!</div>
-                </div>
+      {showTour&&<div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#1a0808,#2d1010)":"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"36px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:TOUR_STEPS[tourStep].warning?"2px solid rgba(220,38,38,0.5)":"2px solid rgba(167,139,250,0.5)",maxWidth:340,width:"90%"}}>
+          <div style={{fontSize:52}}>{TOUR_STEPS[tourStep].emoji}</div>
+          <div style={{fontSize:20,fontWeight:"bold",color:TOUR_STEPS[tourStep].warning?"#ef4444":"#f6d365",marginTop:12,lineHeight:1.3}}>{TOUR_STEPS[tourStep].title}</div>
+          {TOUR_STEPS[tourStep].warning?(
+            <div style={{marginTop:12}}>
+              <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>Points carry over <span style={{color:"#6ee7b7",fontWeight:"bold"}}>every single day</span> — building your lifetime total.</div>
+              <div style={{marginTop:10,fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.7}}>Miss a day and lose <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span>. Miss two days and lose <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span>.</div>
+              <div className="warning-box" style={{marginTop:12,borderRadius:14,padding:"14px",border:"1px solid rgba(220,38,38,0.4)"}}>
+                <div style={{fontSize:14,fontWeight:"bold",color:"#ef4444"}}>⚠️ Miss 3 days in a row...</div>
+                <div style={{fontSize:18,fontWeight:"bold",color:"#fff",marginTop:4}}>ALL points → <span style={{color:"#ef4444"}}>ZERO</span></div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:6}}>We'll send reminders at noon and 6PM!</div>
               </div>
-            ):(
-              <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:12,lineHeight:1.7,whiteSpace:"pre-line"}}>{TOUR_STEPS[tourStep].body}</div>
-            )}
-            <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:20}}>
-              {TOUR_STEPS.map((_,i)=>(<div key={i} style={{width:i===tourStep?16:8,height:8,borderRadius:4,background:i===tourStep?"#a78bfa":"rgba(255,255,255,0.2)",transition:"all 0.3s"}}/>))}
             </div>
-            <div style={{display:"flex",gap:8,marginTop:16}}>
-              <button className="ll-btn" onClick={completeTour} style={{flex:1,padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",fontSize:12}}>Skip</button>
-              <button className="ll-btn" onClick={()=>{ if(tourStep<TOUR_STEPS.length-1) setTourStep(t=>t+1); else completeTour(); }} style={{flex:2,padding:"10px",borderRadius:12,background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#a78bfa,#7c3aed)":"linear-gradient(135deg,#f6d365,#fda085)",color:"#fff",fontSize:14,fontWeight:"bold"}}>
-                {tourStep<TOUR_STEPS.length-1?"Next →":"Let's Play! ✏️"}
-              </button>
-            </div>
+          ):(
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:12,lineHeight:1.7,whiteSpace:"pre-line"}}>{TOUR_STEPS[tourStep].body}</div>
+          )}
+          <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:20}}>
+            {TOUR_STEPS.map((_,i)=>(<div key={i} style={{width:i===tourStep?16:8,height:8,borderRadius:4,background:i===tourStep?"#a78bfa":"rgba(255,255,255,0.2)",transition:"all 0.3s"}}/>))}
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:16}}>
+            <button className="ll-btn" onClick={completeTour} style={{flex:1,padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",fontSize:12}}>Skip</button>
+            <button className="ll-btn" onClick={()=>{ if(tourStep<TOUR_STEPS.length-1) setTourStep(t=>t+1); else completeTour(); }} style={{flex:2,padding:"10px",borderRadius:12,background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#a78bfa,#7c3aed)":"linear-gradient(135deg,#f6d365,#fda085)",color:"#fff",fontSize:14,fontWeight:"bold"}}>
+              {tourStep<TOUR_STEPS.length-1?"Next →":"Let's Play! ✏️"}
+            </button>
           </div>
         </div>
-      )}
+      </div>}
 
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
-        {b.id==="century"?<DoubloonIcon size={36}/>:<div style={{fontSize:28}}>{b.icon}</div>}
+        <div style={{display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
         <div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div>
-        <div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}</div>
+        <div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}{showBadgeExtra?` — ${showBadgeExtra}`:""}</div>
       </div>):null; })()}
 
-      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}><div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div><div style={{fontSize:flash.valid?16:13,color:"#fff",marginTop:4}}>{flash.valid?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}` :"Not a valid word!"}</div></div>}
+      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}>
+        <div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div>
+        <div style={{fontSize:flash.valid?16:13,color:"#fff",marginTop:4}}>{flash.valid&&flash.score>0?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}`:flash.valid?"":("Not a valid word!")}</div>
+      </div>}
 
-      {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}><div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>{checkingStuck?"🔎":"🔍"}</div><div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div></div>}
+      {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
+        <div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>{checkingStuck?"🔎":"🔍"}</div>
+        <div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div>
+      </div>}
+
+      {showUndoConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
+          <div style={{fontSize:40}}>↩️</div>
+          <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Undo Last Word?</div>
+          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Reverse <span style={{color:"#f6d365",fontWeight:"bold"}}>{lastValidEntry?.word}</span> (+{lastValidEntry?.score} pts)<br/>Cost: <span style={{color:"#fb7185",fontWeight:"bold"}}>1,000 pts</span><br/>Your balance: {totalScore} pts</div>
+          <div style={{fontSize:11,color:"#6ee7b7",marginTop:6}}>✓ Your Perfect Day stays intact</div>
+          <button className="ll-btn" onClick={handleUndo} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>↩️ Yes, Undo — 1,000 pts</button>
+          <button className="ll-btn" onClick={()=>setShowUndoConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep It</button>
+        </div>
+      </div>}
 
       {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
           <div style={{fontSize:40}}>🔄</div>
           <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Try Level {level} Again?</div>
-          {/* FIX item 11: show cost for level 5 */}
-          {level === 5 ? (
-            <>
-              <div style={{fontSize:13,color:"#fb7185",marginTop:8,lineHeight:1.6,fontWeight:"bold"}}>⚠️ Retrying Level 5 costs 1,000 pts</div>
-              <div style={{fontSize:12,color:"#bbb",marginTop:4}}>Your balance: {totalScore} pts · {totalScore >= 1000 ? <span style={{color:"#6ee7b7"}}>✓ Enough</span> : <span style={{color:"#fb7185"}}>✗ Not enough</span>}</div>
-            </>
-          ) : (
-            <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Your progress on Level {level} will be lost.<br/>Total score is kept · Same tiles used.</div>
-          )}
-          <button className="ll-btn" onClick={doLevelReset} disabled={level === 5 && totalScore < 1000} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:level===5&&totalScore<1000?"rgba(255,255,255,0.1)":"linear-gradient(135deg,#fb7185,#e11d48)",color:level===5&&totalScore<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:14,fontWeight:"bold",cursor:level===5&&totalScore<1000?"default":"pointer"}}>
-            {level === 5 ? `🔄 ReTry L5 — 1,000 pts` : `Yes, Try Level ${level} Again`}
+          {level===5?(<>
+            <div style={{fontSize:13,color:"#fb7185",marginTop:8,lineHeight:1.6,fontWeight:"bold"}}>⚠️ Retrying Level 5 costs 1,000 pts</div>
+            <div style={{fontSize:12,color:"#bbb",marginTop:4}}>Your balance: {totalScore} pts · {totalScore>=1000?<span style={{color:"#6ee7b7"}}>✓ Enough</span>:<span style={{color:"#fb7185"}}>✗ Not enough</span>}</div>
+          </>):(<div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Progress on Level {level} will be lost.<br/>Total score is kept · Same tiles used.</div>)}
+          <button className="ll-btn" onClick={doLevelReset} disabled={level===5&&totalScore<1000} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:level===5&&totalScore<1000?"rgba(255,255,255,0.1)":"linear-gradient(135deg,#fb7185,#e11d48)",color:level===5&&totalScore<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:14,fontWeight:"bold",cursor:level===5&&totalScore<1000?"default":"pointer"}}>
+            {level===5?"🔄 ReTry L5 — 1,000 pts":`Yes, Try Level ${level} Again`}
           </button>
           <button className="ll-btn" onClick={()=>setShowResetConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
         </div>
@@ -1571,9 +1426,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
           <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
           <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
-          {/* FIX item 11: level 5 retry cost in stuck modal */}
           <button className="ll-btn" onClick={doLevelReset} disabled={level===5&&totalRef.current<1000} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:level===5&&totalRef.current<1000?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#60a5fa,#3b82f6)",color:level===5&&totalRef.current<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:13,fontWeight:"bold",cursor:level===5&&totalRef.current<1000?"default":"pointer"}}>
-            {level===5 ? `🔄 ReTry L5 — 1,000 pts${totalRef.current<1000?" (not enough)":""}` : `🔄 Try Level ${level} Again`}
+            {level===5?`🔄 ReTry L5 — 1,000 pts${totalRef.current<1000?" (not enough)":""}`:` 🔄 Try Level ${level} Again`}
           </button>
           {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
           {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
@@ -1600,23 +1454,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:26,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY!</div>
           <div style={{fontSize:15,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>All 5 levels cleared without buying!</div>
           <div style={{marginTop:16,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
-          {/* FIX items 1 & 2: updated share message and 4-second copy confirmation */}
           <button className="ll-btn" onClick={()=>{
-            const msg = `🌈 It's a PERFECT DAY on LetterLoot!\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n____________________________\nCheck it out. Play free at: letterloot-6k6v.vercel.app/ 🌈`;
-            navigator.clipboard?.writeText(msg);
-            setShareCopied(true);
-            setTimeout(() => setShareCopied(false), 4000);
+            navigator.clipboard?.writeText(getPerfectDayShareText());
+            setShareCopied(true); setTimeout(() => setShareCopied(false), 4000);
           }} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>
-            {shareCopied ? "✓ Copied!" : "📋 Save & Share!"}
+            {shareCopied?"✓ Copied!":"📋 Save & Share!"}
           </button>
-          {shareCopied && <div style={{fontSize:11,color:"#6ee7b7",marginTop:6}}>Your results have been copied! Paste into a text or email to share.</div>}
+          {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:6}}>Your results have been copied! Paste into a text or email to share.</div>}
           <button className="ll-btn replay-btn" onClick={()=>{setPerfectDayAchieved(false);handleFullReset();}} style={{marginTop:12,width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:18,fontWeight:"bold",boxShadow:"0 0 28px rgba(0,200,83,0.6)",border:"none"}}>
             🧠 WOW! You're a Smart One!<br/>Want to Do it Again?
           </button>
         </div>
       </div>}
 
-      {/* FIX item 4: repeat perfect day modal */}
       {showRepeatPerfect&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
           <div style={{fontSize:56}}>🌈</div>
@@ -1628,7 +1478,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <span style={{fontSize:15,color:"#6ee7b7",fontWeight:"bold"}}>Would you like to play again now?</span>
           </div>
           <div style={{display:"flex",gap:10,marginTop:20}}>
-            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{flex:1,padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:15,fontWeight:"bold",border:"none"}}>Yes! 🎮</button>
+            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{flex:1,padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:15,fontWeight:"bold",border:"none",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+              <PencilIcon size={28}/> Yes!
+            </button>
             <button className="ll-btn" onClick={()=>{setShowRepeatPerfect(false);triggerFarewell();}} style={{flex:1,padding:"14px",borderRadius:14,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.3)",color:"#f5f0e8",fontSize:15,fontWeight:"bold"}}>No Thanks</button>
           </div>
         </div>
@@ -1641,36 +1493,30 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
           <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
           <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
-          {/* FIX item 3: use newBestTime state instead of date comparison */}
-          {newBestTime && <div style={{fontSize:12,color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
+          {newBestTime&&<div style={{fontSize:12,color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
           {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
           <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
           <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
         </div>
       </div>}
 
-      {showNameInput&&(
-        <div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:`1px solid ${perfectDay?"rgba(255,215,0,0.35)":"rgba(255,255,255,0.18)"}`,maxWidth:320,width:"90%"}}>
-            <div style={{fontSize:44}}>{perfectDay ? "🌈" : level === 5 ? "🏆" : "📊"}</div>
-            <div style={{fontSize:22,fontWeight:"bold",color:perfectDay?"#f6d365":level===5?"#fda085":"#60a5fa",marginTop:8}}>
-              {perfectDay ? "Perfect Day!" : level === 5 ? "Level 5 Complete!" : `Level ${level} — Game Over`}
-            </div>
-            <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
-            <div style={{fontSize:13,color:"#6ee7b7",marginTop:4}}>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
-            <div style={{fontSize:12,color:"#aaa",marginTop:4}}>{getShortDate()} · ⏱️ {formatTime(totalTimeRef.current)}</div>
-            {!isGuest&&<div style={{fontSize:11,color:"#a78bfa",marginTop:4}}>☁️ Progress saved to your account</div>}
-            <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:14,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
-            <button className="ll-btn" onClick={async()=>{ await handleSaveScore(); triggerFarewell(); }} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
-            {/* FIX item 9: stats button on end-of-game modal */}
-            <button className="ll-btn" onClick={()=>{setShowNameInput(false);setTab("stats");}} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:13,fontWeight:"bold"}}>📊 View My Stats</button>
-            <button className="ll-btn replay-btn" onClick={()=>{setShowNameInput(false);handleFullReset();}} style={{marginTop:10,width:"100%",padding:"20px",borderRadius:16,background:perfectDay?"linear-gradient(135deg,#00c853,#00e676)":"linear-gradient(135deg,#2979ff,#00b0ff)",color:perfectDay?"#003300":"#fff",fontSize:18,fontWeight:"bold",boxShadow:perfectDay?"0 0 28px rgba(0,200,83,0.6)":"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
-              {perfectDay ? "🧠 WOW! You're a Smart One!\nWant to Do it Again?" : "✏️ Want to Try Again?"}
-            </button>
-            <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
-          </div>
+      {showNameInput&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:`1px solid ${perfectDay?"rgba(255,215,0,0.35)":"rgba(255,255,255,0.18)"}`,maxWidth:320,width:"90%"}}>
+          <div style={{fontSize:44}}>{perfectDay?"🌈":level===5?"🏆":"📊"}</div>
+          <div style={{fontSize:22,fontWeight:"bold",color:perfectDay?"#f6d365":level===5?"#fda085":"#60a5fa",marginTop:8}}>{perfectDay?"Perfect Day!":level===5?"Level 5 Complete!":`Level ${level} — Game Over`}</div>
+          <div style={{fontSize:28,fontWeight:"bold",color:"#fff",marginTop:8}}>{totalScore} pts</div>
+          <div style={{fontSize:13,color:"#6ee7b7",marginTop:4}}>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+          <div style={{fontSize:12,color:"#aaa",marginTop:4}}>{getShortDate()} · ⏱️ {formatTime(totalTimeRef.current)}</div>
+          {!isGuest&&<div style={{fontSize:11,color:"#a78bfa",marginTop:4}}>☁️ Progress saved to your account</div>}
+          <input value={playerName} onChange={e=>setPlayerName(e.target.value)} placeholder="Your name…" style={{width:"100%",marginTop:14,padding:"11px 14px",borderRadius:10,border:"1px solid rgba(255,255,255,0.3)",background:"rgba(255,255,255,0.1)",color:"#f5f0e8",fontSize:15,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}/>
+          <button className="ll-btn" onClick={async()=>{ await handleSaveScore(); triggerFarewell(); }} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Save Score 🏆</button>
+          <button className="ll-btn" onClick={()=>{setShowNameInput(false);setTab("stats");}} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:13,fontWeight:"bold"}}>📊 View My Stats</button>
+          <button className="ll-btn replay-btn" onClick={()=>{setShowNameInput(false);handleFullReset();}} style={{marginTop:10,width:"100%",padding:"20px",borderRadius:16,background:perfectDay?"linear-gradient(135deg,#00c853,#00e676)":"linear-gradient(135deg,#2979ff,#00b0ff)",color:perfectDay?"#003300":"#fff",fontSize:18,fontWeight:"bold",boxShadow:perfectDay?"0 0 28px rgba(0,200,83,0.6)":"0 0 28px rgba(41,121,255,0.6)",border:"none"}}>
+            {perfectDay?"🧠 WOW! You're a Smart One!\nWant to Do it Again?":"✏️ Want to Try Again?"}
+          </button>
+          <button className="ll-btn" onClick={()=>setShowNameInput(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:11}}>Done for now</button>
         </div>
-      )}
+      </div>}
 
       {/* ── HEADER ── */}
       <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"10px 12px 0"}}>
@@ -1690,14 +1536,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               </div>
             )}
           </div>
-
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
             <PencilLogo size={90}/>
             <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"4px 14px",boxShadow:"0 0 18px rgba(139,92,246,0.5)"}}>
               <span style={{fontSize:22,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
             </div>
           </div>
-
           <div style={{display:"flex",alignItems:"center",gap:4}}>
             <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:10,color:musicOn?"#f6d365":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif"}}>🎸</button>
             <button className="tour-btn" onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#ffffff",fontWeight:"bold",background:"rgba(139,92,246,0.4)",cursor:"pointer",fontFamily:"Georgia,serif"}}>?</button>
@@ -1707,7 +1551,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
         <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1,marginBottom:5,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
           <span>{getCalendarDate()}</span>
-          {perfectDay&&<span style={{color:"#6ee7b7",animation:"pulse 2s infinite"}}>🌈 On Track!</span>}
           {isGuest&&<span style={{color:"rgba(255,255,255,0.35)"}}>· Guest Mode</span>}
         </div>
 
@@ -1720,7 +1563,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
         <div style={{display:"flex",gap:5,marginBottom:5}}>
           <div style={{flex:1,background:"rgba(246,211,101,0.12)",border:"1px solid rgba(246,211,101,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
-            <div className={pulseScore ? "pulse-big" : ""} style={{fontSize:14,fontWeight:"bold",color:"#f6d365"}}>{levelScore.toLocaleString()}</div>
+            <div className={pulseScore?"pulse-big":""} style={{fontSize:14,fontWeight:"bold",color:"#f6d365"}}>{levelScore.toLocaleString()}</div>
             <div style={{fontSize:7,color:"rgba(255,255,255,0.75)"}}>THIS LEVEL</div>
           </div>
           <div style={{flex:1,background:"rgba(253,160,133,0.12)",border:"1px solid rgba(253,160,133,0.4)",borderRadius:9,padding:"5px 4px",textAlign:"center"}}>
@@ -1756,7 +1599,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:10,color:"#ffffff",letterSpacing:2,fontWeight:"bold"}}>TIME</div>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{textAlign:"center"}}>
-              <div className={pulseTime ? "pulse-big" : ""} style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(levelTime)}</div>
+              <div className={pulseTime?"pulse-big":""} style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(levelTime)}</div>
               <div style={{fontSize:7,color:"#ffffff",letterSpacing:1,fontWeight:"bold"}}>LEVEL</div>
             </div>
             <div style={{width:1,height:26,background:"rgba(255,255,255,0.2)"}}/>
@@ -1770,13 +1613,20 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           </button>
         </div>
 
-        {/* FIX item 7: tab bar has explicit pointerEvents:all to prevent pause overlay bleed */}
+        {/* Tab bar with ℹ️ Tips */}
         <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginBottom:5,flexWrap:"nowrap",position:"relative",zIndex:10,pointerEvents:"all"}}>
-          <button className="ll-tab" onClick={()=>setTab("play")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="play"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="play"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="play"?"bold":"normal",border:tab==="play"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>✏️ Play</button>
+          {[
+            { id:"play",    label:"✏️ Play" },
+            { id:"badges",  label:"🏅 Badges" },
+            { id:"history", label:"📜 History" },
+            { id:"stats",   label:"📊 Stats" },
+            { id:"info",    label:"ℹ️ Tips" },
+          ].map(t => (
+            <button key={t.id} className="ll-tab" onClick={()=>setTab(t.id)} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>
+              {t.label}
+            </button>
+          ))}
           <div style={{padding:"4px 10px",borderRadius:16,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1}}>✦ L{level} ✦</div>
-          <button className="ll-tab" onClick={()=>setTab("badges")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="badges"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="badges"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="badges"?"bold":"normal",border:tab==="badges"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>🏅 Badges</button>
-          <button className="ll-tab" onClick={()=>setTab("history")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="history"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="history"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="history"?"bold":"normal",border:tab==="history"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>📜 History</button>
-          <button className="ll-tab" onClick={()=>setTab("stats")} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab==="stats"?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab==="stats"?"#1a1a2e":"#f0e8d8",fontWeight:tab==="stats"?"bold":"normal",border:tab==="stats"?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>📊 Stats</button>
         </div>
       </div>
 
@@ -1786,21 +1636,32 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{display:"flex",gap:4,marginBottom:5}}>
             <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
             <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>
-              {/* FIX item 11: show cost for level 5 retry button */}
-              {level===5?"🔄 ReTry L5":"🔄 ReTry L"+level}
-            </button>
+            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>{level===5?"🔄 ReTry L5":"🔄 ReTry L"+level}</button>
             {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1}</button>}
           </div>
+
+          {/* UNDO + Share row */}
+          <div style={{display:"flex",gap:4,marginBottom:5}}>
+            <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
+              disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
+              style={{flex:1,padding:"8px 4px",borderRadius:9,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.3),rgba(225,29,72,0.2))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.6)":"rgba(255,255,255,0.1)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#fda4af":"rgba(255,255,255,0.25)",textAlign:"center",fontWeight:"bold"}}>
+              {undoUsed?"↩️ UNDO Used":!lastValidEntry?"↩️ UNDO (play a word first)":`↩️ UNDO — 1,000 pts`}
+            </button>
+            <button className="ll-btn" onClick={()=>{
+              navigator.clipboard?.writeText("✏️ Play LetterLoot — the daily word puzzle where every letter has a value! Free at: https://letterloot-6k6v.vercel.app");
+              setShareLLCopied(true); setTimeout(()=>setShareLLCopied(false),4000);
+            }} style={{flex:1,padding:"8px 4px",borderRadius:9,fontSize:9,background:"rgba(110,231,183,0.12)",border:"1px solid rgba(110,231,183,0.4)",color:"#6ee7b7",textAlign:"center",fontWeight:"bold"}}>
+              {shareLLCopied?"✓ Copied!":"📤 Share LetterLoot"}
+            </button>
+          </div>
+          {shareLLCopied&&<div style={{textAlign:"center",fontSize:10,color:"#6ee7b7",marginBottom:4}}>Copied! Share with your friends.</div>}
 
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:9,padding:"5px 10px",marginBottom:4,border:"2px solid rgba(255,255,255,0.9)",minHeight:38,animation:shake?"shake 0.4s ease":"none"}}>
             <div style={{display:"flex",gap:4,alignItems:"center",flex:1,flexWrap:"wrap"}}>
               {selected.length===0
                 ?<div style={{color:"rgba(255,255,255,0.35)",fontSize:11,fontStyle:"italic"}}>Tap tiles to build a word…</div>
                 :selected.map(id=>{ const tile=tiles.find(t=>t.id===id); return(
-                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:6,padding:"4px 7px",fontSize:15,fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>
-                    {tile?.letter}
-                  </div>
+                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:6,padding:"4px 7px",fontSize:15,fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>{tile?.letter}</div>
                 );})
               }
             </div>
@@ -1813,13 +1674,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           </div>
 
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative"}}>
-            {paused&&(
-              <div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.82)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:5,backdropFilter:"blur(2px)"}}>
-                <div style={{fontSize:40,marginBottom:8}}>⏸️</div>
-                <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>PAUSED</div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:6}}>Tap Resume above to continue</div>
-              </div>
-            )}
+            {paused&&<div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.82)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:5,backdropFilter:"blur(2px)"}}>
+              <div style={{fontSize:40,marginBottom:8}}>⏸️</div>
+              <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>PAUSED</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:6}}>Tap Resume above to continue</div>
+            </div>}
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:3,marginBottom:3}}>
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; return(
@@ -1833,86 +1692,50 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           </div>
 
           {longestWordToday&&<div style={{textAlign:"center",marginTop:6,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters)</div>}
-
-          <div style={{textAlign:"center",marginTop:8}}>
-            <span onClick={()=>{setTourStep(0);setShowTour(true);}} style={{fontSize:10,color:"rgba(167,139,250,0.7)",cursor:"pointer",textDecoration:"underline"}}>↺ Replay Tour</span>
-          </div>
-
+          <div style={{textAlign:"center",marginTop:8}}><span onClick={()=>{setTourStep(0);setShowTour(true);}} style={{fontSize:10,color:"rgba(167,139,250,0.7)",cursor:"pointer",textDecoration:"underline"}}>↺ Replay Tour</span></div>
           {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.1)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(167,139,250,0.3)",textAlign:"center"}}>
             <div style={{fontSize:11,color:"#a78bfa",fontWeight:"bold"}}>☁️ Playing as Guest</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>Create a free account to save progress across devices</div>
             <button className="ll-btn" onClick={onSignOut} style={{marginTop:6,padding:"5px 14px",borderRadius:16,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:10,fontWeight:"bold"}}>Create Account →</button>
           </div>}
-
           <div style={{textAlign:"center",marginTop:8}}>
             <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
           </div>
         </div>
       )}
 
-      {/* ── BADGES TAB ── FIX item 10: three sections */}
+      {/* ── BADGES TAB ── */}
       {tab==="badges"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-
-          {/* Daily Badges */}
           <div style={{marginBottom:14}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>☀️ DAILY BADGES</div>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:7,paddingLeft:4}}>Reset each day — earn them fresh every session</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
               {BADGE_DEFS.filter(b=>b.scope==="daily"||b.scope==="all").map(b=>{
-                const earned = b.scope==="all" ? dailyBadgeIds.includes(b.id) : dailyBadgeIds.includes(b.id);
-                return(
-                  <div key={b.id+"_daily"} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-                    <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>
-                      {renderBadgeIcon(b)}
-                    </div>
-                    <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
-                    {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ TODAY</div>}
-                  </div>
-                );
+                const earned = dailyBadgeIds.includes(b.id);
+                return(<div key={b.id+"_d"} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+                  <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
+                  <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
+                  <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
+                  {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ TODAY</div>}
+                </div>);
               })}
             </div>
           </div>
-
-          {/* Weekly Badges */}
-          <div style={{marginBottom:14}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>📅 WEEKLY BADGES</div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:7,paddingLeft:4}}>Reset each week — earn them again every week</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-              {BADGE_DEFS.filter(b=>b.scope==="weekly"||b.scope==="all").map(b=>{
-                const earned = weeklyBadgeIds.includes(b.id);
-                return(
-                  <div key={b.id+"_weekly"} style={{background:earned?"linear-gradient(135deg,rgba(96,165,250,0.18),rgba(139,92,246,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(96,165,250,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-                    <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>
-                      {renderBadgeIcon(b)}
-                    </div>
-                    <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#60a5fa":"rgba(255,255,255,0.4)"}}>{b.label}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
-                    {earned&&<div style={{marginTop:3,fontSize:8,color:"#60a5fa",letterSpacing:2}}>✓ THIS WEEK</div>}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Lifetime Badges */}
           {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
             <div key={cat} style={{marginBottom:14}}>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>🏆 LIFETIME — {title}</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
                 {BADGE_DEFS.filter(b=>(b.scope==="lifetime"||b.scope==="all")&&b.cat===cat).map(b=>{
                   const earned = lifetimeBadgeIds.includes(b.id);
-                  return(
-                    <div key={b.id+"_life"} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-                      <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>
-                        {renderBadgeIcon(b)}
-                      </div>
-                      <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
-                      <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
-                      {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ EARNED</div>}
-                    </div>
-                  );
+                  const badgeDate = statsData.spaceBadgeDates?.[b.id];
+                  return(<div key={b.id+"_l"} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
+                    <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
+                    <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
+                    {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ EARNED{badgeDate?` · ${badgeDate}`:""}</div>}
+                    {b.id==="infinity"&&statsData.infinityBest>0&&<div style={{fontSize:9,color:"#a78bfa",marginTop:2}}>Best: {statsData.infinityBest} pts</div>}
+                  </div>);
                 })}
               </div>
             </div>
@@ -1921,36 +1744,48 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       )}
 
       {/* ── HISTORY TAB ── */}
-      {tab==="history"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          {submitted.length===0
-            ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No words yet — go loot some letters!</div>
-            :<div style={{display:"flex",flexDirection:"column",gap:5}}>
-              {[...submitted].reverse().map((s,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:10,padding:"8px 12px"}}>
-                  <div>
-                    <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:1}}>{s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
+      {tab==="history"&&(()=>{
+        const history = getDailyHistory();
+        const allGames = history.games || [];
+        const hasAny = allGames.some(g => g && g.length > 0);
+        const grandTotal = allGames.flat().filter(s=>s&&s.valid).reduce((a,s)=>a+s.score,0);
+        return (
+          <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+            {!hasAny
+              ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No words yet — go loot some letters!</div>
+              :<div style={{display:"flex",flexDirection:"column",gap:5}}>
+                {allGames.map((game, gi) => game && game.length > 0 ? (
+                  <div key={gi}>
+                    {allGames.filter(g=>g&&g.length>0).length > 1 && (
+                      <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.35)",letterSpacing:2,padding:"6px 0",marginBottom:2}}>— Game {gi+1} —</div>
+                    )}
+                    {[...game].reverse().map((s,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:10,padding:"8px 12px",marginBottom:4}}>
+                        <div>
+                          <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}</div>
+                          <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:1}}>{s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:17,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
+                          {s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>pts</div>}
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:17,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
-                    {s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>pts</div>}
-                  </div>
+                ) : null)}
+                <div style={{textAlign:"center",padding:"10px",background:"rgba(255,255,255,0.07)",borderRadius:10,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>TODAY'S TOTAL ({allGames.filter(g=>g&&g.length>0).length} game{allGames.filter(g=>g&&g.length>0).length!==1?"s":""})</div>
+                  <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365"}}>{grandTotal}</div>
                 </div>
-              ))}
-              <div style={{textAlign:"center",padding:"10px",background:"rgba(255,255,255,0.07)",borderRadius:10,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>TODAY'S TOTAL</div>
-                <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365"}}>{totalScore}</div>
               </div>
-            </div>
-          }
-        </div>
-      )}
+            }
+          </div>
+        );
+      })()}
 
       {/* ── STATS TAB ── */}
       {tab==="stats"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-
           <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
             <div style={{fontSize:44,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
@@ -1960,22 +1795,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </div>
             {!isGuest&&<div style={{marginTop:6,fontSize:10,color:"#a78bfa"}}>☁️ Saved to your account</div>}
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📅 DAYS & STREAKS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Total Days</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:26,fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div>
-                <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Current Streak</div>
-                {statsData.currentStreak>0&&statsData.currentStreak===statsData.longestStreak&&<div style={{fontSize:8,color:"#6ee7b7"}}>Personal Best!</div>}
-              </div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Current Streak</div>{statsData.currentStreak>0&&statsData.currentStreak===statsData.longestStreak&&<div style={{fontSize:8,color:"#6ee7b7"}}>Personal Best!</div>}</div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>🏆 {statsData.longestStreak}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Longest Streak</div></div>
             </div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAYS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
@@ -1984,7 +1813,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div></div>
             </div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📈 DAILY SCORES</div>
             <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>
@@ -2009,90 +1837,44 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               ))}
             </div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div>
-                {statsData.highWordTodayWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordTodayWord}</div>}
-                <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div>
-              </div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div>{statsData.highWordTodayWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordTodayWord}</div>}<div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}>
-                <div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div>
-                {statsData.highWordAllTimeWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordAllTimeWord}</div>}
-                <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div>
-              </div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div>{statsData.highWordAllTimeWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordAllTimeWord}</div>}<div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div></div>
             </div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🏆 BEST SCORE PER LEVEL</div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
-              {[1,2,3,4,5].map(lvl => {
-                const best = statsData.bestScorePerLevel?.[String(lvl)];
-                return (
-                  <div key={lvl} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",borderRadius:9,padding:"7px 12px",border:best?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.07)"}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <div style={{fontSize:11,fontWeight:"bold",color:best?"#f6d365":"rgba(255,255,255,0.3)",minWidth:28}}>L{lvl}</div>
-                      {best && <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{best.date}</div>}
-                    </div>
-                    <div style={{fontSize:best?17:13,fontWeight:"bold",color:best?"#fda085":"rgba(255,255,255,0.2)"}}>
-                      {best ? `${best.score.toLocaleString()} pts` : "—"}
-                    </div>
-                  </div>
-                );
+              {[1,2,3,4,5].map(lvl=>{
+                const best=statsData.bestScorePerLevel?.[String(lvl)];
+                return(<div key={lvl} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",borderRadius:9,padding:"7px 12px",border:best?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.07)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:11,fontWeight:"bold",color:best?"#f6d365":"rgba(255,255,255,0.3)",minWidth:28}}>L{lvl}</div>{best&&<div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{best.date}</div>}</div>
+                  <div style={{fontSize:best?17:13,fontWeight:"bold",color:best?"#fda085":"rgba(255,255,255,0.2)"}}>{best?`${best.score.toLocaleString()} pts`:"—"}</div>
+                </div>);
               })}
             </div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>⏱️ FASTEST LEVEL TIMES</div>
             <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:10}}>
-              {[1,2,3,4,5].map(l=>(
-                <button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:36,height:36,borderRadius:8,fontSize:11,fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.6)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>
-              ))}
+              {[1,2,3,4,5].map(l=>(<button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:36,height:36,borderRadius:8,fontSize:11,fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.6)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>))}
             </div>
-            {(()=>{
-              const best = statsData.fastestLevels?.[selectedLevelView];
-              return best ? (
-                <div style={{textAlign:"center",marginBottom:8,background:"rgba(96,165,250,0.1)",borderRadius:9,padding:"8px",border:"1px solid rgba(96,165,250,0.3)"}}>
-                  <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginBottom:2,letterSpacing:1}}>PERSONAL BEST</div>
-                  <div style={{fontSize:22,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(best.seconds)}</div>
-                  {best.date && <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:2}}>{best.date}</div>}
-                </div>
-              ) : (
-                <div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0",marginBottom:8}}>No best time yet for Level {selectedLevelView}</div>
-              );
-            })()}
-            {!timeLeaderboard.levels?.[selectedLevelView]?.length
-              ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>No times yet — clear the board to record!</div>
-              :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(
-                <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:5}}>
-                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div>
-                  <div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
-                  <div style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
-                </div>
-              ))
+            {(()=>{ const best=statsData.fastestLevels?.[selectedLevelView]; return best?(<div style={{textAlign:"center",marginBottom:8,background:"rgba(96,165,250,0.1)",borderRadius:9,padding:"8px",border:"1px solid rgba(96,165,250,0.3)"}}><div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginBottom:2,letterSpacing:1}}>PERSONAL BEST</div><div style={{fontSize:22,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(best.seconds)}</div>{best.date&&<div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:2}}>{best.date}</div>}</div>):(<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0",marginBottom:8}}>No best time yet for Level {selectedLevelView}</div>); })()}
+            {!timeLeaderboard.levels?.[selectedLevelView]?.length?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>No times yet — clear the board to record!</div>
+              :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:5}}><div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div><div style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
             }
             <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:2,marginBottom:8}}>🌈 PERFECT DAY TIMES</div>
-              {!timeLeaderboard.perfect?.length
-                ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0"}}>No Perfect Day times yet!</div>
-                :timeLeaderboard.perfect.slice(0,5).map((entry,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.06))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:4}}>
-                    <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div>
-                    <div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div>
-                    <div style={{fontSize:15,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div>
-                  </div>
-                ))
+              {!timeLeaderboard.perfect?.length?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0"}}>No Perfect Day times yet!</div>
+                :timeLeaderboard.perfect.slice(0,5).map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.06))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:4}}><div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div><div style={{fontSize:15,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
               }
             </div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📚 DICTIONARY BREAKDOWN</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
@@ -2103,19 +1885,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#f6d365"}}>{(statsData.collegiateWords||0)+(statsData.medicalWords||0)}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Total Valid</div></div>
             </div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>📏 LONGEST WORDS</div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}>
-              <div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>Today's Best</div>
-              <div style={{fontSize:12,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{statsData.longestWordToday||"—"}</div>
-            </div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0"}}>
-              <div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>All-Time Best</div>
-              <div style={{fontSize:12,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{statsData.longestWordAllTime||"—"}</div>
-            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>Today's Best</div><div style={{fontSize:12,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{statsData.longestWordToday||"—"}</div></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>All-Time Best</div><div style={{fontSize:12,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{statsData.longestWordAllTime||"—"}</div></div>
           </div>
-
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>🌟 LONG WORD BONUSES</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center"}}>
@@ -2128,13 +1902,52 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               ))}
             </div>
           </div>
-
           <div style={{textAlign:"center",marginBottom:8}}>
             <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(139,92,246,0.15)",border:"1px solid rgba(167,139,250,0.4)",color:"#a78bfa",padding:"8px 20px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>↺ Replay Tour</button>
           </div>
-
           <div style={{textAlign:"center",marginBottom:8}}>
-            <button onClick={()=>{const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,highWordTodayWord:"",highWordAllTimeWord:"",fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},bestScorePerLevel:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0}};saveLocalStats(def);setStatsData(def);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
+            <button onClick={()=>{const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,highWordTodayWord:"",highWordAllTimeWord:"",fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},bestScorePerLevel:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0},infinityBest:0,infinityBestDate:"",spaceBadgeDates:{}};saveLocalStats(def);setStatsData(def);}} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── INFO / TIPS TAB ── item 10 */}
+      {tab==="info"&&(
+        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          {/* Header card */}
+          <div style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2),rgba(96,165,250,0.15))",borderRadius:16,padding:"18px 16px",marginBottom:12,border:"2px solid rgba(167,139,250,0.45)",textAlign:"center"}}>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><PencilLogo size={100}/></div>
+            <div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>HINTS & TIPS</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>Play smarter · Loot harder</div>
+          </div>
+
+          {/* Tip cards */}
+          {TIPS.map((tip, i) => (
+            <div key={i} style={{
+              background: i === TIPS.length - 1
+                ? "linear-gradient(135deg,rgba(0,200,83,0.12),rgba(0,230,118,0.07))"
+                : "rgba(255,255,255,0.05)",
+              border: i === TIPS.length - 1
+                ? "1px solid rgba(0,200,83,0.35)"
+                : "1px solid rgba(255,255,255,0.12)",
+              borderRadius:13, padding:"14px 16px", marginBottom:8,
+              display:"flex", gap:13, alignItems:"flex-start"
+            }}>
+              <div style={{fontSize:26,flexShrink:0,marginTop:1,minWidth:32,textAlign:"center"}}>{tip.emoji}</div>
+              <div style={{flex:1}}>
+                <div style={{
+                  fontSize:13, fontWeight:"bold", marginBottom:5,
+                  color: i === TIPS.length - 1 ? "#6ee7b7" : "#f6d365"
+                }}>{tip.title}</div>
+                <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.65}}>{tip.body}</div>
+              </div>
+            </div>
+          ))}
+
+          <div style={{textAlign:"center",marginBottom:16,marginTop:4}}>
+            <button className="ll-btn" onClick={()=>setTab("play")} style={{padding:"11px 28px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",letterSpacing:1}}>
+              ✏️ Back to Playing!
+            </button>
           </div>
         </div>
       )}

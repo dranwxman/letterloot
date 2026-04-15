@@ -832,6 +832,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [pulseTime, setPulseTime] = useState(false);
   const [newBestTime, setNewBestTime] = useState(ss?.newBestTime || false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [showDailyGreeting, setShowDailyGreeting] = useState(false);
   const [shareLLCopied, setShareLLCopied] = useState(false);
   const [undoUsed, setUndoUsed] = useState(ss?.undoUsed || false);
   const [lastValidEntry, setLastValidEntry] = useState(null);
@@ -908,6 +909,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         setPlayerName(localStorage.getItem("ll_name") || "");
       }
       if (!localStorage.getItem("ll_tour_done")) setShowTour(true);
+      // Daily greeting — once per calendar day
+      const greetKey = "ll_greeted_" + getTodayKey();
+      if (!localStorage.getItem(greetKey)) {
+        localStorage.setItem(greetKey, "1");
+        setTimeout(() => setShowDailyGreeting(true), 800);
+      }
       if (Notification.permission === "granted") scheduleNotifications();
     };
     init();
@@ -1519,7 +1526,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       </div>}
 
       {/* ── HEADER ── */}
-      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"6px 10px 0"}}>
+      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"10px 12px 0"}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:5}}>
           <div style={{display:"flex",alignItems:"center",gap:5}}>
             {editingName?(
@@ -1537,114 +1544,91 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             )}
           </div>
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-            <PencilLogo size={70}/>
-            <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"2px 10px",boxShadow:"0 0 12px rgba(139,92,246,0.5)"}}>
-              <span style={{fontSize:17,fontWeight:"bold",letterSpacing:3,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+            <PencilLogo size={90}/>
+            <div style={{background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:12,padding:"4px 14px",boxShadow:"0 0 18px rgba(139,92,246,0.5)"}}>
+              <span style={{fontSize:22,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:4}}>
             <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:10,color:musicOn?"#f6d365":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif"}}>🎸</button>
             <button className="tour-btn" onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:"50%",width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,color:"#ffffff",fontWeight:"bold",background:"rgba(139,92,246,0.4)",cursor:"pointer",fontFamily:"Georgia,serif"}}>?</button>
-            <button onClick={onSignOut} style={{background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"rgba(255,255,255,0.4)",fontFamily:"Georgia,serif"}}>{isGuest?"Login":"Sign Out"}</button>
+            <button onClick={onSignOut} style={{background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"rgba(255,255,255,0.85)",fontFamily:"Georgia,serif"}}>{isGuest?"Login":"Sign Out"}</button>
           </div>
         </div>
 
-        <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1,marginBottom:3,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
-          <span>{getCalendarDate()}</span>
-          {isGuest&&<span style={{color:"rgba(255,255,255,0.35)"}}>· Guest Mode</span>}
+        <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.5)",letterSpacing:1,marginBottom:5,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+          <span style={{color:"rgba(255,255,255,0.75)"}}>{getCalendarDate()}</span>
+          {isGuest&&<span style={{color:"rgba(255,255,255,0.55)"}}>· Guest Mode</span>}
         </div>
 
-        <div style={{background:"rgba(255,255,255,0.12)",borderRadius:6,height:4,overflow:"hidden",marginBottom:2}}>
+        <div style={{background:"rgba(255,255,255,0.12)",borderRadius:8,height:5,overflow:"hidden",marginBottom:3}}>
           <div style={{height:"100%",width:`${((level-1)/5)*100}%`,background:"linear-gradient(90deg,#f6d365,#fda085)",borderRadius:8,transition:"width 0.5s ease"}}/>
         </div>
-        <div style={{display:"flex",justifyContent:"space-between",padding:"0 2px",marginBottom:3}}>
+        <div style={{display:"flex",justifyContent:"space-between",padding:"0 2px",marginBottom:6}}>
           {[1,2,3,4,5].map(l=>(<div key={l} style={{fontSize:8,color:l<=level?"#f6d365":"rgba(255,255,255,0.35)",fontWeight:l===level?"bold":"normal"}}>L{l}</div>))}
         </div>
 
-        <div style={{display:"flex",gap:4,marginBottom:4}}>
-          <div style={{flex:1,background:"rgba(246,211,101,0.12)",border:"1px solid rgba(246,211,101,0.4)",borderRadius:8,padding:"3px 4px",textAlign:"center"}}>
-            <div className={pulseScore?"pulse-big":""} style={{fontSize:12,fontWeight:"bold",color:"#f6d365"}}>{levelScore.toLocaleString()}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>THIS LEVEL</div>
+        <div style={{display:"flex",gap:5,marginBottom:5}}>
+          <div style={{flex:1,background:"rgba(240,147,251,0.1)",border:"1px solid rgba(240,147,251,0.4)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:11,fontWeight:"bold",color:"#f6d365"}}>{levelScore.toLocaleString()}</div>
+            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>LVL SCORE</div>
           </div>
-          <div style={{flex:1,background:"rgba(253,160,133,0.12)",border:"1px solid rgba(253,160,133,0.4)",borderRadius:8,padding:"3px 4px",textAlign:"center"}}>
-            <div style={{fontSize:12,fontWeight:"bold",color:"#fda085"}}>{totalScore.toLocaleString()}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>TODAY</div>
+          <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#60a5fa"}}>{availableTiles.length}</div>
+            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>REMAINING LETTERS</div>
           </div>
-          <div style={{flex:1,background:"rgba(110,231,183,0.12)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:8,padding:"3px 4px",textAlign:"center"}}>
-            <div style={{fontSize:12,fontWeight:"bold",color:"#6ee7b7"}}>{lifetimePoints.toLocaleString()}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>💰 LIFETIME</div>
+          <div style={{flex:1,background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#6ee7b7"}}>{vowelsRemaining}</div>
+            <div style={{fontSize:6.5,color:"rgba(255,255,255,0.75)"}}>VOWELS</div>
           </div>
-        </div>
-
-        <div style={{display:"flex",gap:4,marginBottom:4}}>
-          <div style={{flex:1,background:"rgba(240,147,251,0.1)",border:"1px solid rgba(240,147,251,0.4)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
-            <div style={{fontSize:11,fontWeight:"bold",color:"#f093fb"}}>{lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length}</div>
-            <div style={{fontSize:6.5,color:"rgba(255,255,255,0.75)"}}>BADGES</div>
-          </div>
-          <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
-            <div style={{fontSize:11,fontWeight:"bold",color:"#60a5fa"}}>{availableTiles.length}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>REMAIN.</div>
-          </div>
-          <div style={{flex:1,background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
-            <div style={{fontSize:11,fontWeight:"bold",color:"#6ee7b7"}}>{vowelsRemaining}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>VOWELS</div>
-          </div>
-          <div style={{flex:1,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
-            <div style={{fontSize:11,fontWeight:"bold",color:"#a78bfa"}}>{consonantsRemaining}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>CONSON.</div>
+          <div style={{flex:1,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:9,padding:"5px 3px",textAlign:"center"}}>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa"}}>{consonantsRemaining}</div>
+            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>CONSONANTS</div>
           </div>
         </div>
 
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,255,255,0.07)",borderRadius:10,padding:"3px 8px",marginBottom:4,border:"1px solid rgba(255,255,255,0.2)"}}>
-          <div style={{fontSize:9,color:"#ffffff",letterSpacing:2,fontWeight:"bold"}}>TIME</div>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:"rgba(255,255,255,0.07)",borderRadius:10,padding:"5px 10px",marginBottom:5,border:"1px solid rgba(255,255,255,0.2)"}}>
+          <div style={{fontSize:10,color:"#ffffff",letterSpacing:2,fontWeight:"bold"}}>TIME</div>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
             <div style={{textAlign:"center"}}>
-              <div className={pulseTime?"pulse-big":""} style={{fontSize:13,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(levelTime)}</div>
-              <div style={{fontSize:6,color:"#ffffff",letterSpacing:1,fontWeight:"bold"}}>LEVEL</div>
+              <div className={pulseTime?"pulse-big":""} style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(levelTime)}</div>
+              <div style={{fontSize:7,color:"#ffffff",letterSpacing:1,fontWeight:"bold"}}>LEVEL</div>
             </div>
             <div style={{width:1,height:26,background:"rgba(255,255,255,0.2)"}}/>
             <div style={{textAlign:"center"}}>
-              <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace"}}>{formatTime(totalTime)}</div>
-              <div style={{fontSize:6,color:"#ffffff",letterSpacing:1,fontWeight:"bold"}}>TOTAL</div>
+              <div style={{fontSize:15,fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace"}}>{formatTime(totalTime)}</div>
+              <div style={{fontSize:7,color:"#ffffff",letterSpacing:1,fontWeight:"bold"}}>TOTAL</div>
             </div>
           </div>
-          <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1.5px solid rgba(255,255,255,0.5)",borderRadius:16,padding:"3px 8px",fontSize:10,color:paused?"#003300":"#ffffff",fontWeight:"bold"}}>
-            {paused?"▶️":"⏸️"}
+          <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1.5px solid rgba(255,255,255,0.5)",borderRadius:16,padding:"4px 10px",fontSize:11,color:paused?"#003300":"#ffffff",fontWeight:"bold"}}>
+            {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
         </div>
 
         {/* Tab bar with ℹ️ Tips */}
-        <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginBottom:4,flexWrap:"nowrap",position:"relative",zIndex:10,pointerEvents:"all"}}>
+        <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginBottom:5,flexWrap:"nowrap",position:"relative",zIndex:10,pointerEvents:"all"}}>
           {[
             { id:"play",    label:"✏️ Play" },
-            { id:"badges",  label:"🏅 Badges" },
-            { id:"history", label:"📜 History" },
+                  { id:"history", label:"📜 History" },
             { id:"stats",   label:"📊 Stats" },
             { id:"info",    label:"ℹ️ Tips" },
           ].map(t => (
-            <button key={t.id} className="ll-tab" onClick={()=>setTab(t.id)} style={{padding:"3px 7px",borderRadius:14,fontSize:8,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>
+            <button key={t.id} className="ll-tab" onClick={()=>setTab(t.id)} style={{padding:"4px 9px",borderRadius:16,fontSize:9,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap"}}>
               {t.label}
             </button>
           ))}
-          <div style={{padding:"3px 8px",borderRadius:14,fontSize:8,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1}}>✦ L{level} ✦</div>
+          <div style={{padding:"4px 10px",borderRadius:16,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1}}>✦ L{level} ✦</div>
         </div>
       </div>
 
       {/* ── PLAY TAB ── */}
       {tab==="play"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",paddingBottom:130,animation:"slideUp 0.3s ease"}}>
-          <div style={{display:"flex",gap:4,marginBottom:5}}>
-            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
-            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>{level===5?"🔄 ReTry L5":"🔄 ReTry L"+level}</button>
-            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1}</button>}
-          </div>
-
+        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {/* UNDO + Share row */}
           <div style={{display:"flex",gap:4,marginBottom:5}}>
             <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
               disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
-              style={{flex:1,padding:"8px 4px",borderRadius:9,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.3),rgba(225,29,72,0.2))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.6)":"rgba(255,255,255,0.1)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#fda4af":"rgba(255,255,255,0.25)",textAlign:"center",fontWeight:"bold"}}>
+              style={{flex:1,padding:"8px 4px",borderRadius:9,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.1)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.25)",textAlign:"center",fontWeight:"bold"}}>
               {undoUsed?"↩️ UNDO Used":!lastValidEntry?"↩️ UNDO (play a word first)":`↩️ UNDO — 1,000 pts`}
             </button>
             <button className="ll-btn" onClick={()=>{
@@ -1653,6 +1637,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             }} style={{flex:1,padding:"8px 4px",borderRadius:9,fontSize:9,background:"rgba(110,231,183,0.12)",border:"1px solid rgba(110,231,183,0.4)",color:"#6ee7b7",textAlign:"center",fontWeight:"bold"}}>
               {shareLLCopied?"✓ Copied!":"📤 Share LetterLoot"}
             </button>
+            <button className="ll-btn" onClick={()=>{setTourStep(0);setShowTour(true);}} style={{flex:1,padding:"8px 4px",borderRadius:9,fontSize:9,background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",color:"#c4b5fd",textAlign:"center",fontWeight:"bold"}}>↺ Tour</button>
           </div>
           {shareLLCopied&&<div style={{textAlign:"center",fontSize:10,color:"#6ee7b7",marginBottom:4}}>Copied! Share with your friends.</div>}
 
@@ -1691,8 +1676,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             ))}
           </div>
 
-          {longestWordToday&&<div style={{textAlign:"center",marginTop:6,fontSize:10,color:"rgba(255,255,255,0.5)"}}>📏 Today's longest: <span style={{color:"#a78bfa",fontWeight:"bold"}}>{longestWordToday}</span> ({longestWordToday.length} letters)</div>}
-          <div style={{textAlign:"center",marginTop:8}}><span onClick={()=>{setTourStep(0);setShowTour(true);}} style={{fontSize:10,color:"rgba(167,139,250,0.7)",cursor:"pointer",textDecoration:"underline"}}>↺ Replay Tour</span></div>
           {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.1)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(167,139,250,0.3)",textAlign:"center"}}>
             <div style={{fontSize:11,color:"#a78bfa",fontWeight:"bold"}}>☁️ Playing as Guest</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>Create a free account to save progress across devices</div>
@@ -1786,6 +1769,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── STATS TAB ── */}
       {tab==="stats"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          {/* Badges button at top of stats */}
+          <button className="ll-btn" onClick={()=>setTab("badges")} style={{width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,rgba(240,147,251,0.25),rgba(167,139,250,0.2))",border:"2px solid rgba(240,147,251,0.6)",color:"#f093fb",fontSize:15,fontWeight:"bold",marginBottom:10,letterSpacing:1}}>🏅 View My Badges ({lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length} earned)</button>
           <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
             <div style={{fontSize:44,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
@@ -1824,8 +1809,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </div>
             <div style={{display:"flex",justifyContent:"space-around",paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Daily Avg</div></div>
-              <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#6ee7b7"}}>{allTimeTotal.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All-Time Total</div></div>
             </div>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginTop:10,marginBottom:5,textAlign:"center",letterSpacing:1}}>LAST 7 DAYS</div>
             <div style={{display:"flex",gap:3,alignItems:"flex-end",height:44,justifyContent:"space-around"}}>
@@ -1952,32 +1935,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       )}
 
-      {/* ── STICKY BOTTOM BAR (Play tab only) ── */}
-      {tab==="play"&&(
-        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:500,background:"rgba(10,8,32,0.97)",borderTop:"1px solid rgba(255,255,255,0.18)",backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",paddingBottom:"env(safe-area-inset-bottom,0px)"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",margin:"6px 10px 4px",borderRadius:9,padding:"5px 10px",border:"2px solid rgba(255,255,255,0.85)",minHeight:36,animation:shake?"shake 0.4s ease":"none"}}>
-            <div style={{display:"flex",gap:4,alignItems:"center",flex:1,flexWrap:"wrap"}}>
-              {selected.length===0
-                ?<div style={{color:"rgba(255,255,255,0.35)",fontSize:11,fontStyle:"italic"}}>Tap tiles to build a word…</div>
-                :selected.map(id=>{ const tile=tiles.find(t=>t.id===id); return(
-                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:6,padding:"3px 6px",fontSize:14,fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>{tile?.letter}</div>
-                );})}
+      {/* ── DAILY GREETING ── */}
+      {showDailyGreeting&&(()=>{
+        const streak = statsData.currentStreak || 1;
+        const streakMsg = streak === 1 ? "Day 1 — great to have you!" : `Day ${streak} in a row!`;
+        const greetName = playerName ? `Hi ${playerName}! ` : "Welcome back! ";
+        return (
+          <div style={{position:"fixed",inset:0,zIndex:99997,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowDailyGreeting(false)}>
+            <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"2px solid rgba(246,211,101,0.45)",maxWidth:320,width:"90%"}}>
+              <div style={{fontSize:48}}>✏️</div>
+              <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:10}}>{greetName}</div>
+              <div style={{fontSize:18,fontWeight:"bold",color:"#6ee7b7",marginTop:6}}>🔥 {streakMsg}</div>
+              <div style={{fontSize:15,color:"rgba(255,255,255,0.8)",marginTop:12,lineHeight:1.7}}>Let's get to Looting!</div>
+              <button className="ll-btn" onClick={()=>setShowDailyGreeting(false)} style={{marginTop:20,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>Let's Go! 🎯</button>
             </div>
-            {currentWord.length>0&&(
-              <div style={{textAlign:"right",marginLeft:8,flexShrink:0}}>
-                <div style={{fontSize:12,color:"#f6d365",fontWeight:"bold"}}>+{currentScore}{getLongWordBonus(currentWord.length)>0&&<span style={{color:"#6ee7b7",fontSize:10}}> +{getLongWordBonus(currentWord.length)}!</span>}</div>
-                <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{currentWord.length} letters</div>
-              </div>
-            )}
           </div>
-          <div style={{display:"flex",gap:4,padding:"0 10px 8px"}}>
-            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
-            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>{level===5?"🔄 L5":"🔄 L"+level}</button>
-            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 L{level+1}</button>}
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

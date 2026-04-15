@@ -1640,7 +1640,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <button className="ll-btn" onClick={()=>{setTourStep(0);setShowTour(true);}} style={{flex:1,padding:"8px 4px",borderRadius:9,fontSize:9,background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",color:"#c4b5fd",textAlign:"center",fontWeight:"bold"}}>↺ Tour</button>
           </div>
           {shareLLCopied&&<div style={{textAlign:"center",fontSize:10,color:"#6ee7b7",marginBottom:4}}>Copied! Share with your friends.</div>}
-
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:9,padding:"5px 10px",marginBottom:4,border:"2px solid rgba(255,255,255,0.9)",minHeight:38,animation:shake?"shake 0.4s ease":"none"}}>
             <div style={{display:"flex",gap:4,alignItems:"center",flex:1,flexWrap:"wrap"}}>
               {selected.length===0
@@ -1676,14 +1675,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             ))}
           </div>
 
+          {/* ── ACTION BUTTONS below tiles ── */}
+          <div style={{display:"flex",gap:4,marginTop:6,marginBottom:4}}>
+            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
+            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
+            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>{level===5?"🔄 Retry L5":"🔄 Retry L"+level}</button>
+            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1}</button>}
+          </div>
+
           {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.1)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(167,139,250,0.3)",textAlign:"center"}}>
             <div style={{fontSize:11,color:"#a78bfa",fontWeight:"bold"}}>☁️ Playing as Guest</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>Create a free account to save progress across devices</div>
             <button className="ll-btn" onClick={onSignOut} style={{marginTop:6,padding:"5px 14px",borderRadius:16,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:10,fontWeight:"bold"}}>Create Account →</button>
           </div>}
-          <div style={{textAlign:"center",marginTop:8}}>
-            <button onClick={handleFullReset} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>↺ Reset Full Game</button>
-          </div>
         </div>
       )}
 

@@ -401,7 +401,9 @@ function getLifetimeData() {
     if (!data) return { total: 0, lastPlayedDate: null, missedDays: 0 };
     const todayKey = getTodayKey(); const yesterdayKey = getYesterdayKey();
     if (!data.lastPlayedDate || data.lastPlayedDate === todayKey || data.lastPlayedDate === yesterdayKey) return { ...data, missedDays: 0 };
-    const last = new Date(data.lastPlayedDate); const today = new Date(todayKey);
+    // Parse date keys as UTC midnight to avoid timezone-shifted day differences
+    const parseUTC = (key) => { const [y,m,d] = key.split('-').map(Number); return Date.UTC(y, m-1, d); };
+    const last = parseUTC(data.lastPlayedDate); const today = parseUTC(todayKey);
     const diffDays = Math.floor((today - last) / 86400000);
     const missedDays = diffDays - 1;
     if (missedDays >= 3) return { total: 0, lastPlayedDate: null, missedDays: 3, wasReset: true, originalTotal: data.total };
@@ -890,7 +892,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
         }
         if (dailySession && dailySession.level != null) {
-          setLevel(dailySession.level || 1);
+          // Only use cloud session if local session is absent or cloud is ahead
+          const localSess = loadLocalSession();
+          const cloudLevel = dailySession.level || 1;
+          const localLevel = localSess?.level || 1;
+          const useCloud = !localSess || cloudLevel >= localLevel;
+          if (!useCloud) {
+            // Local is ahead — skip cloud restore, keep local state
+          } else {
+          setLevel(cloudLevel);
           setTotalScore(dailySession.total_score || 0); totalRef.current = dailySession.total_score || 0;
           setLevelScore(dailySession.level_score || 0); levelScoreRef.current = dailySession.level_score || 0;
           if (dailySession.tiles && dailySession.tiles.length > 0) setTiles(dailySession.tiles);
@@ -902,6 +912,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
           if (dailySession.level_complete) setLevelComplete(true);
           if (dailySession.undo_used) setUndoUsed(true);
+          } // end useCloud
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
         if (playerData?.name) setPlayerName(playerData.name);
@@ -1044,8 +1055,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     if (level === 5) {
       if (totalRef.current < 1000) return;
       totalRef.current -= 1000; setTotalScore(totalRef.current);
-      setPerfectDaySync(false);
     }
+    setPerfectDaySync(false); // Any retry disqualifies Perfect Day
     levelResetCount.current += 1;
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
     setSelected([]); resetLevelTimer(); setNewBestTime(false);

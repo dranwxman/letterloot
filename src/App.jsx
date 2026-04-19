@@ -839,7 +839,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [newBestTime, setNewBestTime] = useState(ss?.newBestTime || false);
   const [shareCopied, setShareCopied] = useState(false);
   const [shareLLCopied, setShareLLCopied] = useState(false);
-  const [showIntro, setShowIntro] = useState(() => !localStorage.getItem("ll_intro_seen"));
+  const [showIntro, setShowIntro] = useState(() => {
+    try {
+      const sess = JSON.parse(localStorage.getItem("ll_session") || "null");
+      const d = new Date();
+      const todayKey = d.getUTCFullYear()+"-"+(d.getUTCMonth()+1)+"-"+d.getUTCDate();
+      const hasActiveGame = sess && sess.savedDate === todayKey && sess.submitted && sess.submitted.length > 0;
+      return !hasActiveGame;
+    } catch { return true; }
+  });
   const CONGRATS_MSGS = [
     "Pure perfection. Every tile, every level, every word. You made it look easy.",
     "Five levels. Zero shortcuts. Today, your brain was unstoppable.",
@@ -1052,6 +1060,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setLevelTime(0); setTotalTime(0); startTimer();
     gameIndexRef.current += 1;
     clearLocalSession();
+    setShowIntro(true);
   }, [startTimer, stopTimer, setPerfectDaySync]);
 
   const doLevelReset = useCallback(() => {
@@ -1321,7 +1330,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         <div style={{marginTop:28,background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"20px",border:"1px solid rgba(255,255,255,0.15)",width:"100%"}}>
           <div style={{fontSize:15,color:"#f5f0e8",lineHeight:1.8}}>Spell words from the tiles.<br/>Every letter has a point value.<br/>Clear all 5 levels for a <span style={{color:"#f6d365",fontWeight:"bold"}}>Perfect Day</span>!</div>
         </div>
-        <button onClick={()=>{ localStorage.setItem("ll_intro_seen","1"); setShowIntro(false); }} style={{marginTop:28,width:"100%",padding:"18px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
+        <button onClick={()=>{ setShowIntro(false); }} style={{marginTop:28,width:"100%",padding:"18px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
         </button>
         <div style={{fontSize:10,color:"rgba(255,255,255,0.35)",marginTop:16}}>New board every day at midnight</div>

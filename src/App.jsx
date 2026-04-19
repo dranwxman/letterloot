@@ -1631,8 +1631,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <button className="ll-btn" onClick={()=>{
               navigator.clipboard?.writeText("✏️ Play LetterLoot — the daily word puzzle where every letter has a value! Free at: https://letterloot-6k6v.vercel.app");
               setShareLLCopied(true); setTimeout(()=>setShareLLCopied(false),4000);
-            }} style={{flex:1,padding:"4px 4px",borderRadius:8,fontSize:9,background:"rgba(245,197,24,0.15)",border:"1px solid rgba(245,197,24,0.5)",color:"#F5C518",textAlign:"center",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-              {shareLLCopied ? <span>✓ Copied!</span> : <><PencilIcon size={36}/><span style={{fontSize:8,color:"#F5C518",fontWeight:"bold",lineHeight:1}}>Share<br/>LetterLoot</span></>}
+            }} style={{flex:1,padding:"4px 4px",borderRadius:8,fontSize:9,background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.6)",color:"#22d3ee",textAlign:"center",fontWeight:"bold",display:"flex",flexDirection:"row",alignItems:"center",justifyContent:"center",gap:4}}>
+              {shareLLCopied ? <span style={{color:"#22d3ee"}}>✓ Copied!</span> : <><span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",letterSpacing:1}}>Share</span><div style={{display:"flex",flexDirection:"column",alignItems:"center",lineHeight:1}}><PencilIcon size={38}/><span style={{fontSize:7,color:"#F5C518",fontWeight:"bold",letterSpacing:1,marginTop:1}}>LetterLoot</span></div></>}
             </button>
             <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
               disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}

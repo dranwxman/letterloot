@@ -1578,7 +1578,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:"bold",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{getCalendarDate()}</span>
           <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>🎸</button>
           <button className="tour-btn" onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2px solid rgba(167,139,250,0.9)",borderRadius:"50%",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#ffffff",fontWeight:"bold",background:"rgba(139,92,246,0.4)",cursor:"pointer",fontFamily:"Georgia,serif",flexShrink:0}}>?</button>
-          <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Reset</button>
+          <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Reset Full Game</button>
           <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>
         </div>
 
@@ -1631,13 +1631,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <button className="ll-btn" onClick={()=>{
               navigator.clipboard?.writeText("✏️ Play LetterLoot — the daily word puzzle where every letter has a value! Free at: https://letterloot-6k6v.vercel.app");
               setShareLLCopied(true); setTimeout(()=>setShareLLCopied(false),4000);
-            }} style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:9,background:"rgba(110,231,183,0.15)",border:"1px solid rgba(110,231,183,0.5)",color:"#6ee7b7",textAlign:"center",fontWeight:"bold"}}>
-              {shareLLCopied?"✓ Copied!":"📤 Share LetterLoot"}
+            }} style={{flex:1,padding:"4px 4px",borderRadius:8,fontSize:9,background:"rgba(245,197,24,0.15)",border:"1px solid rgba(245,197,24,0.5)",color:"#F5C518",textAlign:"center",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
+              {shareLLCopied ? <span>✓ Copied!</span> : <><PencilIcon size={36}/><span style={{fontSize:8,color:"#F5C518",fontWeight:"bold"}}>Share</span></>}
             </button>
             <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
               disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
               style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.1)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.25)",textAlign:"center",fontWeight:"bold"}}>
-              {undoUsed?"↩️ UNDO Used":!lastValidEntry?"↩️ UNDO":`↩️ UNDO — 1,000 pts`}
+              {undoUsed?"↩️ UNDO Used":!lastValidEntry?"↩️ UNDO last word":`↩️ UNDO last word — 1,000 pts`}
             </button>
           </div>
           {shareLLCopied&&<div style={{textAlign:"center",fontSize:9,color:"#6ee7b7",marginBottom:2}}>Copied! Share with your friends.</div>}
@@ -1646,8 +1646,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{display:"flex",gap:3,marginBottom:3}}>
             <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
             <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>{level===5?"🔄 L5":"🔄 L"+level}</button>
-            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 L{level+1}</button>}
+            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>{level===5?"🔄 Replay L5":"🔄 Replay L"+level}</button>
+            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1} — {buyCost} pts</button>}
           </div>
 
           {/* ROW 7: Tap tiles to build a word */}

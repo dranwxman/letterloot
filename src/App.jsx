@@ -1632,12 +1632,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               navigator.clipboard?.writeText("✏️ Play LetterLoot — the daily word puzzle where every letter has a value! Free at: https://letterloot-6k6v.vercel.app");
               setShareLLCopied(true); setTimeout(()=>setShareLLCopied(false),4000);
             }} style={{flex:1,padding:"4px 4px",borderRadius:8,fontSize:9,background:"rgba(245,197,24,0.15)",border:"1px solid rgba(245,197,24,0.5)",color:"#F5C518",textAlign:"center",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",gap:4}}>
-              {shareLLCopied ? <span>✓ Copied!</span> : <><PencilIcon size={36}/><span style={{fontSize:8,color:"#F5C518",fontWeight:"bold"}}>Share</span></>}
+              {shareLLCopied ? <span>✓ Copied!</span> : <><PencilIcon size={36}/><span style={{fontSize:8,color:"#F5C518",fontWeight:"bold",lineHeight:1}}>Share<br/>LetterLoot</span></>}
             </button>
             <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
               disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
               style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.1)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.25)",textAlign:"center",fontWeight:"bold"}}>
-              {undoUsed?"↩️ UNDO Used":!lastValidEntry?"↩️ UNDO last word":`↩️ UNDO last word — 1,000 pts`}
+              {undoUsed?"↩️ UNDO Used":`↩️ UNDO last word — 1,000 pts`}
             </button>
           </div>
           {shareLLCopied&&<div style={{textAlign:"center",fontSize:9,color:"#6ee7b7",marginBottom:2}}>Copied! Share with your friends.</div>}

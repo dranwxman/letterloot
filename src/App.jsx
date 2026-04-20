@@ -1694,10 +1694,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── HEADER ── */}
       <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"6px 10px 0"}}>
 
-        {/* ROW 1: Name · Date · 🎸 · Reset · Tour */}
+        {/* ROW 1: Name · Date (center) · 🎸 · Reset · Tour */}
         <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
-          <span style={{fontSize:9,color:"#f6d365",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0}}>{playerName||"Guest"}</span>
-          <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{getCalendarDate()}</span>
+          <span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:"1px 7px",background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
+          <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
           <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>🎸</button>
           <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Reset Full Game</button>
           <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>

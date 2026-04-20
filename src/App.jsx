@@ -654,7 +654,7 @@ async function requestNotificationPermission() {
 const TOUR_STEPS = [
   { emoji:"✏️", title:"Welcome to LetterLoot!", body:"A daily word puzzle where every letter has a point value. Fresh tiles every day at midnight — same board for every player worldwide!", warning:false },
   { emoji:"✨", title:"Letters Don't Need to Connect!", body:"Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!", warning:false },
-  { emoji:"💎", title:"Every Letter Has a Value", body:"Common letters (E, T, A) score 3–5 pts. Rare letters score big — Q=20, Z=22, J=16!\n\nGold tiles = 2× your score\nPurple tiles = 3× your score!", warning:false },
+  { emoji:"💎", title:"Every Letter Has a Value", body:"Common letters (E, T, A) score 3–5 pts. Rare letters score big — Q=20, Z=22, J=16!\n\nGold tiles = 2× the letter's value\nPurple tiles = 3× the letter's value!", warning:false },
   { emoji:"✏️", title:"What the Buttons Do", body:"Submit Word — checks your word\n✕ Clear — removes your selection\n🔄 ReTry Level — same tiles, fresh start\n⏸️ Pause — stops your timer\n🔓 Buy Level — spend points to advance", warning:false },
   { emoji:"↩️", title:"The UNDO Button", body:"Find yourself in a pinch to finish a level?\n\nYou have an optional UNDO available for 1 word per game for 1,000 points.\n\nIt will keep your Perfect Day on track!", warning:false },
   { emoji:"🌟", title:"Clearing a Level", body:"Use ALL tiles to clear the board and earn a big bonus! Can't finish? Spend earned points to buy the next level, or retry with the same tiles.", warning:false },
@@ -1439,6 +1439,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <span style={{fontSize:32,fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
         </div>
         <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:8,letterSpacing:1}}>Daily word puzzle · Every letter has a value</div>
+        <div style={{marginTop:16,fontSize:18,fontWeight:"bold",color:"#22d3ee"}}>
+          {playerName ? `Welcome back, ${playerName}! 👋` : "Welcome! 👋"}
+        </div>
         <div style={{marginTop:28,background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"20px",border:"1px solid rgba(255,255,255,0.15)",width:"100%"}}>
           <div style={{fontSize:15,color:"#f5f0e8",lineHeight:1.8}}>Spell words from the tiles.<br/>Every letter has a point value.<br/>Clear all 5 levels for a <span style={{color:"#f6d365",fontWeight:"bold"}}>Perfect Day</span>!</div>
         </div>

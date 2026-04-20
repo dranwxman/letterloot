@@ -62,6 +62,35 @@ function getLongWordBonus(length) {
   if (length === 13) return 25;
   return 25 + (length - 13) * 10;
 }
+// ── Bonus Level Helpers ───────────────────────────────────────
+function isBonusLevel(level) { return ENABLE_BONUS_LEVELS && level >= 6; }
+function getBonusLevelTileCount(level) { return BONUS_LEVEL_TILES[level] || 66; }
+function calcBonusWordScore(tileIds, tiles) {
+  // Bonus levels multiply base letter values by 1.5
+  let score = 0;
+  tileIds.forEach(id => {
+    const tile = tiles.find(t => t.id === id);
+    if (!tile) return;
+    const baseVal = Math.round(tile.value * BONUS_LEVEL_MULTIPLIER);
+    if (tile.bonus === "double") score += baseVal * 2;
+    else if (tile.bonus === "triple") score += baseVal * 3;
+    else score += baseVal;
+  });
+  return score;
+}
+function getBonusLevelUnlocked(statsData) {
+  // Returns the highest bonus level the player has unlocked (or 0 if none)
+  if (!ENABLE_BONUS_LEVELS) return 0;
+  const streak = statsData.perfectDaysAllTime || 0;
+  const consecutiveStreak = statsData.currentStreak || 0;
+  if (consecutiveStreak >= BONUS_CONSECUTIVE_REQUIRED) return 6;
+  return 0;
+}
+function getConsecutivePerfectDays(statsData) {
+  // How many consecutive perfect days (approximated via streak + perfectDaysWeek)
+  return Math.min(statsData.currentStreak || 0, statsData.perfectDaysAllTime || 0);
+}
+
 function seededRandom(seed) {
   let s = seed;
   return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
@@ -111,6 +140,24 @@ function calcWordScore(tileIds, tiles) {
 const VOWELS = new Set(["A","E","I","O","U"]);
 const LEVEL_BUY_COST = [0, 250, 500, 750, 1000, 1000];
 
+// ── BONUS LEVELS FEATURE FLAG ─────────────────────────────────
+// Set to true when ready to enable bonus levels (Level 6+)
+const ENABLE_BONUS_LEVELS = false;
+
+const BONUS_LEVEL_NAMES = {
+  6: "The Vault",
+  7: "The Sanctum",
+  8: "The Summit",
+  9: "The Cosmos",
+  10: "Infinity",
+};
+const BONUS_LEVEL_EMOJIS = { 6:"🏛️", 7:"💫", 8:"🏔️", 9:"🌌", 10:"∞" };
+const BONUS_LEVEL_TILES  = { 6:66, 7:72, 8:78, 9:84, 10:90 };
+const BONUS_LEVEL_MULTIPLIER = 1.5; // all letter values ×1.5 on bonus levels
+const BONUS_CONSECUTIVE_REQUIRED = 3; // perfect days in a row to unlock Level 6
+// Beyond L6: each subsequent bonus level requires clearing the previous bonus level
+// with a Perfect Day (no buys, no retries) on that same session
+
 // ── Badge definitions ─────────────────────────────────────────
 const BADGE_DEFS = [
   { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",                cat:"core",    scope:"lifetime" },
@@ -153,6 +200,13 @@ const BADGE_DEFS = [
   { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",                 cat:"alltime", scope:"lifetime" },
   { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",        cat:"alltime", scope:"lifetime" },
   { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",       cat:"alltime", scope:"lifetime" },
+  // ── Bonus Level Badges (hidden until ENABLE_BONUS_LEVELS = true) ──
+  { id:"vault_clear",    icon:"🏛️", label:"The Vault",       desc:"Clear Level 6 — The Vault",             cat:"bonus",   scope:"lifetime" },
+  { id:"sanctum_clear",  icon:"💫", label:"The Sanctum",     desc:"Clear Level 7 — The Sanctum",           cat:"bonus",   scope:"lifetime" },
+  { id:"summit_clear",   icon:"🏔️", label:"The Summit",      desc:"Clear Level 8 — The Summit",            cat:"bonus",   scope:"lifetime" },
+  { id:"cosmos_clear",   icon:"🌌", label:"The Cosmos",      desc:"Clear Level 9 — The Cosmos",            cat:"bonus",   scope:"lifetime" },
+  { id:"infinity_clear", icon:"∞",  label:"Infinity",        desc:"Clear Level 10 — Infinity",             cat:"bonus",   scope:"lifetime" },
+  { id:"vault_streak",   icon:"🔱", label:"Streak Master",   desc:"3 consecutive Perfect Days",            cat:"bonus",   scope:"lifetime" },
 ];
 
 // ── Doubloon SVG ──────────────────────────────────────────────
@@ -751,12 +805,34 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+  const [showCelebrate, setShowCelebrate] = useState(() => new URLSearchParams(window.location.search).get('celebrate') === '1');
   const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
   const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
   const handleFarewellDone = () => { setShowFarewell(false); setAuthState("auth"); };
   const handleFarewellStats = () => { setShowFarewell(false); setPostFarewellTab("stats"); };
+  if (showCelebrate) return (
+    <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',color:'#f5f0e8',padding:'30px 24px',position:'relative',overflow:'hidden'}} onClick={()=>setShowCelebrate(false)}>
+      <Starfield/>
+      <ConfettiCanvas active={true} rainbow={true}/>
+      <div style={{position:'relative',zIndex:1,textAlign:'center',maxWidth:340}}>
+        <div style={{fontSize:64,marginBottom:16}}>🌈</div>
+        <div style={{background:'rgba(139,92,246,0.25)',border:'2.5px solid rgba(167,139,250,0.95)',borderRadius:14,padding:'10px 24px',marginBottom:20,boxShadow:'0 0 28px rgba(139,92,246,0.5)'}}>
+          <span style={{fontSize:26,fontWeight:'bold',letterSpacing:4,color:'#fff',textShadow:'0 0 16px rgba(167,139,250,0.85)'}}>LetterLoot</span>
+        </div>
+        <div style={{fontSize:22,fontWeight:'bold',color:'#f6d365',marginBottom:12}}>🎉 Someone had a Perfect Day!</div>
+        <div style={{fontSize:14,color:'#f5f0e8',lineHeight:1.8,marginBottom:20}}>A friend just crushed all 5 levels of LetterLoot — and wanted you to know about it!</div>
+        <div style={{background:'rgba(255,255,255,0.07)',borderRadius:14,padding:'16px',marginBottom:20,border:'1px solid rgba(255,255,255,0.18)',fontSize:13,color:'rgba(255,255,255,0.7)',lineHeight:1.7}}>
+          Daily word puzzle · Every letter has a value · Free to play!
+        </div>
+        <button onClick={()=>setShowCelebrate(false)} style={{width:'100%',padding:'16px',borderRadius:14,background:'linear-gradient(135deg,#f6d365,#fda085)',color:'#1a1a2e',fontSize:16,fontWeight:'bold',fontFamily:'Georgia,serif',border:'none',cursor:'pointer',boxShadow:'0 0 24px rgba(246,211,101,0.4)'}}>
+          ✏️ Play LetterLoot Free!
+        </button>
+        <div style={{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:14}}>Tap anywhere to dismiss</div>
+      </div>
+    </div>
+  );
   if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats}/>;
   if (authState === "loading") return (
     <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", position:"relative" }}>
@@ -862,6 +938,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   ];
   const [congratsMsg] = useState(() => CONGRATS_MSGS[Math.floor(Math.random() * CONGRATS_MSGS.length)]);
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
+  // ── Bonus Level State (dormant when ENABLE_BONUS_LEVELS = false) ──
+  const [bonusLevelUnlocked, setBonusLevelUnlocked] = useState(false);
+  const [showBonusUnlock, setShowBonusUnlock] = useState(false);
+  const [bonusRetryUsed, setBonusRetryUsed] = useState(false);
+  const [showBonusUnsuccessful, setShowBonusUnsuccessful] = useState(false);
+  const [showBonusRestart, setShowBonusRestart] = useState(false);
+  const [showBonusNo, setShowBonusNo] = useState(false);
+  const [bonusRestartChoice, setBonusRestartChoice] = useState(null);
+  const consecutivePerfect = getConsecutivePerfectDays(statsData);
   const [undoUsed, setUndoUsed] = useState(ss?.undoUsed || false);
   const [lastValidEntry, setLastValidEntry] = useState(null);
   const [showUndoConfirm, setShowUndoConfirm] = useState(false);
@@ -1055,6 +1140,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setPerfectDaySync(true); setPerfectDayAchieved(false); setLongestWordToday("");
     setShowRepeatPerfect(false); setNewBestTime(false);
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
+    setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
     levelResetCount.current = 0; clearedLevelsRef.current = {};
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
@@ -1064,7 +1150,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   }, [startTimer, stopTimer, setPerfectDaySync]);
 
   const doLevelReset = useCallback(() => {
-    if (level === 5) {
+    if (ENABLE_BONUS_LEVELS && isBonusLevel(level)) {
+      if (bonusRetryUsed) return; // no more retries on bonus levels
+      setBonusRetryUsed(true);
+      setPerfectDaySync(false);
+    } else if (level === 5) {
       if (totalRef.current < 1000) return;
       totalRef.current -= 1000; setTotalScore(totalRef.current);
       setPerfectDaySync(false);
@@ -1078,7 +1168,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const handleUndo = useCallback(() => {
     if (undoUsed || !lastValidEntry || totalRef.current < 1000) return;
     const { word, score, tileIds, levelScoreDelta } = lastValidEntry;
-    totalRef.current -= (1000 + score); setTotalScore(totalRef.current);
+    const undoCost = isBonusLevel(level) ? 10000 : 1000;
+    totalRef.current -= (undoCost + score); setTotalScore(totalRef.current);
     levelScoreRef.current -= levelScoreDelta; setLevelScore(levelScoreRef.current);
     lifetimeRef.current -= score; setLifetimePoints(lifetimeRef.current);
     if (isGuest) saveLifetimeData(lifetimeRef.current);
@@ -1108,9 +1199,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const allValid = submittedRef.current.filter(s => s.valid);
     const bestWord = allValid.reduce((b, s) => !b || s.score > b.score ? s : b, null);
     const longestW = allValid.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
-    const sharer = playerName ? `${playerName} had a ` : "";
-    return `🌈 ${sharer}PERFECT DAY on LetterLoot!\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app\n🌈`;
-  }, []);
+    const sharer = playerName ? `${playerName} had a Perfect Day on LetterLoot!` : "🌈 PERFECT DAY on LetterLoot!";
+    return `🌈 ${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app?celebrate=1\n🌈`;
+  }, [playerName]);
 
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
@@ -1228,6 +1319,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               setTimeout(() => setShowRepeatPerfect(true), 1000);
             } else {
               setPerfectDayAchieved(true); awardBadge("perfect_day");
+              // ── Check bonus level unlock ──
+              if (ENABLE_BONUS_LEVELS) {
+                const newConsecutive = getConsecutivePerfectDays({...statsData, perfectDaysAllTime: (statsData.perfectDaysAllTime||0)+1});
+                if (newConsecutive >= BONUS_CONSECUTIVE_REQUIRED && !bonusLevelUnlocked) {
+                  setBonusLevelUnlocked(true);
+                  awardBadge("vault_streak");
+                  setTimeout(() => setShowBonusUnlock(true), 3000);
+                }
+              }
               setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
               const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
               const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
@@ -1244,7 +1344,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const hasWords = await hasValidWordsRemaining(newTiles);
         setCheckingStuck(false);
         if (!paused) startTimer();
-        if (!hasWords) setTimeout(() => setShowStuckModal(true), 600);
+        if (!hasWords) {
+          if (ENABLE_BONUS_LEVELS && isBonusLevel(level)) {
+            if (bonusRetryUsed) {
+              // 2nd failure — show restart modal
+              setTimeout(() => setShowBonusRestart(true), 600);
+            } else {
+              // 1st failure — show unsuccessful, offer 1 retry
+              setTimeout(() => setShowBonusUnsuccessful(true), 600);
+            }
+          } else {
+            setTimeout(() => setShowStuckModal(true), 600);
+          }
+        }
       }
     }
     setSelected([]); setValidating(false);
@@ -1449,7 +1561,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
           <div style={{fontSize:40}}>↩️</div>
           <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Undo Last Word?</div>
-          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Reverse <span style={{color:"#f6d365",fontWeight:"bold"}}>{lastValidEntry?.word}</span> (+{lastValidEntry?.score} pts)<br/>Cost: <span style={{color:"#fb7185",fontWeight:"bold"}}>1,000 pts</span><br/>Your balance: {totalScore} pts</div>
+          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Reverse <span style={{color:"#f6d365",fontWeight:"bold"}}>{lastValidEntry?.word}</span> (+{lastValidEntry?.score} pts)<br/>Cost: <span style={{color:"#fb7185",fontWeight:"bold"}}>{isBonusLevel(level)?"10,000 pts":"1,000 pts"}</span><br/>Your balance: {totalScore} pts</div>
           <div style={{fontSize:11,color:"#6ee7b7",marginTop:6}}>✓ Your Perfect Day stays intact</div>
           <button className="ll-btn" onClick={handleUndo} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>↩️ Yes, Undo — 1,000 pts</button>
           <button className="ll-btn" onClick={()=>setShowUndoConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep It</button>
@@ -1582,11 +1694,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── HEADER ── */}
       <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"6px 10px 0"}}>
 
-        {/* ROW 1: Date · 🎸 · ? · Reset · Tour */}
+        {/* ROW 1: Name · Date · 🎸 · Reset · Tour */}
         <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
-          <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:"bold",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{getCalendarDate()}</span>
+          <span style={{fontSize:9,color:"#f6d365",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0}}>{playerName||"Guest"}</span>
+          <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{getCalendarDate()}</span>
           <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>🎸</button>
-          <button className="tour-btn" onClick={()=>{setTourStep(0);setShowTour(true);}} style={{border:"2px solid rgba(167,139,250,0.9)",borderRadius:"50%",width:20,height:20,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#ffffff",fontWeight:"bold",background:"rgba(139,92,246,0.4)",cursor:"pointer",fontFamily:"Georgia,serif",flexShrink:0}}>?</button>
           <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Reset Full Game</button>
           <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>
         </div>
@@ -1898,6 +2010,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               ))}
             </div>
           </div>
+          {/* ── Bonus Level Progress (shown when ENABLE_BONUS_LEVELS=true) ── */}
+          {ENABLE_BONUS_LEVELS && (
+            <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.08))",borderRadius:14,padding:"14px",marginBottom:8,border:"2px solid rgba(246,211,101,0.3)",textAlign:"center"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:6}}>🏛️ BONUS LEVELS</div>
+              {bonusLevelUnlocked
+                ? <div style={{fontSize:13,color:"#f6d365",fontWeight:"bold"}}>The Vault is unlocked! 🏛️</div>
+                : <>
+                    <div style={{fontSize:13,color:"#f5f0e8",marginBottom:6}}>
+                      <span style={{color:"#f6d365",fontWeight:"bold",fontSize:20}}>{consecutivePerfect}</span>
+                      <span style={{color:"rgba(255,255,255,0.5)"}}> / {BONUS_CONSECUTIVE_REQUIRED} consecutive Perfect Days</span>
+                    </div>
+                    <div style={{background:"rgba(255,255,255,0.1)",borderRadius:6,height:8,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:`${Math.min(100,(consecutivePerfect/BONUS_CONSECUTIVE_REQUIRED)*100)}%`,background:"linear-gradient(90deg,#f6d365,#fda085)",borderRadius:6,transition:"width 0.5s ease"}}/>
+                    </div>
+                    <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",marginTop:6}}>Unlock The Vault — Level 6 with 1.5× letter values!</div>
+                  </>
+              }
+            </div>
+          )}
           <div style={{textAlign:"center",marginBottom:8}}>
             <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(139,92,246,0.15)",border:"1px solid rgba(167,139,250,0.4)",color:"#a78bfa",padding:"8px 20px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>↺ Replay Tour</button>
           </div>
@@ -1944,6 +2075,139 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <button className="ll-btn" onClick={()=>setTab("play")} style={{padding:"11px 28px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",letterSpacing:1}}>
               ✏️ Back to Playing!
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── BONUS LEVEL UNLOCK MODAL (dormant when ENABLE_BONUS_LEVELS=false) ── */}
+      {ENABLE_BONUS_LEVELS && showBonusUnlock && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a0a2e,#2d1b4a)",borderRadius:28,padding:"36px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.8)",maxWidth:340,width:"90%"}}>
+            <div style={{fontSize:56}}>🏛️</div>
+            <div style={{fontSize:24,fontWeight:"bold",marginTop:10,color:"#f6d365",letterSpacing:2}}>THE VAULT UNLOCKED!</div>
+            <div style={{fontSize:14,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>
+              You've achieved <span style={{color:"#f6d365",fontWeight:"bold"}}>{BONUS_CONSECUTIVE_REQUIRED} consecutive Perfect Days</span>!<br/><br/>
+              Level 6 — <em>The Vault</em> — is now available.<br/>
+              All letter values are <span style={{color:"#fda085",fontWeight:"bold"}}>1.5×</span> — but the stakes are higher.<br/><br/>
+              <span style={{fontSize:12,color:"rgba(255,255,255,0.6)"}}>⚠️ Retrying or buying on a bonus level breaks your Perfect Day streak.</span>
+            </div>
+            <div style={{marginTop:16,background:"rgba(255,215,0,0.1)",borderRadius:12,padding:"10px",border:"1px solid rgba(255,215,0,0.3)"}}>
+              <div style={{fontSize:11,color:"#f6d365"}}>🏛️ The Vault · 💫 The Sanctum · 🏔️ The Summit</div>
+              <div style={{fontSize:11,color:"#f6d365",marginTop:4}}>🌌 The Cosmos · ∞ Infinity</div>
+            </div>
+            <button className="ll-btn" onClick={()=>setShowBonusUnlock(false)} style={{marginTop:20,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>
+              Let's Enter The Vault! 🏛️
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── BONUS LEVEL PROGRESS INDICATOR (dormant when ENABLE_BONUS_LEVELS=false) ── */}
+      {ENABLE_BONUS_LEVELS && !bonusLevelUnlocked && consecutivePerfect > 0 && (
+        <div style={{position:"fixed",bottom:80,right:12,zIndex:100,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.4)",borderRadius:12,padding:"6px 10px",fontSize:10,color:"#f6d365",fontFamily:"Georgia,serif"}}>
+          🏛️ {consecutivePerfect}/{BONUS_CONSECUTIVE_REQUIRED} Perfect Days
+        </div>
+      )}
+
+      {/* ── BONUS LEVEL UNSUCCESSFUL (1st failure — retry available) ── */}
+      {ENABLE_BONUS_LEVELS && showBonusUnsuccessful && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a0a2e,#2d1b4a)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(246,211,101,0.5)",maxWidth:340,width:"90%"}}>
+            <div style={{fontSize:48}}>{BONUS_LEVEL_EMOJIS[level]||"🏛️"}</div>
+            <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365",marginTop:10}}>{BONUS_LEVEL_NAMES[level]||"The Vault"}</div>
+            <div style={{fontSize:14,color:"#f5f0e8",marginTop:12,lineHeight:1.8}}>
+              The {BONUS_LEVEL_NAMES[level]||"Vault"} was tough today — but you gave it everything!<br/><br/>
+              You have <span style={{color:"#6ee7b7",fontWeight:"bold"}}>1 retry</span> remaining for this level.
+            </div>
+            <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px",fontSize:11,color:"rgba(255,255,255,0.55)",lineHeight:1.7}}>
+              💡 If this attempt is also unsuccessful, you'll need to earn your way back via 3 consecutive Perfect Days.
+            </div>
+            <button className="ll-btn" onClick={()=>{ setShowBonusUnsuccessful(false); doLevelReset(); }} style={{marginTop:18,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>
+              🔄 Use My Retry
+            </button>
+            <button className="ll-btn" onClick={()=>{ setShowBonusUnsuccessful(false); setShowBonusRestart(true); }} style={{marginTop:8,width:"100%",padding:"11px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>
+              I'm done for today
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── BONUS LEVEL RESTART? (2nd failure or chose done) ── */}
+      {ENABLE_BONUS_LEVELS && showBonusRestart && !bonusRestartChoice && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a0a2e,#2d1b4a)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(167,139,250,0.5)",maxWidth:340,width:"90%"}}>
+            <div style={{fontSize:48}}>💪</div>
+            <div style={{fontSize:20,fontWeight:"bold",color:"#a78bfa",marginTop:10}}>Restart Game?</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.7)",marginTop:10,lineHeight:1.7}}>
+              You'll need to earn your way back to {BONUS_LEVEL_NAMES[level]||"The Vault"} via <span style={{color:"#f6d365",fontWeight:"bold"}}>3 consecutive Perfect Days</span>.
+            </div>
+            <div style={{display:"flex",gap:10,marginTop:20}}>
+              <button className="ll-btn" onClick={()=>setBonusRestartChoice("yes")} style={{flex:1,padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold",border:"none"}}>Yes</button>
+              <button className="ll-btn" onClick={()=>{ setShowBonusNo(true); setShowBonusRestart(false); }} style={{flex:1,padding:"13px",borderRadius:14,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.3)",color:"#f5f0e8",fontSize:14,fontWeight:"bold"}}>No</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BONUS RESTART YES — Welcome screen with inspirational message ── */}
+      {ENABLE_BONUS_LEVELS && showBonusRestart && bonusRestartChoice==="yes" && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:"30px 24px"}}>
+          <Starfield/>
+          <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360,textAlign:"center"}}>
+            <PencilLogo size={160}/>
+            <div style={{marginTop:14,background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:14,padding:"8px 24px",boxShadow:"0 0 28px rgba(139,92,246,0.5)"}}>
+              <span style={{fontSize:26,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+            </div>
+            <div style={{marginTop:20,background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"20px",border:"1px solid rgba(167,139,250,0.3)",width:"100%"}}>
+              <div style={{fontSize:28,marginBottom:10}}>🌟</div>
+              <div style={{fontSize:14,color:"#f5f0e8",lineHeight:1.9,fontStyle:"italic"}}>
+                "Every master was once a beginner.<br/>Your Perfect Day streak starts now —<br/>and The Vault will be waiting.<br/><br/>Let's go get it! 🏛️"
+              </div>
+            </div>
+            <div style={{marginTop:20,fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:12}}>Ready to play again?</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,width:"100%"}}>
+              <button className="ll-btn replay-btn" onClick={()=>{ setShowBonusRestart(false); setBonusRestartChoice(null); handleFullReset(); }} style={{width:"100%",padding:"16px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
+              <button className="ll-btn" onClick={()=>{ setBonusRestartChoice("later"); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:14,fontWeight:"bold"}}>🌅 Maybe Later Today</button>
+              <button className="ll-btn" onClick={()=>{ setBonusRestartChoice("tomorrow"); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:14,fontWeight:"bold"}}>🌙 Tomorrow</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LATER TODAY response ── */}
+      {ENABLE_BONUS_LEVELS && showBonusRestart && bonusRestartChoice==="later" && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a0a2e,#2d1b4a)",borderRadius:28,padding:"36px 28px",textAlign:"center",maxWidth:340,width:"90%",border:"1px solid rgba(96,165,250,0.4)"}}>
+            <div style={{fontSize:48}}>🌅</div>
+            <div style={{fontSize:20,fontWeight:"bold",color:"#bfdbfe",marginTop:10}}>Great! See you later.</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:10,lineHeight:1.7}}>Your Perfect Day journey continues whenever you're ready.</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOMORROW response ── */}
+      {ENABLE_BONUS_LEVELS && showBonusRestart && bonusRestartChoice==="tomorrow" && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+          <div style={{background:"linear-gradient(135deg,#1a0a2e,#2d1b4a)",borderRadius:28,padding:"36px 28px",textAlign:"center",maxWidth:340,width:"90%",border:"1px solid rgba(167,139,250,0.4)"}}>
+            <div style={{fontSize:48}}>🌙</div>
+            <div style={{fontSize:20,fontWeight:"bold",color:"#e9d5ff",marginTop:10}}>New boards. Another Perfect Day awaits!</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:10,lineHeight:1.7}}>Rest up — The Vault will be waiting for you tomorrow. 🏛️</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── BONUS RESTART NO — Beautiful closing message ── */}
+      {ENABLE_BONUS_LEVELS && showBonusNo && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px"}}>
+          <div style={{background:"linear-gradient(135deg,#1a0a2e,#2d1b4a)",borderRadius:28,padding:"36px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(167,139,250,0.5)",maxWidth:340,width:"90%"}}>
+            <div style={{fontSize:52}}>🌟</div>
+            <div style={{fontSize:20,fontWeight:"bold",color:"#a78bfa",marginTop:10}}>Remarkable Effort.</div>
+            <div style={{fontSize:13,color:"#f5f0e8",marginTop:14,lineHeight:1.9,fontStyle:"italic"}}>
+              "What you accomplished today took real intelligence, dedication, and vocabulary power.<br/><br/>
+              Reaching {BONUS_LEVEL_NAMES[level]||"The Vault"} puts you in rare company.<br/><br/>
+              Rest up — I'm confident you'll return and conquer it soon. See you tomorrow! 🏛️"
+            </div>
+            <div style={{marginTop:20,fontSize:28}}>🌅</div>
           </div>
         </div>
       )}

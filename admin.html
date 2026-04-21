@@ -1,1 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LetterLoot Admin</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0a0820;font-family:Georgia,serif;color:#f5f0e8;min-height:100vh}
+  .stars{position:fixed;inset:0;pointer-events:none;z-index:0;overflow:hidden}
+  .star{position:absolute;border-radius:50%;background:#fff}
+  #login{display:flex;align-items:center;justify-content:center;min-height:100vh;position:relative;z-index:1}
+  .login-box{background:linear-gradient(135deg,#1a1040,#2d1b69);border-radius:20px;padding:36px 32px;text-align:center;border:1px solid rgba(255,255,255,0.15);max-width:320px;width:90%}
+  .login-box h2{color:#f6d365;font-size:18px;letter-spacing:3px;margin-bottom:20px}
+  .login-box input{width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#f5f0e8;font-size:14px;font-family:Georgia,serif;outline:none;margin-bottom:12px}
+  .login-box button{width:100%;padding:13px;border-radius:12px;border:none;background:linear-gradient(135deg,#f6d365,#fda085);color:#1a1a2e;font-size:14px;font-weight:bold;font-family:Georgia,serif;cursor:pointer}
+  .error{color:#fca5a5;font-size:12px;margin-top:8px}
+  #app{display:none;position:relative;z-index:1;padding:16px;max-width:960px;margin:0 auto}
+  .header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.1)}
+  .header h1{font-size:16px;color:#f6d365;letter-spacing:3px}
+  .signout{background:none;border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:4px 12px;color:rgba(255,255,255,0.5);font-family:Georgia,serif;font-size:11px;cursor:pointer}
+  .refresh{background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.4);border-radius:12px;padding:4px 12px;color:#a78bfa;font-family:Georgia,serif;font-size:11px;cursor:pointer;margin-right:8px}
+  .last-updated{font-size:10px;color:rgba(255,255,255,0.3);margin-top:4px;text-align:right}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:16px}
+  .stat-card{background:rgba(255,255,255,0.05);border-radius:12px;padding:14px;text-align:center;border:1px solid rgba(255,255,255,0.1)}
+  .stat-card.gold{background:rgba(246,211,101,0.1);border-color:rgba(246,211,101,0.35)}
+  .stat-card.teal{background:rgba(34,211,238,0.08);border-color:rgba(34,211,238,0.35)}
+  .stat-card.purple{background:rgba(167,139,250,0.08);border-color:rgba(167,139,250,0.35)}
+  .stat-card.green{background:rgba(110,231,183,0.08);border-color:rgba(110,231,183,0.35)}
+  .stat-card.orange{background:rgba(253,160,133,0.1);border-color:rgba(253,160,133,0.35)}
+  .stat-val{font-size:32px;font-weight:bold;color:#f6d365}
+  .stat-val.teal{color:#22d3ee}
+  .stat-val.purple{color:#a78bfa}
+  .stat-val.green{color:#6ee7b7}
+  .stat-val.orange{color:#fda085}
+  .stat-label{font-size:9px;color:rgba(255,255,255,0.5);letter-spacing:2px;margin-top:4px}
+  .section{background:rgba(255,255,255,0.04);border-radius:14px;padding:16px;margin-bottom:14px;border:1px solid rgba(255,255,255,0.08)}
+  .section h3{font-size:10px;color:rgba(255,255,255,0.6);letter-spacing:3px;margin-bottom:12px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th{text-align:left;color:rgba(255,255,255,0.4);font-size:9px;letter-spacing:2px;padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.08);font-weight:normal}
+  td{padding:8px 8px;border-bottom:1px solid rgba(255,255,255,0.05);color:#f5f0e8;vertical-align:middle}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:rgba(255,255,255,0.03)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:9px;font-weight:bold}
+  .badge.perfect{background:rgba(110,231,183,0.2);color:#6ee7b7;border:1px solid rgba(110,231,183,0.4)}
+  .badge.streak{background:rgba(253,160,133,0.2);color:#fda085;border:1px solid rgba(253,160,133,0.4)}
+  .chart-bars{display:flex;align-items:flex-end;gap:4px;height:80px;margin-top:8px}
+  .chart-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+  .chart-bar{width:100%;background:linear-gradient(180deg,#f6d365,#fda085);border-radius:3px 3px 0 0;min-height:2px;transition:height 0.3s}
+  .chart-label{font-size:7px;color:rgba(255,255,255,0.4)}
+  .chart-val{font-size:7px;color:rgba(255,255,255,0.6)}
+  .loading{text-align:center;color:rgba(255,255,255,0.3);padding:20px;font-size:12px}
+  .empty{text-align:center;color:rgba(255,255,255,0.25);padding:16px;font-size:11px;font-style:italic}
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:600px){.two-col{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,1fr)}}
+  .avatar{width:28px;height:28px;border-radius:50%;background:rgba(167,139,250,0.2);border:1px solid rgba(167,139,250,0.4);display:inline-flex;align-items:center;justify-content:center;font-size:12px;margin-right:8px;vertical-align:middle}
+  .pts{color:#f6d365;font-weight:bold}
+  .name-cell{display:flex;align-items:center}
+</style>
+</head>
+<body>
 
+<div class="stars" id="stars"></div>
+
+<!-- Login -->
+<div id="login">
+  <div class="login-box">
+    <svg viewBox="0 0 300 68" width="140" height="32" xmlns="http://www.w3.org/2000/svg" style="margin-bottom:12px">
+      <rect x="0" y="16" width="18" height="36" rx="2" fill="#C8C8C8"/>
+      <rect x="18" y="14" width="226" height="40" rx="2" fill="#F5C518"/>
+      <polygon points="244,14 268,34 244,54" fill="#DEB887"/>
+      <polygon points="268,28 300,34 268,40" fill="#5a5a5a"/>
+      <text x="131" y="30" text-anchor="middle" font-family="Georgia,serif" font-size="11" font-weight="bold" fill="#1a1100">LetterLoot</text>
+      <rect x="0" y="16" width="6" height="36" rx="2" fill="#2D8B4E"/>
+    </svg>
+    <h2>ADMIN DASHBOARD</h2>
+    <input type="password" id="pw" placeholder="Password" onkeydown="if(event.key==='Enter')login()"/>
+    <button onclick="login()">Sign In</button>
+    <div class="error" id="pw-error"></div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="app">
+  <div class="header">
+    <div>
+      <h1>✏️ LETTERLOOT ADMIN</h1>
+      <div class="last-updated" id="last-updated"></div>
+    </div>
+    <div>
+      <button class="refresh" onclick="loadAll()">↺ Refresh</button>
+      <button class="signout" onclick="signout()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- Top stat cards -->
+  <div class="grid">
+    <div class="stat-card gold"><div class="stat-val" id="s-total">—</div><div class="stat-label">TOTAL PLAYERS</div></div>
+    <div class="stat-card teal"><div class="stat-val teal" id="s-today">—</div><div class="stat-label">PLAYED TODAY</div></div>
+    <div class="stat-card purple"><div class="stat-val purple" id="s-week">—</div><div class="stat-label">NEW THIS WEEK</div></div>
+    <div class="stat-card green"><div class="stat-val green" id="s-perfect">—</div><div class="stat-label">PERFECT DAYS</div></div>
+    <div class="stat-card orange"><div class="stat-val orange" id="s-streak">—</div><div class="stat-label">LONGEST STREAK</div></div>
+  </div>
+
+  <!-- Activity chart -->
+  <div class="section">
+    <h3>📅 DAILY ACTIVITY — LAST 14 DAYS</h3>
+    <div class="chart-bars" id="chart"></div>
+  </div>
+
+  <div class="two-col">
+    <!-- Top scores -->
+    <div class="section">
+      <h3>🏆 TOP LIFETIME SCORES</h3>
+      <div id="top-scores"><div class="loading">Loading…</div></div>
+    </div>
+    <!-- Perfect Day leaders -->
+    <div class="section">
+      <h3>🌈 PERFECT DAY LEADERS</h3>
+      <div id="perfect-leaders"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <!-- Streak leaders -->
+    <div class="section">
+      <h3>🔥 CURRENT STREAK LEADERS</h3>
+      <div id="streak-leaders"><div class="loading">Loading…</div></div>
+    </div>
+    <!-- Recent signups -->
+    <div class="section">
+      <h3>👤 RECENT SIGNUPS</h3>
+      <div id="recent-signups"><div class="loading">Loading…</div></div>
+    </div>
+  </div>
+
+  <!-- All players -->
+  <div class="section">
+    <h3>📋 ALL PLAYERS</h3>
+    <div id="all-players"><div class="loading">Loading…</div></div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = "https://zcevszxmoggmcmvyxjtn.supabase.co";
+const ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM";
+const PASSWORD = "!!Wxmanone2!!";
+
+// Starfield
+const container = document.getElementById('stars');
+for(let i=0;i<50;i++){
+  const s=document.createElement('div');s.className='star';
+  const r=Math.random()*1.5+0.5;
+  s.style.cssText=`width:${r*2}px;height:${r*2}px;opacity:${Math.random()*0.4+0.1};left:${Math.random()*100}%;top:${Math.random()*100}%`;
+  container.appendChild(s);
+}
+
+function login(){
+  const pw=document.getElementById('pw').value;
+  if(pw===PASSWORD){
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').style.display='block';
+    loadAll();
+  } else {
+    document.getElementById('pw-error').textContent='Incorrect password';
+  }
+}
+function signout(){
+  document.getElementById('login').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('pw').value='';
+}
+
+async function query(table, select='*', order=null, limit=null){
+  let url=`${SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}`;
+  if(order) url+=`&order=${order}`;
+  if(limit) url+=`&limit=${limit}`;
+  const r=await fetch(url,{headers:{'apikey':ANON_KEY,'Authorization':`Bearer ${ANON_KEY}`,'Content-Type':'application/json'}});
+  if(!r.ok) return [];
+  return r.json();
+}
+
+async function queryAuth(){
+  // Get users from auth via REST
+  const r=await fetch(`${SUPABASE_URL}/auth/v1/admin/users`,{
+    headers:{'apikey':ANON_KEY,'Authorization':`Bearer ${ANON_KEY}`}
+  });
+  if(!r.ok) return [];
+  const d=await r.json();
+  return d.users||[];
+}
+
+function formatDate(str){
+  if(!str) return '—';
+  return new Date(str).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+}
+function timeAgo(str){
+  if(!str) return '—';
+  const diff=Date.now()-new Date(str).getTime();
+  const d=Math.floor(diff/86400000);
+  if(d===0) return 'Today';
+  if(d===1) return 'Yesterday';
+  return `${d} days ago`;
+}
+
+async function loadAll(){
+  document.getElementById('last-updated').textContent='Loading…';
+  
+  try {
+    // Load game states
+    const gameStates = await query('game_state','player_name,lifetime_points,last_played_date,current_streak,longest_streak,stats,badges','lifetime_points.desc');
+    
+    // Load daily sessions for today
+    const today = new Date().toISOString().split('T')[0];
+    const todaySessions = await query('daily_sessions',`user_id,session_date,total_score,perfect_day`,`session_date.eq.${today}`);
+
+    // Load recent sessions for activity chart (last 14 days)
+    const twoWeeksAgo = new Date(Date.now()-14*86400000).toISOString().split('T')[0];
+    const recentSessions = await query('daily_sessions','session_date',`session_date.gte.${twoWeeksAgo}`);
+
+    // Calculate stats
+    const total = gameStates.length;
+    const playedToday = todaySessions.length;
+    
+    // New this week
+    const weekAgo = new Date(Date.now()-7*86400000).toISOString().split('T')[0];
+    const weekSessions = await query('daily_sessions',`user_id,session_date`,`session_date.gte.${weekAgo}`);
+    const newThisWeek = new Set(weekSessions.map(s=>s.user_id)).size;
+
+    // Perfect days total
+    const perfectTotal = gameStates.reduce((a,g)=>{
+      const pd = g.stats?.perfectDaysAllTime||0;
+      return a+pd;
+    },0);
+
+    // Longest streak
+    const longestStreak = gameStates.reduce((a,g)=>Math.max(a,g.longest_streak||0),0);
+
+    // Update stat cards
+    document.getElementById('s-total').textContent = total;
+    document.getElementById('s-today').textContent = playedToday;
+    document.getElementById('s-week').textContent = newThisWeek;
+    document.getElementById('s-perfect').textContent = perfectTotal;
+    document.getElementById('s-streak').textContent = longestStreak+'d';
+
+    // Activity chart
+    buildChart(recentSessions);
+
+    // Top scores
+    buildTopScores(gameStates.slice(0,10));
+
+    // Perfect day leaders
+    const perfectLeaders = [...gameStates]
+      .sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0))
+      .slice(0,8);
+    buildPerfectLeaders(perfectLeaders);
+
+    // Streak leaders
+    const streakLeaders = [...gameStates]
+      .sort((a,b)=>(b.current_streak||0)-(a.current_streak||0))
+      .slice(0,8);
+    buildStreakLeaders(streakLeaders);
+
+    // All players
+    buildAllPlayers(gameStates);
+
+    // Recent signups - use last_played_date as proxy
+    const recent = [...gameStates]
+      .sort((a,b)=>new Date(b.last_played_date||0)-new Date(a.last_played_date||0))
+      .slice(0,8);
+    buildRecentSignups(recent);
+
+    document.getElementById('last-updated').textContent = 'Last updated: '+new Date().toLocaleTimeString();
+
+  } catch(e) {
+    console.error(e);
+    document.getElementById('last-updated').textContent = 'Error loading data — check console';
+  }
+}
+
+function buildChart(sessions){
+  const counts={};
+  const labels=[];
+  for(let i=13;i>=0;i--){
+    const d=new Date(Date.now()-i*86400000);
+    const key=d.toISOString().split('T')[0];
+    const label=d.toLocaleDateString('en-US',{weekday:'short'});
+    counts[key]=0;
+    labels.push({key,label});
+  }
+  sessions.forEach(s=>{ if(counts[s.session_date]!==undefined) counts[s.session_date]++; });
+  const max=Math.max(...Object.values(counts),1);
+  const chart=document.getElementById('chart');
+  chart.innerHTML='';
+  labels.forEach(({key,label})=>{
+    const val=counts[key];
+    const pct=Math.max(4,(val/max)*76);
+    chart.innerHTML+=`<div class="chart-bar-wrap">
+      <div class="chart-val">${val||''}</div>
+      <div class="chart-bar" style="height:${pct}px"></div>
+      <div class="chart-label">${label}</div>
+    </div>`;
+  });
+}
+
+function medal(i){ return i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`; }
+
+function buildTopScores(data){
+  if(!data.length){document.getElementById('top-scores').innerHTML='<div class="empty">No data yet</div>';return;}
+  let html='<table><tr><th></th><th>Player</th><th>Lifetime Pts</th><th>Last Played</th></tr>';
+  data.forEach((g,i)=>{
+    html+=`<tr>
+      <td>${medal(i)}</td>
+      <td><div class="name-cell"><span class="avatar">✏️</span>${g.player_name||'Guest'}</div></td>
+      <td class="pts">${(g.lifetime_points||0).toLocaleString()}</td>
+      <td style="color:rgba(255,255,255,0.4);font-size:10px">${timeAgo(g.last_played_date)}</td>
+    </tr>`;
+  });
+  html+='</table>';
+  document.getElementById('top-scores').innerHTML=html;
+}
+
+function buildPerfectLeaders(data){
+  if(!data.length){document.getElementById('perfect-leaders').innerHTML='<div class="empty">No data yet</div>';return;}
+  let html='<table><tr><th></th><th>Player</th><th>Perfect Days</th></tr>';
+  data.forEach((g,i)=>{
+    const pd=g.stats?.perfectDaysAllTime||0;
+    if(!pd) return;
+    html+=`<tr>
+      <td>${medal(i)}</td>
+      <td><div class="name-cell"><span class="avatar">🌈</span>${g.player_name||'Guest'}</div></td>
+      <td><span class="badge perfect">🌈 ${pd}</span></td>
+    </tr>`;
+  });
+  html+='</table>';
+  document.getElementById('perfect-leaders').innerHTML=html;
+}
+
+function buildStreakLeaders(data){
+  if(!data.length){document.getElementById('streak-leaders').innerHTML='<div class="empty">No data yet</div>';return;}
+  let html='<table><tr><th></th><th>Player</th><th>Current</th><th>Best</th></tr>';
+  data.forEach((g,i)=>{
+    const cs=g.current_streak||0;
+    if(!cs) return;
+    html+=`<tr>
+      <td>${medal(i)}</td>
+      <td><div class="name-cell"><span class="avatar">🔥</span>${g.player_name||'Guest'}</div></td>
+      <td><span class="badge streak">🔥 ${cs}d</span></td>
+      <td style="color:rgba(255,255,255,0.4);font-size:10px">${g.longest_streak||0}d best</td>
+    </tr>`;
+  });
+  html+='</table>';
+  document.getElementById('streak-leaders').innerHTML=html;
+}
+
+function buildRecentSignups(data){
+  if(!data.length){document.getElementById('recent-signups').innerHTML='<div class="empty">No data yet</div>';return;}
+  let html='<table><tr><th>Player</th><th>Last Active</th><th>Lifetime Pts</th></tr>';
+  data.forEach(g=>{
+    html+=`<tr>
+      <td><div class="name-cell"><span class="avatar">👤</span>${g.player_name||'Guest'}</div></td>
+      <td style="color:rgba(255,255,255,0.5);font-size:10px">${timeAgo(g.last_played_date)}</td>
+      <td class="pts" style="font-size:11px">${(g.lifetime_points||0).toLocaleString()}</td>
+    </tr>`;
+  });
+  html+='</table>';
+  document.getElementById('recent-signups').innerHTML=html;
+}
+
+function buildAllPlayers(data){
+  if(!data.length){document.getElementById('all-players').innerHTML='<div class="empty">No players yet</div>';return;}
+  let html=`<table>
+    <tr><th>#</th><th>Player</th><th>Lifetime Pts</th><th>Streak</th><th>Perfect Days</th><th>Badges</th><th>Last Played</th></tr>`;
+  data.forEach((g,i)=>{
+    const pd=g.stats?.perfectDaysAllTime||0;
+    const badges=(g.badges||[]).length;
+    html+=`<tr>
+      <td style="color:rgba(255,255,255,0.3);font-size:10px">${i+1}</td>
+      <td><div class="name-cell"><span class="avatar">✏️</span>${g.player_name||'Guest'}</div></td>
+      <td class="pts">${(g.lifetime_points||0).toLocaleString()}</td>
+      <td>${g.current_streak?'<span class="badge streak">🔥 '+g.current_streak+'d</span>':'—'}</td>
+      <td>${pd?'<span class="badge perfect">🌈 '+pd+'</span>':'—'}</td>
+      <td style="color:rgba(255,255,255,0.5);font-size:11px">${badges} earned</td>
+      <td style="color:rgba(255,255,255,0.4);font-size:10px">${timeAgo(g.last_played_date)}</td>
+    </tr>`;
+  });
+  html+='</table>';
+  document.getElementById('all-players').innerHTML=html;
+}
+
+// Auto-refresh every 5 minutes
+setInterval(()=>{ if(document.getElementById('app').style.display==='block') loadAll(); }, 300000);
+</script>
+</body>
+</html>

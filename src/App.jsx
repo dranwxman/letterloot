@@ -788,6 +788,192 @@ function AuthScreen({ onGuest, onLogin }) {
   );
 }
 
+
+// ── ADMIN DASHBOARD ──────────────────────────────────────────
+const ADMIN_SUPABASE_URL = "https://zcevszxmoggmcmvyxjtn.supabase.co";
+const ADMIN_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM";
+const ADMIN_PASSWORD = "!!Wxmanone2!!";
+
+function AdminScreen({ onExit }) {
+  const [authed, setAuthed] = useState(false);
+  const [pw, setPw] = useState("");
+  const [pwError, setPwError] = useState("");
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [selectedTab, setSelectedTab] = useState("overview");
+
+  const adminQuery = async (table, select='*', extra='') => {
+    let url = `${ADMIN_SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}${extra}`;
+    const r = await fetch(url, { headers: { apikey: ADMIN_ANON_KEY, Authorization: `Bearer ${ADMIN_ANON_KEY}` }});
+    if (!r.ok) return [];
+    return r.json();
+  };
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const gameStates = await adminQuery('game_state', 'player_name,lifetime_points,last_played_date,current_streak,longest_streak,stats,badges', '&order=lifetime_points.desc');
+      const today = new Date().toISOString().split('T')[0];
+      const twoWeeksAgo = new Date(Date.now()-14*86400000).toISOString().split('T')[0];
+      const weekAgo = new Date(Date.now()-7*86400000).toISOString().split('T')[0];
+      const todaySessions = await adminQuery('daily_sessions', 'user_id,session_date,total_score,perfect_day', `&session_date=eq.${today}`);
+      const recentSessions = await adminQuery('daily_sessions', 'session_date', `&session_date=gte.${twoWeeksAgo}`);
+      const weekSessions = await adminQuery('daily_sessions', 'user_id,session_date', `&session_date=gte.${weekAgo}`);
+      setData({ gameStates, todaySessions, recentSessions, weekSessions, today });
+      setLastUpdated(new Date().toLocaleTimeString());
+    } catch(e) { console.error(e); }
+    setLoading(false);
+  };
+
+  useEffect(() => { if (authed) loadData(); }, [authed]);
+  useEffect(() => {
+    if (!authed) return;
+    const t = setInterval(loadData, 300000);
+    return () => clearInterval(t);
+  }, [authed]);
+
+  const medal = (i) => i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}.`;
+  const timeAgo = (str) => {
+    if (!str) return '—';
+    const d = Math.floor((Date.now()-new Date(str).getTime())/86400000);
+    if (d===0) return 'Today'; if (d===1) return 'Yesterday'; return `${d}d ago`;
+  };
+
+  const cardStyle = (color) => ({ background: `rgba(${color},0.08)`, border: `1px solid rgba(${color},0.35)`, borderRadius:12, padding:'12px', textAlign:'center' });
+  const tbl = { width:'100%', borderCollapse:'collapse', fontSize:11 };
+  const th = { textAlign:'left', color:'rgba(255,255,255,0.4)', fontSize:9, letterSpacing:2, padding:'4px 8px', borderBottom:'1px solid rgba(255,255,255,0.08)', fontWeight:'normal' };
+  const td = { padding:'7px 8px', borderBottom:'1px solid rgba(255,255,255,0.05)', color:'#f5f0e8' };
+
+  if (!authed) return (
+    <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',position:'relative'}}>
+      <Starfield/>
+      <div style={{position:'relative',zIndex:1,background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:20,padding:'36px 32px',textAlign:'center',border:'1px solid rgba(255,255,255,0.15)',maxWidth:320,width:'90%'}}>
+        <PencilLogo size={140}/>
+        <div style={{fontSize:13,fontWeight:'bold',color:'#f6d365',letterSpacing:3,margin:'16px 0 20px'}}>ADMIN DASHBOARD</div>
+        <input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(pw===ADMIN_PASSWORD?(setAuthed(true),setPwError('')):(setPwError('Incorrect password')))} placeholder="Password" style={{width:'100%',padding:'11px 14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(255,255,255,0.08)',color:'#f5f0e8',fontSize:14,fontFamily:'Georgia,serif',outline:'none',marginBottom:10,textAlign:'center'}}/>
+        {pwError && <div style={{color:'#fca5a5',fontSize:11,marginBottom:8}}>{pwError}</div>}
+        <button onClick={()=>pw===ADMIN_PASSWORD?(setAuthed(true),setPwError('')):(setPwError('Incorrect password'))} style={{width:'100%',padding:'13px',borderRadius:12,border:'none',background:'linear-gradient(135deg,#f6d365,#fda085)',color:'#1a1a2e',fontSize:14,fontWeight:'bold',fontFamily:'Georgia,serif',cursor:'pointer'}}>Sign In</button>
+        <button onClick={onExit} style={{marginTop:10,width:'100%',padding:'8px',borderRadius:10,background:'none',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.4)',fontSize:11,fontFamily:'Georgia,serif',cursor:'pointer'}}>← Back to Game</button>
+      </div>
+    </div>
+  );
+
+  const gs = data?.gameStates || [];
+  const total = gs.length;
+  const playedToday = data?.todaySessions?.length || 0;
+  const newThisWeek = new Set((data?.weekSessions||[]).map(s=>s.user_id)).size;
+  const perfectTotal = gs.reduce((a,g)=>a+(g.stats?.perfectDaysAllTime||0),0);
+  const longestStreak = gs.reduce((a,g)=>Math.max(a,g.longest_streak||0),0);
+
+  // Chart data
+  const chartCounts = {};
+  const chartLabels = [];
+  for(let i=13;i>=0;i--){
+    const d=new Date(Date.now()-i*86400000);
+    const key=d.toISOString().split('T')[0];
+    chartCounts[key]=0;
+    chartLabels.push({key,label:d.toLocaleDateString('en-US',{weekday:'short'})});
+  }
+  (data?.recentSessions||[]).forEach(s=>{ if(chartCounts[s.session_date]!==undefined) chartCounts[s.session_date]++; });
+  const chartMax = Math.max(...Object.values(chartCounts),1);
+
+  return (
+    <div style={{minHeight:'100vh',background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',padding:'14px',position:'relative'}}>
+      <Starfield/>
+      <div style={{position:'relative',zIndex:1,maxWidth:900,margin:'0 auto'}}>
+        {/* Header */}
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,paddingBottom:12,borderBottom:'1px solid rgba(255,255,255,0.1)'}}>
+          <div>
+            <div style={{fontSize:14,fontWeight:'bold',color:'#f6d365',letterSpacing:3}}>✏️ LETTERLOOT ADMIN</div>
+            <div style={{fontSize:9,color:'rgba(255,255,255,0.3)',marginTop:3}}>Last updated: {lastUpdated||'—'}</div>
+          </div>
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={loadData} style={{background:'rgba(167,139,250,0.15)',border:'1px solid rgba(167,139,250,0.4)',borderRadius:12,padding:'4px 12px',color:'#a78bfa',fontFamily:'Georgia,serif',fontSize:11,cursor:'pointer'}}>{loading?'Loading…':'↺ Refresh'}</button>
+            <button onClick={onExit} style={{background:'none',border:'1px solid rgba(255,255,255,0.2)',borderRadius:12,padding:'4px 12px',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:11,cursor:'pointer'}}>← Game</button>
+          </div>
+        </div>
+
+        {/* Stat cards */}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:14}}>
+          {[
+            {label:'TOTAL PLAYERS',val:total,color:'246,211,101',vc:'#f6d365'},
+            {label:'PLAYED TODAY',val:playedToday,color:'34,211,238',vc:'#22d3ee'},
+            {label:'NEW THIS WEEK',val:newThisWeek,color:'167,139,250',vc:'#a78bfa'},
+            {label:'PERFECT DAYS',val:perfectTotal,color:'110,231,183',vc:'#6ee7b7'},
+            {label:'LONGEST STREAK',val:longestStreak+'d',color:'253,160,133',vc:'#fda085'},
+          ].map((c,i)=>(
+            <div key={i} style={cardStyle(c.color)}>
+              <div style={{fontSize:28,fontWeight:'bold',color:c.vc}}>{c.val}</div>
+              <div style={{fontSize:8,color:'rgba(255,255,255,0.5)',letterSpacing:2,marginTop:4}}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Activity chart */}
+        <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,marginBottom:12,border:'1px solid rgba(255,255,255,0.08)'}}>
+          <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📅 DAILY ACTIVITY — LAST 14 DAYS</div>
+          <div style={{display:'flex',alignItems:'flex-end',gap:4,height:70}}>
+            {chartLabels.map(({key,label})=>{
+              const val=chartCounts[key];
+              const pct=Math.max(3,(val/chartMax)*64);
+              return(<div key={key} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:2}}>
+                <div style={{fontSize:7,color:'rgba(255,255,255,0.5)'}}>{val||''}</div>
+                <div style={{width:'100%',background:'linear-gradient(180deg,#f6d365,#fda085)',borderRadius:'3px 3px 0 0',height:pct}}/>
+                <div style={{fontSize:7,color:'rgba(255,255,255,0.35)'}}>{label}</div>
+              </div>);
+            })}
+          </div>
+        </div>
+
+        {/* Two col */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          {/* Top scores */}
+          <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
+            <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>🏆 TOP LIFETIME SCORES</div>
+            {gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
+            <table style={tbl}><thead><tr><th style={th}></th><th style={th}>Player</th><th style={th}>Pts</th><th style={th}>Last Active</th></tr></thead><tbody>
+              {gs.slice(0,8).map((g,i)=>(
+                <tr key={i}><td style={td}>{medal(i)}</td><td style={td}>{g.player_name||'Guest'}</td><td style={{...td,color:'#f6d365',fontWeight:'bold'}}>{(g.lifetime_points||0).toLocaleString()}</td><td style={{...td,color:'rgba(255,255,255,0.4)',fontSize:10}}>{timeAgo(g.last_played_date)}</td></tr>
+              ))}
+            </tbody></table>}
+          </div>
+          {/* Perfect day leaders */}
+          <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
+            <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAY LEADERS</div>
+            {gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
+            <table style={tbl}><thead><tr><th style={th}></th><th style={th}>Player</th><th style={th}>Perfect Days</th><th style={th}>Streak</th></tr></thead><tbody>
+              {[...gs].sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,8).map((g,i)=>(
+                <tr key={i}><td style={td}>{medal(i)}</td><td style={td}>{g.player_name||'Guest'}</td><td style={{...td,color:'#6ee7b7',fontWeight:'bold'}}>🌈 {g.stats?.perfectDaysAllTime||0}</td><td style={{...td,color:'#fda085',fontSize:10}}>🔥 {g.current_streak||0}d</td></tr>
+              ))}
+            </tbody></table>}
+          </div>
+        </div>
+
+        {/* All players table */}
+        <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
+          <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📋 ALL PLAYERS ({total})</div>
+          {gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No players yet</div>:
+          <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Player</th><th style={th}>Lifetime Pts</th><th style={th}>Current Streak</th><th style={th}>Best Streak</th><th style={th}>Perfect Days</th><th style={th}>Badges</th><th style={th}>Last Played</th></tr></thead><tbody>
+            {gs.map((g,i)=>(
+              <tr key={i}>
+                <td style={{...td,color:'rgba(255,255,255,0.3)',fontSize:10}}>{i+1}</td>
+                <td style={td}>{g.player_name||'Guest'}</td>
+                <td style={{...td,color:'#f6d365',fontWeight:'bold'}}>{(g.lifetime_points||0).toLocaleString()}</td>
+                <td style={{...td,color:'#fda085'}}>{g.current_streak?'🔥 '+g.current_streak+'d':'—'}</td>
+                <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{g.longest_streak||0}d</td>
+                <td style={{...td,color:'#6ee7b7'}}>{g.stats?.perfectDaysAllTime?'🌈 '+g.stats.perfectDaysAllTime:'—'}</td>
+                <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{(g.badges||[]).length} earned</td>
+                <td style={{...td,color:'rgba(255,255,255,0.4)',fontSize:10}}>{timeAgo(g.last_played_date)}</td>
+              </tr>
+            ))}
+          </tbody></table>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [authState, setAuthState] = useState("loading");
   const [user, setUser] = useState(null);
@@ -806,12 +992,14 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
   const [showCelebrate, setShowCelebrate] = useState(() => new URLSearchParams(window.location.search).get('celebrate') === '1');
+  const [showAdmin, setShowAdmin] = useState(() => new URLSearchParams(window.location.search).get('admin') === '1');
   const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
   const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
   const handleFarewellDone = () => { setShowFarewell(false); setAuthState("auth"); };
   const handleFarewellStats = () => { setShowFarewell(false); setPostFarewellTab("stats"); };
+  if (showAdmin) return <AdminScreen onExit={()=>setShowAdmin(false)}/>;
   if (showCelebrate) return (
     <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',color:'#f5f0e8',padding:'30px 24px',position:'relative',overflow:'hidden'}} onClick={()=>setShowCelebrate(false)}>
       <Starfield/>

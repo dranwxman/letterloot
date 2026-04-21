@@ -1497,7 +1497,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   }
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
-                  <input ref={photoInputRef} type="file" accept="image/*" capture="user" onChange={handlePhotoChange} style={{display:"none"}}/>
+                  <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{display:"none"}}/>
                   <button onClick={()=>photoInputRef.current?.click()} style={{padding:"6px 10px",borderRadius:10,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.5)",color:"#22d3ee",fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",fontWeight:"bold"}}>
                     📷 Choose / Take Photo
                   </button>

@@ -939,6 +939,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [congratsMsg] = useState(() => CONGRATS_MSGS[Math.floor(Math.random() * CONGRATS_MSGS.length)]);
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState(() => localStorage.getItem("ll_photo") || null);
+  const [profileNickname, setProfileNickname] = useState(() => localStorage.getItem("ll_nickname") || "");
+  const [editingProfile, setEditingProfile] = useState(false);
+  const photoInputRef = useRef(null);
   // ── Bonus Level State (dormant when ENABLE_BONUS_LEVELS = false) ──
   const [bonusLevelUnlocked, setBonusLevelUnlocked] = useState(false);
   const [showBonusUnlock, setShowBonusUnlock] = useState(false);
@@ -1204,6 +1208,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     return `🌈 ${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app?celebrate=1\n🌈`;
   }, [playerName]);
 
+  const handlePhotoChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      setProfilePhoto(dataUrl);
+      localStorage.setItem("ll_photo", dataUrl);
+    };
+    reader.readAsDataURL(file);
+  };
+  const handleNicknameSave = (val) => {
+    setProfileNickname(val);
+    localStorage.setItem("ll_nickname", val);
+  };
+
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
     if (!online) { setFlash({ word: "No internet connection!", score: 0, valid: false }); setTimeout(() => setFlash(null), 2000); return; }
@@ -1432,25 +1452,91 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   ];
 
   if (showIntro) return (
-    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"30px 24px",position:"relative",overflow:"hidden"}}>
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 24px",position:"relative",overflow:"hidden"}}>
       <Starfield/>
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360,textAlign:"center"}}>
-        <PencilLogo size={180}/>
-        <div style={{marginTop:16,background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:14,padding:"10px 28px",boxShadow:"0 0 28px rgba(139,92,246,0.5)"}}>
-          <span style={{fontSize:32,fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+        <PencilLogo size={160}/>
+        <div style={{marginTop:12,background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:14,padding:"8px 24px",boxShadow:"0 0 28px rgba(139,92,246,0.5)"}}>
+          <span style={{fontSize:28,fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
         </div>
-        <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:8,letterSpacing:1}}>Daily word puzzle · Every letter has a value</div>
-        <div style={{marginTop:16,fontSize:18,fontWeight:"bold",color:"#22d3ee"}}>
-          {playerName ? `Welcome back, ${playerName}! 👋` : "Welcome! 👋"}
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:6,letterSpacing:1}}>Daily word puzzle · Every letter has a value</div>
+
+        {/* ── Profile section ── */}
+        <div style={{marginTop:16,width:"100%",background:"rgba(255,255,255,0.05)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.12)"}}>
+          {!editingProfile ? (
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              {/* Photo */}
+              <div style={{position:"relative",flexShrink:0}} onClick={()=>setEditingProfile(true)}>
+                {profilePhoto
+                  ? <img src={profilePhoto} alt="profile" style={{width:60,height:60,borderRadius:"50%",objectFit:"cover",border:"2.5px solid rgba(34,211,238,0.7)",cursor:"pointer"}}/>
+                  : <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(34,211,238,0.1)",border:"2px dashed rgba(34,211,238,0.5)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22}}>👤</div>
+                }
+                <div style={{position:"absolute",bottom:0,right:0,background:"rgba(34,211,238,0.9)",borderRadius:"50%",width:18,height:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,cursor:"pointer"}}>✏️</div>
+              </div>
+              {/* Name/nickname */}
+              <div style={{flex:1,textAlign:"left"}}>
+                <div style={{fontSize:16,fontWeight:"bold",color:"#22d3ee"}}>
+                  {profileNickname || playerName || "Guest"}
+                </div>
+                {profileNickname && playerName && profileNickname !== playerName &&
+                  <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:2}}>{playerName}</div>
+                }
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:4,cursor:"pointer"}} onClick={()=>setEditingProfile(true)}>
+                  Tap to edit profile ✏️
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {/* Photo upload */}
+              <div style={{display:"flex",alignItems:"center",gap:12}}>
+                <div style={{position:"relative",flexShrink:0}}>
+                  {profilePhoto
+                    ? <img src={profilePhoto} alt="profile" style={{width:64,height:64,borderRadius:"50%",objectFit:"cover",border:"2.5px solid rgba(34,211,238,0.7)"}}/>
+                    : <div style={{width:64,height:64,borderRadius:"50%",background:"rgba(34,211,238,0.1)",border:"2px dashed rgba(34,211,238,0.5)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24}}>👤</div>
+                  }
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
+                  <input ref={photoInputRef} type="file" accept="image/*" capture="user" onChange={handlePhotoChange} style={{display:"none"}}/>
+                  <button onClick={()=>photoInputRef.current?.click()} style={{padding:"6px 10px",borderRadius:10,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.5)",color:"#22d3ee",fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",fontWeight:"bold"}}>
+                    📷 Choose / Take Photo
+                  </button>
+                  {profilePhoto && <button onClick={()=>{ setProfilePhoto(null); localStorage.removeItem("ll_photo"); }} style={{padding:"4px 10px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:10,fontFamily:"Georgia,serif",cursor:"pointer"}}>Remove Photo</button>}
+                </div>
+              </div>
+              {/* Nickname input */}
+              <div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:4,textAlign:"left"}}>Nickname (shown on welcome screen)</div>
+                <input
+                  value={profileNickname}
+                  onChange={e=>setProfileNickname(e.target.value)}
+                  onBlur={e=>handleNicknameSave(e.target.value)}
+                  placeholder={playerName || "Enter a nickname…"}
+                  style={{width:"100%",padding:"8px 12px",borderRadius:10,border:"1px solid rgba(34,211,238,0.4)",background:"rgba(34,211,238,0.08)",color:"#f5f0e8",fontSize:13,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}
+                />
+              </div>
+              <button onClick={()=>{ handleNicknameSave(profileNickname); setEditingProfile(false); }} style={{padding:"8px",borderRadius:10,background:"linear-gradient(135deg,#22d3ee,#0ea5e9)",color:"#0a0820",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+                ✓ Save Profile
+              </button>
+            </div>
+          )}
         </div>
-        <div style={{marginTop:28,background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"20px",border:"1px solid rgba(255,255,255,0.15)",width:"100%"}}>
-          <div style={{fontSize:15,color:"#f5f0e8",lineHeight:1.8}}>Spell words from the tiles.<br/>Every letter has a point value.<br/>Clear all 5 levels for a <span style={{color:"#f6d365",fontWeight:"bold"}}>Perfect Day</span>!</div>
-          <div style={{marginTop:12,fontSize:13,color:"#22d3ee",fontFamily:"Georgia,serif",lineHeight:1.6}}>
+
+        {/* Welcome message */}
+        <div style={{marginTop:12,fontSize:17,fontWeight:"bold",color:"#22d3ee"}}>
+          {(profileNickname||playerName) ? `Welcome back, ${profileNickname||playerName}! 👋` : "Welcome! 👋"}
+        </div>
+
+        {/* Game info */}
+        <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.15)",width:"100%"}}>
+          <div style={{fontSize:14,color:"#f5f0e8",lineHeight:1.8}}>Spell words from the tiles.<br/>Every letter has a point value.<br/>Clear all 5 levels for a <span style={{color:"#f6d365",fontWeight:"bold"}}>Perfect Day</span>!</div>
+          <div style={{marginTop:10,fontSize:12,color:"#22d3ee",fontFamily:"Georgia,serif",lineHeight:1.6}}>
             ✨ Fresh board every day at midnight<br/>
-            <span style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>(your local time — {(()=>{ const d=new Date(); d.setHours(24,0,0,0); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', timeZoneName:'short'}); })()})</span>
+            <span style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>(your local time — {(()=>{ const d=new Date(); d.setHours(24,0,0,0); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', timeZoneName:'short'}); })()})</span>
           </div>
         </div>
-        <button onClick={()=>{ setShowIntro(false); }} style={{marginTop:28,width:"100%",padding:"18px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
+
+        <button onClick={()=>{ setEditingProfile(false); setShowIntro(false); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
         </button>
       </div>

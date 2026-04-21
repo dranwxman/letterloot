@@ -820,7 +820,15 @@ function AdminScreen({ onExit }) {
       const todaySessions = await adminQuery('daily_sessions', 'user_id,session_date,total_score,perfect_day', `&session_date=eq.${today}`);
       const recentSessions = await adminQuery('daily_sessions', 'session_date', `&session_date=gte.${twoWeeksAgo}`);
       const weekSessions = await adminQuery('daily_sessions', 'user_id,session_date', `&session_date=gte.${weekAgo}`);
-      setData({ gameStates, todaySessions, recentSessions, weekSessions, today });
+      // Build top 25 longest words and top word scores from stats
+      const allWords = [];
+      gameStates.forEach(g => {
+        if (g.stats?.longestWordAllTime) allWords.push({ player: g.player_name||'Guest', word: g.stats.longestWordAllTime, letters: g.stats.longestWordAllTime.length, type:'longest' });
+        if (g.stats?.highWordAllTimeWord) allWords.push({ player: g.player_name||'Guest', word: g.stats.highWordAllTimeWord, score: g.stats.highWordAllTime||0, type:'score' });
+      });
+      const top25Longest = [...allWords].filter(w=>w.type==='longest').sort((a,b)=>b.letters-a.letters).slice(0,25);
+      const top25Score = [...allWords].filter(w=>w.type==='score').sort((a,b)=>b.score-a.score).slice(0,25);
+      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score });
       setLastUpdated(new Date().toLocaleTimeString());
     } catch(e) { console.error(e); }
     setLoading(false);
@@ -945,6 +953,38 @@ function AdminScreen({ onExit }) {
             <table style={tbl}><thead><tr><th style={th}></th><th style={th}>Player</th><th style={th}>Perfect Days</th><th style={th}>Streak</th></tr></thead><tbody>
               {[...gs].sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,8).map((g,i)=>(
                 <tr key={i}><td style={td}>{medal(i)}</td><td style={td}>{g.player_name||'Guest'}</td><td style={{...td,color:'#6ee7b7',fontWeight:'bold'}}>🌈 {g.stats?.perfectDaysAllTime||0}</td><td style={{...td,color:'#fda085',fontSize:10}}>🔥 {g.current_streak||0}d</td></tr>
+              ))}
+            </tbody></table>}
+          </div>
+        </div>
+
+        {/* Top 25 longest words + top word scores */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
+            <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📏 TOP 25 LONGEST WORDS</div>
+            {!(data?.top25Longest?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
+            <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Word</th><th style={th}>Letters</th><th style={th}>Player</th></tr></thead><tbody>
+              {(data.top25Longest||[]).map((w,i)=>(
+                <tr key={i}>
+                  <td style={{...td,color:'rgba(255,255,255,0.3)',fontSize:10}}>{medal(i)}</td>
+                  <td style={{...td,color:'#a78bfa',fontWeight:'bold',letterSpacing:2}}>{w.word}</td>
+                  <td style={{...td,color:'#22d3ee',fontWeight:'bold'}}>{w.letters}</td>
+                  <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{w.player}</td>
+                </tr>
+              ))}
+            </tbody></table>}
+          </div>
+          <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
+            <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>💎 TOP 25 WORD SCORES</div>
+            {!(data?.top25Score?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
+            <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Word</th><th style={th}>Score</th><th style={th}>Player</th></tr></thead><tbody>
+              {(data.top25Score||[]).map((w,i)=>(
+                <tr key={i}>
+                  <td style={{...td,color:'rgba(255,255,255,0.3)',fontSize:10}}>{medal(i)}</td>
+                  <td style={{...td,color:'#f093fb',fontWeight:'bold',letterSpacing:2}}>{w.word}</td>
+                  <td style={{...td,color:'#f6d365',fontWeight:'bold'}}>{w.score} pts</td>
+                  <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{w.player}</td>
+                </tr>
               ))}
             </tbody></table>}
           </div>
@@ -1127,6 +1167,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [congratsMsg] = useState(() => CONGRATS_MSGS[Math.floor(Math.random() * CONGRATS_MSGS.length)]);
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState(null);
+  const [leaderboardLoading, setLeaderboardLoading] = useState(false);
+  const [leaderboardTab, setLeaderboardTab] = useState('scores');
+  const [leaderboardPeriod, setLeaderboardPeriod] = useState('alltime');
   const [profilePhoto, setProfilePhoto] = useState(() => localStorage.getItem("ll_photo") || null);
   const [profileNickname, setProfileNickname] = useState(() => localStorage.getItem("ll_nickname") || "");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -1147,6 +1191,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const gameIndexRef = useRef(ss?.gameIndex || 0);
 
   useEffect(() => { if (initialTab) { setTab(initialTab); onTabConsumed?.(); } }, [initialTab]);
+  useEffect(() => {
+    if (tab === 'leaderboard' && !leaderboardData && !leaderboardLoading) {
+      setLeaderboardLoading(true);
+      fetchLeaderboard().then(d => { setLeaderboardData(d); setLeaderboardLoading(false); });
+    }
+  }, [tab]);
 
   const timerRef = useRef(null);
   const levelTimeRef = useRef(ss?.levelTime || 0);
@@ -1395,6 +1445,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const sharer = playerName ? `${playerName} had a Perfect Day on LetterLoot!` : "🌈 PERFECT DAY on LetterLoot!";
     return `🌈 ${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app?celebrate=1\n🌈`;
   }, [playerName]);
+
+  const fetchLeaderboard = async () => {
+    try {
+      const base = `${import.meta.env.VITE_SUPABASE_URL || "https://zcevszxmoggmcmvyxjtn.supabase.co"}/rest/v1`;
+      const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM"}` };
+      const [gsRes, todayRes, weekRes] = await Promise.all([
+        fetch(`${base}/game_state?select=player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`, {headers:hdrs}),
+        fetch(`${base}/daily_sessions?select=user_id,session_date,total_score,level_score,tiles,submitted&session_date=eq.${new Date().toISOString().split('T')[0]}&limit=100`, {headers:hdrs}),
+        fetch(`${base}/daily_sessions?select=user_id,session_date,total_score&session_date=gte.${new Date(Date.now()-7*86400000).toISOString().split('T')[0]}&limit=500`, {headers:hdrs}),
+      ]);
+      const gs = gsRes.ok ? await gsRes.json() : [];
+      const todaySessions = todayRes.ok ? await todayRes.json() : [];
+      const weekSessions = weekRes.ok ? await weekRes.json() : [];
+      return { gs, todaySessions, weekSessions };
+    } catch { return null; }
+  };
 
   const handlePhotoChange = (e) => {
     const file = e.target.files?.[0];
@@ -1722,6 +1788,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             ✨ Fresh board every day at midnight<br/>
             <span style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>(your local time — {(()=>{ const d=new Date(); d.setHours(24,0,0,0); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', timeZoneName:'short'}); })()})</span>
           </div>
+          <div style={{marginTop:10,background:"rgba(246,211,101,0.1)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(246,211,101,0.3)"}}>
+            <div style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>🏆 Global Leaderboard available to all registered players!</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:3}}>Top Scores · Best Words · Longest Words · Perfect Days · Streaks</div>
+          </div>
         </div>
 
         <button onClick={()=>{ setEditingProfile(false); setShowIntro(false); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
@@ -1986,7 +2056,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
         {/* ROW 2: History · Stats · Tips · Level pill */}
         <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:3}}>
-          {[{id:"history",label:"📜 History"},{id:"stats",label:"📊 Stats"},{id:"info",label:"ℹ️ Tips"}].map(t=>(
+          {[{id:"history",label:"📜 History"},{id:"stats",label:"📊 Stats"},{id:"info",label:"ℹ️ Tips"},{id:"leaderboard",label:"🏆 Leaders"}].map(t=>(
             <button key={t.id} className="ll-tab" onClick={()=>setTab(t.id)} style={{flex:1,padding:"4px 3px",borderRadius:12,fontSize:9,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap",textAlign:"center"}}>
               {t.label}
             </button>
@@ -2326,7 +2396,164 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       )}
 
-      {/* ── INFO / TIPS TAB ── item 10 */}
+      {/* ── LEADERBOARD TAB ── */}
+      {tab==="leaderboard"&&(
+        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          {/* Header */}
+          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"12px 16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
+            <div style={{fontSize:16,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:3}}>🏆 LEADERBOARD</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Registered players only · Updated live</div>
+            {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.15)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(167,139,250,0.4)"}}>
+              <div style={{fontSize:11,color:"#a78bfa",fontWeight:"bold"}}>Want to appear on the leaderboard?</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>Create a free account to save your scores and compete!</div>
+              <button className="ll-btn" onClick={onSignOut} style={{marginTop:6,padding:"5px 14px",borderRadius:10,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:10,fontWeight:"bold"}}>Create Account →</button>
+            </div>}
+          </div>
+
+          {/* Category tabs */}
+          <div style={{display:"flex",gap:3,marginBottom:6}}>
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+              <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:8,background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Period tabs — only show for non-streaks */}
+          {leaderboardTab!=="streaks"&&(
+            <div style={{display:"flex",gap:3,marginBottom:8}}>
+              {[{id:"daily",label:"☀️ Today"},{id:"weekly",label:"📅 This Week"},{id:"alltime",label:"🏆 All-Time"}].map(p=>(
+                <button key={p.id} className="ll-tab" onClick={()=>setLeaderboardPeriod(p.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:9,background:leaderboardPeriod===p.id?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.06)",color:leaderboardPeriod===p.id?"#fff":"rgba(255,255,255,0.55)",fontWeight:leaderboardPeriod===p.id?"bold":"normal",border:leaderboardPeriod===p.id?"none":"1px solid rgba(255,255,255,0.15)",textAlign:"center"}}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {leaderboardLoading&&<div style={{textAlign:"center",padding:"30px",color:"rgba(255,255,255,0.4)",fontSize:12}}>Loading leaderboard…</div>}
+          {!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:"30px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
+
+          {!leaderboardLoading&&leaderboardData&&(()=>{
+            const { gs=[], todaySessions=[], weekSessions=[] } = leaderboardData;
+            const medal = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
+            const isMe = (name) => name === playerName;
+            const rowStyle = (name, i) => ({
+              display:"flex", alignItems:"center", gap:8,
+              background: isMe(name)?"rgba(34,211,238,0.1)":i===0?"rgba(246,211,101,0.08)":"rgba(255,255,255,0.03)",
+              border: isMe(name)?"1px solid rgba(34,211,238,0.4)":i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",
+              borderRadius:10, padding:"8px 10px", marginBottom:5
+            });
+
+            // Build today/week best scores per player
+            const todayBest = {};
+            todaySessions.forEach(s=>{ if(!todayBest[s.user_id]||s.total_score>todayBest[s.user_id]) todayBest[s.user_id]=s.total_score; });
+            const weekBest = {};
+            weekSessions.forEach(s=>{ if(!weekBest[s.user_id]||s.total_score>weekBest[s.user_id]) weekBest[s.user_id]=s.total_score; });
+
+            const empty = <div style={{textAlign:"center",padding:"20px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>No data yet for this period</div>;
+
+            // ── SCORES ──
+            if (leaderboardTab==="scores") {
+              let ranked = [];
+              if (leaderboardPeriod==="alltime") ranked = [...gs].sort((a,b)=>(b.lifetime_points||0)-(a.lifetime_points||0)).slice(0,10).map(g=>({name:g.player_name,val:(g.lifetime_points||0).toLocaleString(),suffix:"pts"}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBest[g.player_name]).sort((a,b)=>(b.stats?.highScoreToday||0)-(a.stats?.highScoreToday||0)).slice(0,10).map(g=>({name:g.player_name,val:(g.stats?.highScoreToday||0).toLocaleString(),suffix:"pts"}));
+              if (leaderboardPeriod==="weekly") ranked = [...gs].sort((a,b)=>(b.stats?.highScoreAllTime||0)-(a.stats?.highScoreAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:(g.stats?.highScoreAllTime||0).toLocaleString(),suffix:"pts"}));
+              if (!ranked.length) return empty;
+              return <div>{ranked.map((r,i)=>(
+                <div key={i} style={rowStyle(r.name,i)}>
+                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
+                  <div style={{flex:1}}><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>{isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}</div>
+                  <span style={{fontSize:15,fontWeight:"bold",color:"#f6d365"}}>{r.val}</span>
+                  <span style={{fontSize:9,color:"rgba(255,255,255,0.35)",marginLeft:2}}>{r.suffix}</span>
+                </div>
+              ))}</div>;
+            }
+
+            // ── BEST WORD SCORES ──
+            if (leaderboardTab==="words") {
+              let ranked = [];
+              if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>g.stats?.highWordTodayWord).sort((a,b)=>(b.stats?.highWordToday||0)-(a.stats?.highWordToday||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordTodayWord,val:g.stats.highWordToday||0}));
+              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
+              if (!ranked.length) return empty;
+              return <div>{ranked.map((r,i)=>(
+                <div key={i} style={rowStyle(r.name,i)}>
+                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{r.word}</div>
+                    <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}</div>
+                  </div>
+                  <span style={{fontSize:15,fontWeight:"bold",color:"#f6d365"}}>{r.val} pts</span>
+                </div>
+              ))}</div>;
+            }
+
+            // ── LONGEST WORDS ──
+            if (leaderboardTab==="longest") {
+              let ranked = [];
+              if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>g.stats?.longestWordToday).sort((a,b)=>(b.stats?.longestWordToday?.length||0)-(a.stats?.longestWordToday?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordToday,val:g.stats.longestWordToday?.length||0}));
+              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
+              if (!ranked.length) return empty;
+              return <div>{ranked.map((r,i)=>(
+                <div key={i} style={rowStyle(r.name,i)}>
+                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{r.word}</div>
+                    <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}</div>
+                  </div>
+                  <span style={{fontSize:15,fontWeight:"bold",color:"#22d3ee"}}>{r.val}</span>
+                  <span style={{fontSize:9,color:"rgba(255,255,255,0.35)",marginLeft:2}}>ltrs</span>
+                </div>
+              ))}</div>;
+            }
+
+            // ── PERFECT DAYS ──
+            if (leaderboardTab==="perfect") {
+              let ranked = [];
+              if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.perfectDaysAllTime>0).sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:g.stats.perfectDaysAllTime}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>g.stats?.perfectDaysWeek&&Object.values(g.stats.perfectDaysWeek||{}).some(v=>v>0)).sort((a,b)=>{const ak=Object.keys(b.stats?.perfectDaysWeek||{}).sort().pop();const bk=Object.keys(a.stats?.perfectDaysWeek||{}).sort().pop();return(b.stats?.perfectDaysWeek?.[ak]||0)-(a.stats?.perfectDaysWeek?.[bk]||0);}).slice(0,10).map(g=>({name:g.player_name,val:"🌈 Today"}));
+              if (leaderboardPeriod==="weekly") ranked = [...gs].map(g=>({name:g.player_name,val:Object.values(g.stats?.perfectDaysWeek||{}).reduce((a,b)=>a+b,0)})).filter(g=>g.val>0).sort((a,b)=>b.val-a.val).slice(0,10);
+              if (!ranked.length) return empty;
+              return <div>{ranked.map((r,i)=>(
+                <div key={i} style={rowStyle(r.name,i)}>
+                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
+                  <div style={{flex:1}}><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>{isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}</div>
+                  <span style={{fontSize:15,fontWeight:"bold",color:"#6ee7b7"}}>🌈 {r.val}</span>
+                </div>
+              ))}</div>;
+            }
+
+            // ── STREAKS — ALL-TIME ONLY ──
+            if (leaderboardTab==="streaks") {
+              const ranked = [...gs].sort((a,b)=>(b.longest_streak||0)-(a.longest_streak||0)).slice(0,10);
+              if (!ranked.length) return empty;
+              return (
+                <div>
+                  <div style={{textAlign:"center",fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:1}}>ALL-TIME LONGEST STREAKS</div>
+                  {ranked.map((g,i)=>(
+                    <div key={i} style={rowStyle(g.player_name,i)}>
+                      <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
+                      <div style={{flex:1}}>
+                        <span style={{fontSize:12,fontWeight:"bold",color:isMe(g.player_name)?"#22d3ee":"#f5f0e8"}}>{g.player_name||"Guest"}</span>
+                        {isMe(g.player_name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}
+                        {g.current_streak>0&&<div style={{fontSize:9,color:"#fda085",marginTop:1}}>🔥 Currently on {g.current_streak}d streak</div>}
+                      </div>
+                      <span style={{fontSize:15,fontWeight:"bold",color:"#fda085"}}>🔥 {g.longest_streak||0}d</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            }
+          })()}
+
+          <div style={{marginTop:10,textAlign:"center"}}>
+            <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{padding:"7px 18px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",fontSize:10}}>↺ Refresh</button>
+          </div>
+        </div>
+      )}
+
+            {/* ── INFO / TIPS TAB ── item 10 */}
       {tab==="info"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {/* Header card */}

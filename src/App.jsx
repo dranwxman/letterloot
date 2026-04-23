@@ -1168,6 +1168,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
   const [showReadyScreen, setShowReadyScreen] = useState(false);
+  const [leaderboardFromPerfectDay, setLeaderboardFromPerfectDay] = useState(false);
   const [leaderboardData, setLeaderboardData] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardTab, setLeaderboardTab] = useState('scores');
@@ -2055,10 +2056,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
           <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
           <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+          <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
+            🏆 Check Leaderboard
+          </button>
           <button className="ll-btn" onClick={()=>{
             navigator.clipboard?.writeText(getPerfectDayShareText());
             setShareCopied(true); setTimeout(() => setShareCopied(false), 4000);
-          }} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
+          }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
             {shareCopied?"✓ Copied!":"📋 Save & Share!"}
           </button>
           {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
@@ -2095,10 +2099,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
             Only 1 Perfect Day counts per day toward your total — but every one is worth celebrating!
           </div>
+          <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
+            🏆 Check Leaderboard
+          </button>
           <button className="ll-btn" onClick={()=>{
             navigator.clipboard?.writeText(getPerfectDayShareText());
             setShareCopied(true); setTimeout(()=>setShareCopied(false),4000);
-          }} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
+          }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
             {shareCopied?"✓ Copied!":"📋 Save & Share!"}
           </button>
           {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
@@ -2648,6 +2655,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             }
           })()}
 
+          {leaderboardFromPerfectDay&&(
+            <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(false); setTab('play'); perfectDayAchieved ? setPerfectDayAchieved(true) : setShowRepeatPerfect(true); }} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,165,0,0.2))",border:"2px solid rgba(255,215,0,0.6)",color:"#f6d365",fontSize:13,fontWeight:"bold",marginBottom:8}}>
+              🌈 ← Back to Perfect Day
+            </button>
+          )}
           <div style={{marginTop:10,display:"flex",gap:8}}>
             <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:"7px",borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:10,fontWeight:"bold"}}>↺ Refresh</button>
             <button className="ll-btn" onClick={()=>setTab("play")} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Return to Your Game</button>

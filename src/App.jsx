@@ -1246,18 +1246,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
         }
         if (dailySession && dailySession.level != null) {
-          setLevel(dailySession.level || 1);
-          setTotalScore(dailySession.total_score || 0); totalRef.current = dailySession.total_score || 0;
-          setLevelScore(dailySession.level_score || 0); levelScoreRef.current = dailySession.level_score || 0;
-          if (dailySession.tiles && dailySession.tiles.length > 0) setTiles(dailySession.tiles);
-          tileCountRef.current = dailySession.tile_count || 42;
-          setSubmitted(dailySession.submitted || []); submittedRef.current = dailySession.submitted || [];
-          setPerfectDaySync(dailySession.perfect_day ?? true);
-          setLongestWordToday(dailySession.longest_word_today || "");
-          levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
-          setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
-          if (dailySession.level_complete) setLevelComplete(true);
-          if (dailySession.undo_used) setUndoUsed(true);
+          // Only restore cloud session if it's further along than local session
+          const localLevel = ss?.level || 1;
+          const localSubmitted = ss?.submitted?.length || 0;
+          const cloudLevel = dailySession.level || 1;
+          const cloudSubmitted = (dailySession.submitted || []).length;
+          const useCloud = cloudLevel > localLevel || (cloudLevel === localLevel && cloudSubmitted >= localSubmitted);
+          if (useCloud) {
+            setLevel(cloudLevel);
+            setTotalScore(dailySession.total_score || 0); totalRef.current = dailySession.total_score || 0;
+            setLevelScore(dailySession.level_score || 0); levelScoreRef.current = dailySession.level_score || 0;
+            if (dailySession.tiles && dailySession.tiles.length > 0) setTiles(dailySession.tiles);
+            tileCountRef.current = dailySession.tile_count || 42;
+            setSubmitted(dailySession.submitted || []); submittedRef.current = dailySession.submitted || [];
+            setPerfectDaySync(dailySession.perfect_day ?? true);
+            setLongestWordToday(dailySession.longest_word_today || "");
+            levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
+            setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
+            if (dailySession.level_complete) setLevelComplete(true);
+            if (dailySession.undo_used) setUndoUsed(true);
+          }
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
         if (playerData?.name) setPlayerName(playerData.name);
@@ -1282,6 +1290,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         gameIndex: gameIndexRef.current,
       }),
       saveGameState(user.id, {
+        playerName: playerName || '',
         lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
         currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
         lastStreakDate: statsData.lastStreakDate, badges: badgeStore.lifetime,
@@ -2004,21 +2013,31 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       </div>}
 
-      {showRepeatPerfect&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%"}}>
-          <div style={{fontSize:56}}>🌈</div>
-          <div style={{fontSize:22,fontWeight:"bold",marginTop:10}} className="perfect-text">PERFECT DAY Again!</div>
-          <div style={{fontSize:14,color:"#f5f0e8",marginTop:14,lineHeight:1.8}}>
-            Congratulations again on your LetterLoot <strong>PERFECT DAY</strong> Achievement!<br/><br/>
-            You scored <span style={{color:"#f6d365",fontWeight:"bold"}}>{totalRef.current} points</span> in <span style={{color:"#60a5fa",fontWeight:"bold"}}>{formatTime(totalTimeRef.current)}</span>.<br/><br/>
-            As a reminder, only <strong>1 "Perfect Day"</strong> will be included in your final count per day. For all your game statistics go to the <strong>"Stats"</strong> button on any LetterLoot level.<br/><br/>
-            <span style={{fontSize:15,color:"#6ee7b7",fontWeight:"bold"}}>Would you like to play again now?</span>
+      {showRepeatPerfect&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%",margin:"20px auto"}}>
+          <div style={{fontSize:52}}>🌈</div>
+          <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
+          <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
+          <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
+            🏆 {playerName||"You"}<br/>{getShortDate()}<br/>
+            Score: {totalRef.current} pts · Time: {formatTime(totalTimeRef.current)}<br/>
+            💰 Lifetime: {lifetimePoints.toLocaleString()} pts
           </div>
-          <div style={{display:"flex",gap:10,marginTop:20}}>
-            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{flex:1,padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:15,fontWeight:"bold",border:"none",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-              <PencilIcon size={28}/> Yes!
-            </button>
-            <button className="ll-btn" onClick={()=>{setShowRepeatPerfect(false);triggerFarewell();}} style={{flex:1,padding:"14px",borderRadius:14,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.3)",color:"#f5f0e8",fontSize:15,fontWeight:"bold"}}>No Thanks</button>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
+            Only 1 Perfect Day counts per day toward your total — but every one is worth celebrating!
+          </div>
+          <button className="ll-btn" onClick={()=>{
+            navigator.clipboard?.writeText(getPerfectDayShareText());
+            setShareCopied(true); setTimeout(()=>setShareCopied(false),4000);
+          }} style={{marginTop:12,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
+            {shareCopied?"✓ Copied!":"📋 Save & Share!"}
+          </button>
+          {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
+            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:14,fontWeight:"bold"}}>🌅 Later Today</button>
+            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); triggerFarewell(); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:14,fontWeight:"bold"}}>🌙 Tomorrow</button>
           </div>
         </div>
       </div>}

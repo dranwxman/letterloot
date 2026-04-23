@@ -2579,8 +2579,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             }
           })()}
 
-          <div style={{marginTop:10,textAlign:"center"}}>
-            <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{padding:"7px 18px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",fontSize:10}}>↺ Refresh</button>
+          <div style={{marginTop:10,display:"flex",gap:8}}>
+            <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:"7px",borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:10,fontWeight:"bold"}}>↺ Refresh</button>
+            <button className="ll-btn" onClick={()=>setTab("play")} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Return to Your Game</button>
           </div>
         </div>
       )}

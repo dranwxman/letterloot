@@ -1199,6 +1199,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   }, [tab]);
 
   const timerRef = useRef(null);
+  const justResetRef = useRef(false);
   const levelTimeRef = useRef(ss?.levelTime || 0);
   const totalTimeRef = useRef(ss?.totalTime || 0);
   const submittedRef = useRef(ss?.submitted || []);
@@ -1245,7 +1246,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           setStatsData(prev => ({...prev, ...(gameState.stats || {})}));
           setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
         }
-        if (dailySession && dailySession.level != null) {
+        if (dailySession && dailySession.level != null && !justResetRef.current) {
           // Only restore cloud session if it's further along than local session
           const localLevel = ss?.level || 1;
           const localSubmitted = ss?.submitted?.length || 0;
@@ -1272,6 +1273,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       } else {
         setPlayerName(localStorage.getItem("ll_name") || "");
       }
+      justResetRef.current = false;
       if (!localStorage.getItem("ll_tour_done")) setShowTour(true);
       if (Notification.permission === "granted") scheduleNotifications();
     };
@@ -1398,6 +1400,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setLevelTime(0); setTotalTime(0); startTimer();
     gameIndexRef.current += 1;
     clearLocalSession();
+    justResetRef.current = true;
     setShowIntro(true);
   }, [startTimer, stopTimer, setPerfectDaySync]);
 
@@ -2008,7 +2011,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </div>
           )}
           {playAgainChoice==="now"&&<div style={{marginTop:14,fontSize:20,fontWeight:"bold",color:"#00e676"}}>Let's Go! 🎯</div>}
-          {playAgainChoice==="later"&&(<div style={{marginTop:14}}><div style={{fontSize:15,color:"#bfdbfe",lineHeight:1.7,fontWeight:"bold"}}>Excellent.<br/>A Perfect Sunset awaits. 🌅</div><button className="ll-btn" onClick={()=>{setPerfectDayAchieved(false);setPlayAgainChoice(null);}} style={{marginTop:12,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close</button></div>)}
+          {playAgainChoice==="later"&&(<div style={{marginTop:14}}>
+            <div style={{fontSize:15,color:"#bfdbfe",lineHeight:1.7,fontWeight:"bold"}}>Nice work so far.<br/>See you later! 🌅</div>
+            <button className="ll-btn replay-btn" onClick={()=>{setPerfectDayAchieved(false);setPlayAgainChoice(null);handleFullReset();}} style={{marginTop:14,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
+            <button className="ll-btn" onClick={()=>{setPerfectDayAchieved(false);setPlayAgainChoice(null);handleFullReset();setShowIntro(false);}} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close — I'll be back later</button>
+          </div>)}
           {playAgainChoice==="tomorrow"&&(<div style={{marginTop:14}}><div style={{fontSize:14,color:"#e9d5ff",lineHeight:1.8,fontWeight:"bold"}}>New Boards, New Words.<br/>Another Perfect Day will be waiting! 🌙</div><button className="ll-btn" onClick={()=>{setPerfectDayAchieved(false);setPlayAgainChoice(null);}} style={{marginTop:12,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close</button></div>)}
         </div>
       </div>}
@@ -2036,7 +2043,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
           <div style={{display:"flex",flexDirection:"column",gap:8}}>
             <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
-            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:14,fontWeight:"bold"}}>🌅 Later Today</button>
+            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); handleFullReset(); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:14,fontWeight:"bold"}}>🌅 Later Today</button>
             <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); triggerFarewell(); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:14,fontWeight:"bold"}}>🌙 Tomorrow</button>
           </div>
         </div>

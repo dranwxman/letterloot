@@ -1819,7 +1819,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           </div>
         </div>
 
-        <button onClick={()=>{ setEditingProfile(false); setShowIntro(false); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
+        <button onClick={()=>{
+          setEditingProfile(false);
+          // If all tiles used (completed game), force a fresh reset before showing play screen
+          const allUsed = tiles.every(t => t.used);
+          if (allUsed || level === 5) {
+            const rng = seededRandom(getDailySeed());
+            const bp = getBonusPositions(42, getBonusCount(1), rng);
+            setTiles(generateLevelTiles(1, 0, rng, bp));
+            tileCountRef.current = 42; setLevel(1); setSelected([]);
+            setSubmitted([]); submittedRef.current = [];
+            setTotalScore(0); totalRef.current = 0;
+            setLevelScore(0); levelScoreRef.current = 0;
+            setStreak(0); setLevelComplete(false);
+            setPerfectDaySync(true); setLongestWordToday("");
+            setUndoUsed(false); setLastValidEntry(null);
+            stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
+            setLevelTime(0); setTotalTime(0); startTimer();
+            clearLocalSession();
+          }
+          setShowIntro(false);
+        }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
         </button>
       </div>

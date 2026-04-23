@@ -1167,6 +1167,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [congratsMsg] = useState(() => CONGRATS_MSGS[Math.floor(Math.random() * CONGRATS_MSGS.length)]);
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
+  const [showReadyScreen, setShowReadyScreen] = useState(false);
   const [leaderboardData, setLeaderboardData] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardTab, setLeaderboardTab] = useState('scores');
@@ -1322,7 +1323,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   }, []);
   const stopTimer = useCallback(() => { clearInterval(timerRef.current); timerRef.current = null; }, []);
   const resetLevelTimer = useCallback(() => { levelTimeRef.current = 0; setLevelTime(0); }, []);
-  useEffect(() => { startTimer(); return () => stopTimer(); }, []);
+  useEffect(() => { stopTimer(); return () => stopTimer(); }, []); // timer starts on Lets Go
 
   const handlePause = () => {
     if (paused) { setPaused(false); startTimer(); if (musicOn) startMusic(); }
@@ -1402,6 +1403,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     gameIndexRef.current += 1;
     clearLocalSession();
     justResetRef.current = true;
+    setShowReadyScreen(true);
     // Also clear cloud daily session so it doesn't reload completed game
     if (!isGuest && user) {
       const todayKey = getTodayKey();
@@ -1845,6 +1847,32 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           setShowReadyToPlay(true);
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
+        </button>
+      </div>
+    </div>
+  );
+
+  if (showReadyScreen) return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"30px 24px",position:"relative",overflow:"hidden"}}>
+      <Starfield/>
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360,textAlign:"center"}}>
+        {profilePhoto
+          ? <img src={profilePhoto} alt="profile" style={{width:80,height:80,borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(34,211,238,0.7)",marginBottom:16}}/>
+          : <div style={{fontSize:56,marginBottom:16}}>✏️</div>
+        }
+        <div style={{fontSize:22,fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>
+          {profileNickname||playerName ? `Ready, ${profileNickname||playerName}?` : "Ready to Play?"}
+        </div>
+        <div style={{fontSize:13,color:"rgba(255,255,255,0.55)",marginBottom:24,lineHeight:1.7}}>
+          Your tiles are set.<br/>The clock starts when you do.
+        </div>
+        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px 20px",border:"1px solid rgba(255,255,255,0.12)",marginBottom:28,width:"100%",fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.9}}>
+          <div>✦ Level 1 — 42 tiles ready</div>
+          <div>✦ Timer starts on <strong style={{color:"#f6d365"}}>Let's Go!</strong></div>
+          <div>✦ Clear all 5 levels for a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day 🌈</span></div>
+        </div>
+        <button onClick={()=>{ setShowReadyScreen(false); startTimer(); }} style={{width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:20,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
+          Let's Go! 🎯
         </button>
       </div>
     </div>

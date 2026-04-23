@@ -1200,6 +1200,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const timerRef = useRef(null);
   const justResetRef = useRef(false);
+  const [showReadyToPlay, setShowReadyToPlay] = useState(false);
   const levelTimeRef = useRef(ss?.levelTime || 0);
   const totalTimeRef = useRef(ss?.totalTime || 0);
   const submittedRef = useRef(ss?.submitted || []);
@@ -1838,7 +1839,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             setLevelTime(0); setTotalTime(0); startTimer();
             clearLocalSession();
           }
+          // Show ready prompt — timer starts only when player taps Ready
+          stopTimer();
           setShowIntro(false);
+          setShowReadyToPlay(true);
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
         </button>
@@ -2796,6 +2800,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           </div>
         </div>
       )}
+
+      {/* ── READY TO PLAY MODAL ── */}
+      {showReadyToPlay&&<div style={{position:"fixed",inset:0,zIndex:9800,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"36px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(246,211,101,0.5)",maxWidth:320,width:"90%"}}>
+          <div style={{fontSize:52}}>✏️</div>
+          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:10}}>Ready to play?</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:10,lineHeight:1.7}}>Your timer starts when you tap Let's Go!</div>
+          <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>
+            Level 1 · Fresh tiles · Good luck! 🍀
+          </div>
+          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); startTimer(); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:16,fontWeight:"bold",border:"none"}}>
+            Let's Go! 🎯
+          </button>
+        </div>
+      </div>}
+
     </div>
   );
 }

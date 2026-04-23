@@ -1031,7 +1031,7 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
-  const [showCelebrate, setShowCelebrate] = useState(() => new URLSearchParams(window.location.search).get('celebrate') === '1');
+  const [showCelebrate, setShowCelebrate] = useState(() => window.location.hash === '#celebrate');
   const [showAdmin, setShowAdmin] = useState(() => new URLSearchParams(window.location.search).get('admin') === '1');
   const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
   const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
@@ -1401,6 +1401,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       if (totalRef.current < 1000) return;
       totalRef.current -= 1000; setTotalScore(totalRef.current);
       setPerfectDaySync(false);
+    } else {
+      // Any retry on levels 1-4 forfeits Perfect Day
+      setPerfectDaySync(false);
     }
     levelResetCount.current += 1;
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
@@ -1443,7 +1446,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const bestWord = allValid.reduce((b, s) => !b || s.score > b.score ? s : b, null);
     const longestW = allValid.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
     const sharer = playerName ? `${playerName} had a Perfect Day on LetterLoot!` : "🌈 PERFECT DAY on LetterLoot!";
-    return `🌈 ${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app?celebrate=1\n🌈`;
+    return `🌈 ${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈`;
   }, [playerName]);
 
   const fetchLeaderboard = async () => {
@@ -1662,9 +1665,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     handleNextLevel(true);
   };
   const handleExtendLevel5 = () => {
-    if (totalRef.current < 1000) return;
-    totalRef.current -= 1000; setTotalScore(totalRef.current);
-    setPerfectDaySync(false);
+    if (totalRef.current < 5000) return;
+    totalRef.current -= 5000; setTotalScore(totalRef.current);
+    // Does NOT forfeit Perfect Day — fresh tiles, not a retry
     const rng = seededRandom(getDailySeed() + level * 999 + Date.now());
     const count = 42 + (level - 1) * 6;
     const bp = getBonusPositions(count, getBonusCount(level), rng);
@@ -1940,11 +1943,21 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
           <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
           <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
-          <button className="ll-btn" onClick={doLevelReset} disabled={level===5&&totalRef.current<1000} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:12,background:level===5&&totalRef.current<1000?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#60a5fa,#3b82f6)",color:level===5&&totalRef.current<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:13,fontWeight:"bold",cursor:level===5&&totalRef.current<1000?"default":"pointer"}}>
+          {/* UNDO option if still available */}
+          {!undoUsed&&lastValidEntry&&totalRef.current>=1000&&(
+            <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowUndoConfirm(true); }} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))",border:"1px solid rgba(251,113,133,0.9)",color:"#ffffff",fontSize:13,fontWeight:"bold"}}>
+              ↩️ UNDO Last Word — 1,000 pts
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontWeight:"normal",marginTop:2}}>Reverse "{lastValidEntry?.word}" and try different tiles</div>
+            </button>
+          )}
+          <button className="ll-btn" onClick={doLevelReset} disabled={level===5&&totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:level===5&&totalRef.current<1000?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#60a5fa,#3b82f6)",color:level===5&&totalRef.current<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:13,fontWeight:"bold",cursor:level===5&&totalRef.current<1000?"default":"pointer"}}>
             {level===5?`🔄 ReTry L5 — 1,000 pts${totalRef.current<1000?" (not enough)":""}`:` 🔄 Try Level ${level} Again`}
           </button>
           {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
-          {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=1000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=1000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=1000?"pointer":"default"}}>🔓 Extend Level 5 — 1,000 pts{totalRef.current<1000?" (not enough)":""}</button>}
+          {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<5000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=5000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=5000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=5000?"pointer":"default"}}>
+    🆕 Fresh Tiles — 5,000 pts{totalRef.current<5000?" (not enough)":""}
+    <div style={{fontSize:10,fontWeight:"normal",marginTop:2,opacity:0.8}}>Brand new set of Level 5 tiles · Perfect Day stays intact!</div>
+  </button>}
           <button className="ll-btn" onClick={handleGiveUp} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — See Summary":"📊 End & Save Score"}</button>
         </div>
       </div>}

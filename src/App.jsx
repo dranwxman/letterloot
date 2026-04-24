@@ -1487,9 +1487,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       const base = `${import.meta.env.VITE_SUPABASE_URL || "https://zcevszxmoggmcmvyxjtn.supabase.co"}/rest/v1`;
       const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM"}` };
       const [gsRes, todayRes, weekRes] = await Promise.all([
-        fetch(`${base}/game_state?select=player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`, {headers:hdrs}),
-        fetch(`${base}/daily_sessions?select=user_id,session_date,total_score,level_score,tiles,submitted&session_date=eq.${new Date().toISOString().split('T')[0]}&limit=100`, {headers:hdrs}),
-        fetch(`${base}/daily_sessions?select=user_id,session_date,total_score&session_date=gte.${new Date(Date.now()-7*86400000).toISOString().split('T')[0]}&limit=500`, {headers:hdrs}),
+        fetch(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`, {headers:hdrs}),
+        fetch(`${base}/daily_sessions?select=player_id,session_date,total_score,perfect_day&session_date=eq.${new Date().toLocaleDateString('en-CA')}&limit=100`, {headers:hdrs}),
+        fetch(`${base}/daily_sessions?select=player_id,session_date,total_score,perfect_day&session_date=gte.${new Date(Date.now()-7*86400000).toLocaleDateString('en-CA')}&limit=500`, {headers:hdrs}),
       ]);
       const gs = gsRes.ok ? await gsRes.json() : [];
       const todaySessions = todayRes.ok ? await todayRes.json() : [];
@@ -2569,10 +2569,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             });
 
             // Build today/week best scores per player
-            const todayBest = {};
-            todaySessions.forEach(s=>{ if(!todayBest[s.user_id]||s.total_score>todayBest[s.user_id]) todayBest[s.user_id]=s.total_score; });
-            const weekBest = {};
-            weekSessions.forEach(s=>{ if(!weekBest[s.user_id]||s.total_score>weekBest[s.user_id]) weekBest[s.user_id]=s.total_score; });
+            // Build maps by player_id
+            const todayBestById = {};
+            const todayPerfectById = {};
+            todaySessions.forEach(s=>{
+              if(!todayBestById[s.player_id]||s.total_score>todayBestById[s.player_id]) todayBestById[s.player_id]=s.total_score;
+              if(s.perfect_day) todayPerfectById[s.player_id]=true;
+            });
+            const weekBestById = {};
+            const weekPerfectById = {};
+            weekSessions.forEach(s=>{
+              if(!weekBestById[s.player_id]||s.total_score>weekBestById[s.player_id]) weekBestById[s.player_id]=s.total_score;
+              if(s.perfect_day) weekPerfectById[s.player_id]=(weekPerfectById[s.player_id]||0)+1;
+            });
 
             const empty = <div style={{textAlign:"center",padding:"20px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>No data yet for this period</div>;
 
@@ -2580,8 +2589,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             if (leaderboardTab==="scores") {
               let ranked = [];
               if (leaderboardPeriod==="alltime") ranked = [...gs].sort((a,b)=>(b.lifetime_points||0)-(a.lifetime_points||0)).slice(0,10).map(g=>({name:g.player_name,val:(g.lifetime_points||0).toLocaleString(),suffix:"pts"}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBest[g.player_name]).sort((a,b)=>(b.stats?.highScoreToday||0)-(a.stats?.highScoreToday||0)).slice(0,10).map(g=>({name:g.player_name,val:(g.stats?.highScoreToday||0).toLocaleString(),suffix:"pts"}));
-              if (leaderboardPeriod==="weekly") ranked = [...gs].sort((a,b)=>(b.stats?.highScoreAllTime||0)-(a.stats?.highScoreAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:(g.stats?.highScoreAllTime||0).toLocaleString(),suffix:"pts"}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestById[g.player_id]>0).sort((a,b)=>(todayBestById[b.player_id]||0)-(todayBestById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:(todayBestById[g.player_id]||0).toLocaleString(),suffix:"pts"}));
+              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]>0).sort((a,b)=>(weekBestById[b.player_id]||0)-(weekBestById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:(weekBestById[g.player_id]||0).toLocaleString(),suffix:"pts"}));
               if (!ranked.length) return empty;
               return <div>{ranked.map((r,i)=>(
                 <div key={i} style={rowStyle(r.name,i)}>
@@ -2597,8 +2606,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             if (leaderboardTab==="words") {
               let ranked = [];
               if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>g.stats?.highWordTodayWord).sort((a,b)=>(b.stats?.highWordToday||0)-(a.stats?.highWordToday||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordTodayWord,val:g.stats.highWordToday||0}));
-              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestById[g.player_id]&&g.stats?.highWordTodayWord).sort((a,b)=>(b.stats?.highWordToday||0)-(a.stats?.highWordToday||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordTodayWord,val:g.stats.highWordToday||0}));
+              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
               if (!ranked.length) return empty;
               return <div>{ranked.map((r,i)=>(
                 <div key={i} style={rowStyle(r.name,i)}>
@@ -2616,8 +2625,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             if (leaderboardTab==="longest") {
               let ranked = [];
               if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>g.stats?.longestWordToday).sort((a,b)=>(b.stats?.longestWordToday?.length||0)-(a.stats?.longestWordToday?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordToday,val:g.stats.longestWordToday?.length||0}));
-              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestById[g.player_id]&&g.stats?.longestWordToday).sort((a,b)=>(b.stats?.longestWordToday?.length||0)-(a.stats?.longestWordToday?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordToday,val:g.stats.longestWordToday?.length||0}));
+              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
               if (!ranked.length) return empty;
               return <div>{ranked.map((r,i)=>(
                 <div key={i} style={rowStyle(r.name,i)}>
@@ -2636,8 +2645,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             if (leaderboardTab==="perfect") {
               let ranked = [];
               if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.perfectDaysAllTime>0).sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:g.stats.perfectDaysAllTime}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>g.stats?.perfectDaysWeek&&Object.values(g.stats.perfectDaysWeek||{}).some(v=>v>0)).sort((a,b)=>{const ak=Object.keys(b.stats?.perfectDaysWeek||{}).sort().pop();const bk=Object.keys(a.stats?.perfectDaysWeek||{}).sort().pop();return(b.stats?.perfectDaysWeek?.[ak]||0)-(a.stats?.perfectDaysWeek?.[bk]||0);}).slice(0,10).map(g=>({name:g.player_name,val:"🌈 Today"}));
-              if (leaderboardPeriod==="weekly") ranked = [...gs].map(g=>({name:g.player_name,val:Object.values(g.stats?.perfectDaysWeek||{}).reduce((a,b)=>a+b,0)})).filter(g=>g.val>0).sort((a,b)=>b.val-a.val).slice(0,10);
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayPerfectById[g.player_id]).map(g=>({name:g.player_name,val:"🌈",pid:g.player_id})).slice(0,10);
+              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekPerfectById[g.player_id]>0).sort((a,b)=>(weekPerfectById[b.player_id]||0)-(weekPerfectById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekPerfectById[g.player_id]}));
               if (!ranked.length) return empty;
               return <div>{ranked.map((r,i)=>(
                 <div key={i} style={rowStyle(r.name,i)}>

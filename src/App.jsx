@@ -25,18 +25,18 @@ function getDailySeed() {
 }
 function getTodayKey() {
   const d = new Date();
-  return `${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`;
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
 function getYesterdayKey() {
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  return `${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`;
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
 function getWeekKey() {
   const now = new Date();
   const monday = new Date(now);
-  monday.setUTCDate(now.getUTCDate() - ((now.getUTCDay() + 6) % 7));
-  return `${monday.getUTCFullYear()}-${monday.getUTCMonth()+1}-${monday.getUTCDate()}`;
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  return `${monday.getFullYear()}-${monday.getMonth()+1}-${monday.getDate()}`;
 }
 function getCalendarDate() {
   return new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric", year:"numeric" });
@@ -277,34 +277,24 @@ async function validateWord(word) {
 async function hasValidWordsRemaining(tiles) {
   const available = tiles.filter(t => !t.used).map(t => t.letter);
   if (available.length < 3) return false;
-  if (available.length > 15) return true;
+  if (available.length > 10) return true; // skip check for large boards — false positives impossible
   const letters = [...available];
   const combos = new Set();
-  const cap = Math.max(200, available.length * 12);
+  // Lower cap for speed — fewer API calls
+  const cap = Math.min(80, available.length * 6);
   for (let i = 0; i < letters.length && combos.size < cap; i++)
     for (let j = 0; j < letters.length && combos.size < cap; j++) {
       if (j === i) continue;
       for (let k = 0; k < letters.length && combos.size < cap; k++) {
         if (k === i || k === j) continue;
         combos.add(letters[i] + letters[j] + letters[k]);
-        for (let m = 0; m < letters.length && combos.size < cap; m++) {
-          if (m === i || m === j || m === k) continue;
-          combos.add(letters[i] + letters[j] + letters[k] + letters[m]);
-        }
       }
     }
-  for (const combo of combos) { const r = await validateWord(combo); if (r.valid) return true; }
-  const combos2 = new Set();
-  const shuffled = [...letters].sort(() => Math.random() - 0.5);
-  for (let i = 0; i < shuffled.length && combos2.size < cap; i++)
-    for (let j = 0; j < shuffled.length && combos2.size < cap; j++) {
-      if (j === i) continue;
-      for (let k = 0; k < shuffled.length && combos2.size < cap; k++) {
-        if (k === i || k === j) continue;
-        combos2.add(shuffled[i] + shuffled[j] + shuffled[k]);
-      }
-    }
-  for (const combo of combos2) { const r = await validateWord(combo); if (r.valid) return true; }
+  // Check cached words first (instant), then uncached
+  const cached = [...combos].filter(w => wordCache[w.toLowerCase()] !== undefined);
+  const uncached = [...combos].filter(w => wordCache[w.toLowerCase()] === undefined);
+  for (const combo of cached) { if (wordCache[combo.toLowerCase()]?.valid) return true; }
+  for (const combo of uncached) { const r = await validateWord(combo); if (r.valid) return true; }
   return false;
 }
 
@@ -1147,7 +1137,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     try {
       const sess = JSON.parse(localStorage.getItem("ll_session") || "null");
       const d = new Date();
-      const todayKey = d.getUTCFullYear()+"-"+(d.getUTCMonth()+1)+"-"+d.getUTCDate();
+      const todayKey = d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
       const hasActiveGame = sess && sess.savedDate === todayKey && sess.submitted && sess.submitted.length > 0;
       return !hasActiveGame;
     } catch { return true; }
@@ -1228,8 +1218,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const weekHighScore = Math.max(0, ...Object.values(statsData.highScoreWeek || {}).concat([0]));
   const weekHighWord = Math.max(0, ...Object.values(statsData.highWordWeek || {}).concat([0]));
   const last7Days = Array.from({length:7}, (_,i) => {
-    const d = new Date(); d.setUTCDate(d.getUTCDate() - (6-i));
-    const key = `${d.getUTCFullYear()}-${d.getUTCMonth()+1}-${d.getUTCDate()}`;
+    const d = new Date(); d.setDate(d.getDate() - (6-i));
+    const key = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
     return { key, score: statsData.dailyScores?.[key] || 0, label: d.toLocaleDateString("en-US",{weekday:"short"}) };
   });
   const maxDayScore = Math.max(...last7Days.map(d => d.score), 1);
@@ -1982,7 +1972,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       </div>}
 
       {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
-        <div style={{fontSize:26,animation:"spin 1s linear infinite",display:"inline-block"}}>{checkingStuck?"🔎":"🔍"}</div>
+        <div style={{animation:"spin 1s linear infinite",display:"inline-block",transformOrigin:"center"}}><PencilIcon size={60}/></div>
         <div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div>
       </div>}
 
@@ -2273,6 +2263,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── BADGES TAB ── */}
       {tab==="badges"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ✏️ Return to Game
+          </button>
+
           <div style={{marginBottom:14}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>☀️ DAILY BADGES</div>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:7,paddingLeft:4}}>Reset each day — earn them fresh every session</div>
@@ -2312,14 +2306,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── HISTORY TAB ── */}
       {tab==="history"&&(()=>{
         const history = getDailyHistory();
+        const returnButton = (<button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>✏️ Return to Game</button>);
         const allGames = history.games || [];
         const hasAny = allGames.some(g => g && g.length > 0);
         const grandTotal = allGames.flat().filter(s=>s&&s.valid).reduce((a,s)=>a+s.score,0);
         return (
           <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
             {!hasAny
-              ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No words yet — go loot some letters!</div>
-              :<div style={{display:"flex",flexDirection:"column",gap:5}}>
+              ?<div>{returnButton}<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No words yet — go loot some letters!</div></div>
+              :<div style={{display:"flex",flexDirection:"column",gap:5}}>{returnButton}
                 {allGames.map((game, gi) => game && game.length > 0 ? (
                   <div key={gi}>
                     {allGames.filter(g=>g&&g.length>0).length > 1 && (
@@ -2352,7 +2347,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── STATS TAB ── */}
       {tab==="stats"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <button className="ll-btn" onClick={()=>setTab("badges")} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(240,147,251,0.25),rgba(167,139,250,0.2))",border:"2px solid rgba(240,147,251,0.6)",color:"#f093fb",fontSize:14,fontWeight:"bold",marginBottom:10,letterSpacing:1}}>🏅 View My Badges — {lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length} Earned</button>
+          <button className="ll-btn" onClick={()=>setTab("badges")} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(240,147,251,0.25),rgba(167,139,250,0.2))",border:"2px solid rgba(240,147,251,0.6)",color:"#f093fb",fontSize:14,fontWeight:"bold",marginBottom:8,letterSpacing:1}}>🏅 View My Badges — {lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length} Earned</button>
+          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ✏️ Return to Game
+          </button>
+
           <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
             <div style={{fontSize:44,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
@@ -2676,6 +2675,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>HINTS & TIPS</div>
             <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>Play smarter · Loot harder</div>
           </div>
+          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ✏️ Return to Game
+          </button>
+
 
           {/* Tip cards */}
           {TIPS.map((tip, i) => (

@@ -1412,16 +1412,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     clearLocalSession();
     justResetRef.current = true;
     setShowReadyScreen(true);
-    // Also clear cloud daily session so it doesn't reload completed game
-    if (!isGuest && user) {
-      const todayKey = getTodayKey();
-      saveDailySession(user.id, todayKey, {
-        level: 1, totalScore: 0, levelScore: 0, tiles: null,
-        submitted: [], perfectDay: true, tileCount: 42,
-        levelTime: 0, totalTime: 0, longestWordToday: "",
-        completed: false, undoUsed: false, gameIndex: gameIndexRef.current,
-      });
-    }
+    // Don't wipe cloud session — justResetRef flag prevents stale reload
     setShowIntro(true);
   }, [startTimer, stopTimer, setPerfectDaySync]);
 

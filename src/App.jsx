@@ -1488,8 +1488,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM"}` };
       const [gsRes, todayRes, weekRes] = await Promise.all([
         fetch(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`, {headers:hdrs}),
-        fetch(`${base}/daily_sessions?select=player_id,session_date,total_score,perfect_day,submitted,longest_word_today&session_date=eq.${new Date().toLocaleDateString('en-CA')}&limit=100`, {headers:hdrs}),
-        fetch(`${base}/daily_sessions?select=player_id,session_date,total_score,perfect_day&session_date=gte.${new Date(Date.now()-7*86400000).toLocaleDateString('en-CA')}&limit=500`, {headers:hdrs}),
+        fetch(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,submitted,longest_word_today&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`, {headers:hdrs}),
+        fetch(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`, {headers:hdrs}),
       ]);
       const gs = gsRes.ok ? await gsRes.json() : [];
       const todaySessions = todayRes.ok ? await todayRes.json() : [];

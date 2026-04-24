@@ -1488,7 +1488,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM"}` };
       const [gsRes, todayRes, weekRes] = await Promise.all([
         fetch(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`, {headers:hdrs}),
-        fetch(`${base}/daily_sessions?select=player_id,session_date,total_score,perfect_day&session_date=eq.${new Date().toLocaleDateString('en-CA')}&limit=100`, {headers:hdrs}),
+        fetch(`${base}/daily_sessions?select=player_id,session_date,total_score,perfect_day,submitted,longest_word_today&session_date=eq.${new Date().toLocaleDateString('en-CA')}&limit=100`, {headers:hdrs}),
         fetch(`${base}/daily_sessions?select=player_id,session_date,total_score,perfect_day&session_date=gte.${new Date(Date.now()-7*86400000).toLocaleDateString('en-CA')}&limit=500`, {headers:hdrs}),
       ]);
       const gs = gsRes.ok ? await gsRes.json() : [];
@@ -2569,12 +2569,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             });
 
             // Build today/week best scores per player
-            // Build maps by player_id
+            // Build maps by player_id from actual session data
             const todayBestById = {};
             const todayPerfectById = {};
+            const todayBestWordById = {}; // {score, word}
+            const todayLongestById = {}; // {length, word}
             todaySessions.forEach(s=>{
               if(!todayBestById[s.player_id]||s.total_score>todayBestById[s.player_id]) todayBestById[s.player_id]=s.total_score;
               if(s.perfect_day) todayPerfectById[s.player_id]=true;
+              // Derive best word and longest word from submitted array
+              const validWords = (s.submitted||[]).filter(w=>w.valid);
+              validWords.forEach(w=>{
+                if(!todayBestWordById[s.player_id]||w.score>todayBestWordById[s.player_id].score) todayBestWordById[s.player_id]={word:w.word,score:w.score};
+                if(!todayLongestById[s.player_id]||w.word.length>todayLongestById[s.player_id].length) todayLongestById[s.player_id]={word:w.word,length:w.word.length};
+              });
+              // Also use longest_word_today field if available
+              if(s.longest_word_today&&(!todayLongestById[s.player_id]||s.longest_word_today.length>todayLongestById[s.player_id].length)) todayLongestById[s.player_id]={word:s.longest_word_today,length:s.longest_word_today.length};
             });
             const weekBestById = {};
             const weekPerfectById = {};
@@ -2606,7 +2616,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             if (leaderboardTab==="words") {
               let ranked = [];
               if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestById[g.player_id]&&g.stats?.highWordTodayWord).sort((a,b)=>(b.stats?.highWordToday||0)-(a.stats?.highWordToday||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordTodayWord,val:g.stats.highWordToday||0}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestWordById[g.player_id]).sort((a,b)=>(todayBestWordById[b.player_id]?.score||0)-(todayBestWordById[a.player_id]?.score||0)).slice(0,10).map(g=>({name:g.player_name,word:todayBestWordById[g.player_id]?.word||"—",val:todayBestWordById[g.player_id]?.score||0}));
               if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
               if (!ranked.length) return empty;
               return <div>{ranked.map((r,i)=>(
@@ -2625,7 +2635,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             if (leaderboardTab==="longest") {
               let ranked = [];
               if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestById[g.player_id]&&g.stats?.longestWordToday).sort((a,b)=>(b.stats?.longestWordToday?.length||0)-(a.stats?.longestWordToday?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordToday,val:g.stats.longestWordToday?.length||0}));
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayLongestById[g.player_id]).sort((a,b)=>(todayLongestById[b.player_id]?.length||0)-(todayLongestById[a.player_id]?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:todayLongestById[g.player_id]?.word||"—",val:todayLongestById[g.player_id]?.length||0}));
               if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
               if (!ranked.length) return empty;
               return <div>{ranked.map((r,i)=>(

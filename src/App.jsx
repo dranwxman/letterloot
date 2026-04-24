@@ -1064,6 +1064,7 @@ export default function App() {
 function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) {
   const isGuest = !user;
   const [playerName, setPlayerName] = useState("");
+  const playerNameRef = useRef("");
   const [editingName, setEditingName] = useState(false);
   const [showTour, setShowTour] = useState(false);
   const [tourStep, setTourStep] = useState(0);
@@ -1262,9 +1263,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           }
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
-        if (playerData?.name) setPlayerName(playerData.name);
+        if (playerData?.name) { setPlayerName(playerData.name); playerNameRef.current = playerData.name; }
       } else {
-        setPlayerName(localStorage.getItem("ll_name") || "");
+        const savedName = localStorage.getItem("ll_name") || "";
+        setPlayerName(savedName); playerNameRef.current = savedName;
       }
       justResetRef.current = false;
       if (!localStorage.getItem("ll_tour_done")) setShowTour(true);
@@ -1285,11 +1287,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         gameIndex: gameIndexRef.current,
       }),
       saveGameState(user.id, {
-        playerName: playerName || '',
+        playerName: playerNameRef.current || playerName || '',
         lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
         currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
         lastStreakDate: statsData.lastStreakDate, badges: badgeStore.lifetime,
-        stats: {...statsData, playerName}, timeRecords: timeLeaderboard,
+        stats: {...statsData, playerName: playerNameRef.current || playerName}, timeRecords: timeLeaderboard,
       }),
     ]);
   }, [user, isGuest, level, tiles, longestWordToday, badgeStore, statsData, timeLeaderboard, playerName, levelComplete, newBestTime, undoUsed]);
@@ -1447,7 +1449,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const handleNameSave = async () => {
     if (!playerName.trim()) return;
-    localStorage.setItem("ll_name", playerName);
+    localStorage.setItem("ll_name", playerName); playerNameRef.current = playerName;
     setEditingName(false);
     if (!isGuest && user) await updatePlayerName(user.id, playerName);
   };

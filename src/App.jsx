@@ -1782,6 +1782,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                 <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:4,cursor:"pointer"}} onClick={()=>setEditingProfile(true)}>
                   Tap to edit profile ✏️
                 </div>
+                {/* Show sign in prompt if not authenticated */}
+                {isGuest && (
+                  <button onClick={onSignOut} style={{marginTop:6,padding:"4px 12px",borderRadius:10,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:10,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+                    🔑 Sign In to sync across devices
+                  </button>
+                )}
               </div>
             </div>
           ) : (

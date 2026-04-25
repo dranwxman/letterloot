@@ -386,7 +386,68 @@ function ConfettiCanvas({ active, rainbow }) {
   return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:9999, pointerEvents:"none" }} />;
 }
 
-// ── Visual Tour ──
+function VisualTour({ onDone }) {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>LetterLoot Visual Tour</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{background:#0a0820;font-family:Georgia,serif;color:#f5f0e8;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:16px;}
+.stars{position:fixed;inset:0;pointer-events:none;z-index:0;}
+.star{position:absolute;border-radius:50%;background:#fff;}
+.wrap{position:relative;z-index:1;width:100%;max-width:380px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+.scene-box{width:100%;background:linear-gradient(135deg,#1a1040,#2d1b69);border-radius:24px;padding:20px;border:2px solid rgba(167,139,250,0.5);box-shadow:0 16px 60px rgba(0,0,0,0.8);}
+.dots{display:flex;gap:6px;justify-content:center;}
+.dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);transition:all 0.3s;cursor:pointer;}
+.dot.active{width:20px;background:#a78bfa;}
+.dot.done{background:rgba(167,139,250,0.5);}
+.scene-title{font-size:16px;font-weight:bold;color:#f6d365;margin-bottom:6px;text-align:center;}
+.scene-desc{font-size:13px;color:rgba(255,255,255,0.88);text-align:center;line-height:1.7;margin-bottom:14px;font-weight:bold;}
+.nav{display:flex;gap:10px;margin-top:16px;}
+.btn-back{flex:1;padding:10px;border-radius:12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);font-family:Georgia,serif;font-size:12px;cursor:pointer;}
+.btn-next{flex:2;padding:12px;border-radius:12px;background:linear-gradient(135deg,#f6d365,#fda085);color:#1a1a2e;font-family:Georgia,serif;font-size:14px;font-weight:bold;border:none;cursor:pointer;}
+.btn-done{flex:2;padding:12px;border-radius:12px;background:linear-gradient(135deg,#00c853,#00e676);color:#003300;font-family:Georgia,serif;font-size:14px;font-weight:bold;border:none;cursor:pointer;}
+.tile{width:42px;height:48px;border-radius:8px;background:linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07));border:1px solid rgba(255,255,255,0.22);display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:bold;font-size:16px;color:#fff;transition:all 0.2s;position:relative;}
+.tv{font-size:7px;color:#fda085;font-weight:bold;}
+.tile.sel{background:linear-gradient(135deg,#5c6bc0,#512da8);border-color:#9fa8da;transform:translateY(-5px) scale(1.1);}
+.tile.dbl{box-shadow:0 0 12px 3px rgba(255,215,0,0.8);border-color:rgba(255,215,0,0.7);}
+.tile.trp{box-shadow:0 0 14px 4px rgba(255,100,255,0.9);border-color:rgba(224,64,251,0.7);}
+.tbv{font-size:7px;font-weight:bold;}
+.trow{display:flex;gap:5px;justify-content:center;margin-bottom:5px;}
+.wbox{width:100%;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.8);border-radius:8px;padding:8px 12px;min-height:36px;display:flex;align-items:center;gap:6px;margin:8px 0;position:relative;}
+.wl{background:linear-gradient(135deg,#5c6bc0,#512da8);border-radius:5px;padding:4px 7px;font-size:14px;font-weight:bold;color:#fff;}
+.ws{position:absolute;right:10px;font-size:12px;color:#f6d365;font-weight:bold;}
+.finger{position:absolute;font-size:26px;pointer-events:none;z-index:10;transition:left 0.35s ease,top 0.35s ease,opacity 0.3s;opacity:0;}
+.flash{position:absolute;top:20%;left:50%;transform:translate(-50%,-50%) scale(0);background:rgba(30,160,70,0.97);border-radius:16px;padding:12px 24px;font-size:18px;font-weight:bold;color:#fff;text-align:center;z-index:20;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none;white-space:nowrap;}
+.flash.show{transform:translate(-50%,-50%) scale(1);}
+.dbtn{padding:6px 8px;border-radius:8px;font-size:9px;font-family:Georgia,serif;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#f0e8d8;cursor:pointer;transition:all 0.2s;white-space:nowrap;display:inline-block;margin:2px;}
+.dbtn.hl{border-color:#f6d365;background:rgba(246,211,101,0.2);color:#f6d365;transform:scale(1.08);}
+.dbtn.pb{background:linear-gradient(135deg,#f6d365,#fda085);color:#1a1a2e;font-weight:bold;border:none;}
+.dbtn.lp{background:rgba(139,92,246,0.22);border:1.5px solid rgba(167,139,250,0.7);color:#e9d5ff;font-weight:bold;}
+.callout{background:rgba(246,211,101,0.15);border:1.5px solid rgba(246,211,101,0.6);border-radius:12px;padding:10px 14px;font-size:12px;color:#f6d365;text-align:center;margin-top:10px;line-height:1.6;width:100%;display:none;}
+@keyframes rb{0%{color:#f00}16%{color:#f80}33%{color:#ff0}50%{color:#0f0}66%{color:#08f}83%{color:#80f}100%{color:#f00}}
+.rb{animation:rb 2s linear infinite;}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
+.btn-next.pulse{animation:pulse 1.2s ease-in-out infinite;}
+.btn-done.pulse{animation:pulse 1.2s ease-in-out infinite;}
+</style>
+</head>
+<body>
+<div class="stars" id="stars"></div>
+<div class="wrap">
+
+  <div class="dots" id="dots"></div>
+  <div class="scene-box" id="sb"></div>
+</div>
+<script>
+var sc=document.getElementById("stars");
+for(var i=0;i<50;i++){var s=document.createElement("div");s.className="star";var r=Math.random()*1.5+0.5;s.style.cssText="width:"+(r*2)+"px;height:"+(r*2)+"px;opacity:"+(Math.random()*0.4+0.1)+";left:"+(Math.random()*100)+"%;top:"+(Math.random()*100)+"%";sc.appendChild(s);}
+
+var cur=0;
+
 var CL={
   date:"Shows today date -- tiles reset at midnight local time",
   music:"Toggle background guitar music on or off",
@@ -669,7 +730,7 @@ function s4(){
 }
 
 function s5(){
-  return "<div><div style='font-size:16px;font-weight:bold;color:#f6d365;text-align:center;margin-bottom:12px;letter-spacing:1px'>&#128073; Tap any button to learn what it does!</div><div style='font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:4px'>TOP ROW</div><div style='margin-bottom:8px'><span class='dbtn' onclick='showC(\"date\",this)'>&#128197; Date</span><span class='dbtn' onclick='showC(\"music\",this)' style='background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.6);color:#ffffff;font-size:11px'>&#9835; Music</span><span class='dbtn' onclick='showC(\"reset\",this)'>&#8634; Reset Full Game</span><span class='dbtn' onclick='showC(\"tour\",this)'>&#8634; Tour</span></div><div style='font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:4px'>NAV TABS</div><div style='margin-bottom:8px'><span class='dbtn' onclick='showC(\"history\",this)'>&#128220; History</span><span class='dbtn' onclick='showC(\"stats\",this)'>&#128202; Stats</span><span class='dbtn' onclick='showC(\"tips\",this)'>&#8505;&#65039; Tips</span><span class='dbtn' onclick='showC(\"leaders\",this)'>&#127942; Leaders</span><span class='dbtn lp' onclick='showC(\"level\",this)'>&#10022; L1 &#10022;</span></div><div style='font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:4px'>GAME CONTROLS</div><div style='margin-bottom:4px'><span class='dbtn' onclick='showC(\"pause\",this)'>&#9208;&#65039; Pause</span><span class='dbtn' onclick='showC(\"share\",this)'>&#128228; Share LetterLoot</span><span class='dbtn' onclick='showC(\"undo\",this)'>&#8617;&#65039; UNDO last word</span></div><div><span class='dbtn pb' onclick='showC(\"submit\",this)'>Submit Word</span><span class='dbtn' onclick='showC(\"clear\",this)'>&#10005; Clear</span><span class='dbtn' onclick='showC(\"retry\",this)'>&#128260; Replay L1</span><span class='dbtn' onclick='showC(\"buy\",this)'>&#128275; Buy L2</span></div><div class='callout' id='callout'></div></div>";
+  return "<div><div style='font-size:16px;font-weight:bold;color:#f6d365;text-align:center;margin-bottom:12px;letter-spacing:1px'>&#128073; Tap any button to learn what it does!</div><div style='font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:4px'>TOP ROW</div><div style='margin-bottom:8px'><span class='dbtn' onclick='showC(\\"date\\",this)'>&#128197; Date</span><span class='dbtn' onclick='showC(\\"music\\",this)' style='background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.6);color:#ffffff;font-size:11px'>&#9835; Music</span><span class='dbtn' onclick='showC(\\"reset\\",this)'>&#8634; Reset Full Game</span><span class='dbtn' onclick='showC(\\"tour\\",this)'>&#8634; Tour</span></div><div style='font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:4px'>NAV TABS</div><div style='margin-bottom:8px'><span class='dbtn' onclick='showC(\\"history\\",this)'>&#128220; History</span><span class='dbtn' onclick='showC(\\"stats\\",this)'>&#128202; Stats</span><span class='dbtn' onclick='showC(\\"tips\\",this)'>&#8505;&#65039; Tips</span><span class='dbtn' onclick='showC(\\"leaders\\",this)'>&#127942; Leaders</span><span class='dbtn lp' onclick='showC(\\"level\\",this)'>&#10022; L1 &#10022;</span></div><div style='font-size:9px;color:rgba(255,255,255,0.4);letter-spacing:2px;margin-bottom:4px'>GAME CONTROLS</div><div style='margin-bottom:4px'><span class='dbtn' onclick='showC(\\"pause\\",this)'>&#9208;&#65039; Pause</span><span class='dbtn' onclick='showC(\\"share\\",this)'>&#128228; Share LetterLoot</span><span class='dbtn' onclick='showC(\\"undo\\",this)'>&#8617;&#65039; UNDO last word</span></div><div><span class='dbtn pb' onclick='showC(\\"submit\\",this)'>Submit Word</span><span class='dbtn' onclick='showC(\\"clear\\",this)'>&#10005; Clear</span><span class='dbtn' onclick='showC(\\"retry\\",this)'>&#128260; Replay L1</span><span class='dbtn' onclick='showC(\\"buy\\",this)'>&#128275; Buy L2</span></div><div class='callout' id='callout'></div></div>";
 }
 
 function s6(){
@@ -737,115 +798,53 @@ function flashNext(){
   }, 200);
 }
 
-const TOUR_SCENES = [
-  {title:"Welcome to LetterLoot!",desc:"",fn:s1,enter:null,last:false},
-  {title:"Tap Tiles to Spell a Word",desc:"Tap any tiles in any order -- no adjacency rules!",fn:s2,enter:a2,last:false},
-  {title:"Letter Values",desc:"Every letter has value.",fn:s4,enter:null,last:false},
-  {title:"Your Buttons",desc:"",fn:s5,enter:null,last:false},
-  {title:"5 Levels of Looting",desc:"Each level has more tiles. Clear the board for a bonus!",fn:s6,enter:null,last:false},
-  {title:"The Perfect Day",desc:"Find the Pot of Loot at the end of the Rainbow!",fn:s7,enter:null,last:false},
-  {title:"Ready to Loot!",desc:"You have everything you need. Now go get that loot!",fn:s8,enter:null,last:true}
-];
-
-
-function flashTourNextBtn() {
-  setTimeout(function(){
-    var btn=document.querySelector('.tour-btn-next')||document.querySelector('.tour-btn-done');
-    if(btn)btn.classList.add('tour-pulse');
-  },200);
+function render(){
+  var scene=SCENES[cur];
+  var dotsEl=document.getElementById("dots");
+  var dhtml="";
+  for(var i=0;i<SCENES.length;i++){
+    var cls="dot"+(i===cur?" active":i<cur?" done":"");
+    dhtml+="<div class=\\""+cls+"\\" onclick=\\"goTo("+i+")\\"></div>";
+  }
+  dotsEl.innerHTML=dhtml;
+  var box=document.getElementById("sb");
+  var backLabel=cur===0?"Skip":"Back";
+  box.innerHTML="<div class=\\"scene-title\\">"+scene.title+"</div>"
+    +"<div class=\\"scene-desc\\">"+scene.desc+"</div>"
+    +scene.fn()
+    +"<div class=\\"nav\\">"
+    +"<button class=\\"btn-back\\" onclick=\\"back()\\">"+backLabel+"</button>"
+    +(scene.last?"<button class=\\"btn-done\\" onclick=\\"done()\\">&#9999;&#65039; Lets Play!</button>":"<button class=\\"btn-next\\" onclick=\\"next()\\">Next &rarr;</button>")
+    +"</div>";
+  if(scene.enter)setTimeout(scene.enter,150);
+  else flashNext();
 }
 
+function next(){if(cur<SCENES.length-1){cur++;render();}}
+function back(){if(cur>0){cur--;render();}else{done();}}
+function goTo(i){cur=i;render();}
+function done(){alert("In the real game this starts playing! This is just the preview.");}
 
-function VisualTour({ onDone }) {
-  const [cur, setCur] = React.useState(0);
-  const containerRef = React.useRef(null);
-
-  // Run scene enter animation after render
+render();
+</script>
+</body>
+</html>
+`;
   React.useEffect(() => {
-    const scene = TOUR_SCENES[cur];
-    if (scene.enter) {
-      setTimeout(scene.enter, 150);
-    } else {
-      setTimeout(flashTourNext, 200);
-    }
-  }, [cur]);
-
-  function flashTourNext() {
-    const btn = document.querySelector('.tour-btn-next') || document.querySelector('.tour-btn-done');
-    if (btn) btn.classList.add('tour-pulse');
-  }
-
-  function goTo(i) { setCur(i); }
-  function next() { if (cur < TOUR_SCENES.length - 1) setCur(c => c + 1); }
-  function back() { if (cur > 0) setCur(c => c - 1); else onDone(); }
-
-  const scene = TOUR_SCENES[cur];
-  const isLast = scene.last || false;
-
+    const handler = (e) => {
+      if (e.data === 'tour-done') onDone();
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, [onDone]);
   return (
-    <div style={{position:'fixed',inset:0,zIndex:99999,background:'rgba(0,0,0,0.95)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'12px 16px',overflowY:'auto',fontFamily:'Georgia,serif',color:'#f5f0e8'}}>
-      <style>{`
-        *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-body{background:#0a0820;font-family:Georgia,serif;color:#f5f0e8;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:16px;}
-.stars{position:fixed;inset:0;pointer-events:none;z-index:0;}
-.star{position:absolute;border-radius:50%;background:#fff;}
-.wrap{position:relative;z-index:1;width:100%;max-width:380px;display:flex;flex-direction:column;align-items:center;gap:10px;}
-.scene-box{width:100%;background:linear-gradient(135deg,#1a1040,#2d1b69);border-radius:24px;padding:20px;border:2px solid rgba(167,139,250,0.5);box-shadow:0 16px 60px rgba(0,0,0,0.8);}
-.dots{display:flex;gap:6px;justify-content:center;}
-.dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.2);transition:all 0.3s;cursor:pointer;}
-.dot.active{width:20px;background:#a78bfa;}
-.dot.done{background:rgba(167,139,250,0.5);}
-.scene-title{font-size:16px;font-weight:bold;color:#f6d365;margin-bottom:6px;text-align:center;}
-.scene-desc{font-size:13px;color:rgba(255,255,255,0.88);text-align:center;line-height:1.7;margin-bottom:14px;font-weight:bold;}
-.nav{display:flex;gap:10px;margin-top:16px;}
-.btn-back{flex:1;padding:10px;border-radius:12px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.5);font-family:Georgia,serif;font-size:12px;cursor:pointer;}
-.btn-next{flex:2;padding:12px;border-radius:12px;background:linear-gradient(135deg,#f6d365,#fda085);color:#1a1a2e;font-family:Georgia,serif;font-size:14px;font-weight:bold;border:none;cursor:pointer;}
-.btn-done{flex:2;padding:12px;border-radius:12px;background:linear-gradient(135deg,#00c853,#00e676);color:#003300;font-family:Georgia,serif;font-size:14px;font-weight:bold;border:none;cursor:pointer;}
-.tile{width:42px;height:48px;border-radius:8px;background:linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07));border:1px solid rgba(255,255,255,0.22);display:inline-flex;flex-direction:column;align-items:center;justify-content:center;font-weight:bold;font-size:16px;color:#fff;transition:all 0.2s;position:relative;}
-.tv{font-size:7px;color:#fda085;font-weight:bold;}
-.tile.sel{background:linear-gradient(135deg,#5c6bc0,#512da8);border-color:#9fa8da;transform:translateY(-5px) scale(1.1);}
-.tile.dbl{box-shadow:0 0 12px 3px rgba(255,215,0,0.8);border-color:rgba(255,215,0,0.7);}
-.tile.trp{box-shadow:0 0 14px 4px rgba(255,100,255,0.9);border-color:rgba(224,64,251,0.7);}
-.tbv{font-size:7px;font-weight:bold;}
-.trow{display:flex;gap:5px;justify-content:center;margin-bottom:5px;}
-.wbox{width:100%;background:rgba(255,255,255,0.05);border:1.5px solid rgba(255,255,255,0.8);border-radius:8px;padding:8px 12px;min-height:36px;display:flex;align-items:center;gap:6px;margin:8px 0;position:relative;}
-.wl{background:linear-gradient(135deg,#5c6bc0,#512da8);border-radius:5px;padding:4px 7px;font-size:14px;font-weight:bold;color:#fff;}
-.ws{position:absolute;right:10px;font-size:12px;color:#f6d365;font-weight:bold;}
-.finger{position:absolute;font-size:26px;pointer-events:none;z-index:10;transition:left 0.35s ease,top 0.35s ease,opacity 0.3s;opacity:0;}
-.flash{position:absolute;top:20%;left:50%;transform:translate(-50%,-50%) scale(0);background:rgba(30,160,70,0.97);border-radius:16px;padding:12px 24px;font-size:18px;font-weight:bold;color:#fff;text-align:center;z-index:20;transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1);pointer-events:none;white-space:nowrap;}
-.flash.show{transform:translate(-50%,-50%) scale(1);}
-.dbtn{padding:6px 8px;border-radius:8px;font-size:9px;font-family:Georgia,serif;border:1px solid rgba(255,255,255,0.25);background:rgba(255,255,255,0.08);color:#f0e8d8;cursor:pointer;transition:all 0.2s;white-space:nowrap;display:inline-block;margin:2px;}
-.dbtn.hl{border-color:#f6d365;background:rgba(246,211,101,0.2);color:#f6d365;transform:scale(1.08);}
-.dbtn.pb{background:linear-gradient(135deg,#f6d365,#fda085);color:#1a1a2e;font-weight:bold;border:none;}
-.dbtn.lp{background:rgba(139,92,246,0.22);border:1.5px solid rgba(167,139,250,0.7);color:#e9d5ff;font-weight:bold;}
-.callout{background:rgba(246,211,101,0.15);border:1.5px solid rgba(246,211,101,0.6);border-radius:12px;padding:10px 14px;font-size:12px;color:#f6d365;text-align:center;margin-top:10px;line-height:1.6;width:100%;display:none;}
-@keyframes rb{0%{color:#f00}16%{color:#f80}33%{color:#ff0}50%{color:#0f0}66%{color:#08f}83%{color:#80f}100%{color:#f00}}
-.rb{animation:rb 2s linear infinite;}
-@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
-.btn-next.pulse{animation:pulse 1.2s ease-in-out infinite;}
-.btn-done.pulse{animation:pulse 1.2s ease-in-out infinite;}
-        @keyframes tour-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
-        .tour-pulse{animation:tour-pulse 1.2s ease-in-out infinite!important;}
-      `}</style>
-      <div style={{width:'100%',maxWidth:400}}>
-        <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:10}}>
-          {TOUR_SCENES.map((_,i) => (
-            <div key={i} onClick={()=>goTo(i)} style={{width:i===cur?20:8,height:8,borderRadius:4,background:i===cur?'#a78bfa':i<cur?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.2)',transition:'all 0.3s',cursor:'pointer'}}/>
-          ))}
-        </div>
-        <div style={{width:'100%',background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:20,border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
-          <div style={{fontSize:16,fontWeight:'bold',color:'#f6d365',marginBottom:6,textAlign:'center'}}>{scene.title}</div>
-          {scene.desc && <div style={{fontSize:13,color:'rgba(255,255,255,0.88)',textAlign:'center',lineHeight:1.7,marginBottom:14,fontWeight:'bold'}}>{scene.desc}</div>}
-          <div dangerouslySetInnerHTML={{__html: scene.fn()}}/>
-          <div style={{display:'flex',gap:10,marginTop:16}}>
-            <button className="ll-btn" onClick={back} style={{flex:1,padding:'10px',borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:12,cursor:'pointer'}}>{cur===0?'Skip':'← Back'}</button>
-            {isLast
-              ? <button className={"ll-btn tour-btn-done"} onClick={onDone} style={{flex:2,padding:'12px',borderRadius:12,background:'linear-gradient(135deg,#00c853,#00e676)',color:'#003300',fontFamily:'Georgia,serif',fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer'}}>✏️ Lets Play!</button>
-              : <button className={"ll-btn tour-btn-next"} onClick={next} style={{flex:2,padding:'12px',borderRadius:12,background:'linear-gradient(135deg,#f6d365,#fda085)',color:'#1a1a2e',fontFamily:'Georgia,serif',fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer'}}>Next →</button>
-            }
-          </div>
-        </div>
-      </div>
+    <div style={{position:'fixed',inset:0,zIndex:99999,background:'#0a0820'}}>
+      <iframe
+        srcDoc={html}
+        style={{width:'100%',height:'100%',border:'none'}}
+        sandbox="allow-scripts allow-same-origin"
+        title="LetterLoot Tour"
+      />
     </div>
   );
 }

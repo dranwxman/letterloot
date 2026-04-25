@@ -5,7 +5,7 @@ try {
 } catch(e) {}
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName } from "./supabase";
+import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto } from "./supabase";
 
 const LETTER_VALUES = {};
 const SCORE_MAP = {
@@ -707,7 +707,9 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewSta
 }
 
 function AuthScreen({ onGuest, onLogin }) {
-  const [mode, setMode] = useState("welcome");
+  // If player has a saved name or previous session, go straight to Sign In
+  const isReturning = !!(localStorage.getItem("ll_name") || localStorage.getItem("ll_session"));
+  const [mode, setMode] = useState(isReturning ? "login" : "welcome");
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [name, setName] = useState("");
   const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [success, setSuccess] = useState("");
   const handleSignUp = async () => {
@@ -753,7 +755,15 @@ function AuthScreen({ onGuest, onLogin }) {
         )}
         {mode==="login"&&(
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center",marginBottom:18}}><div style={{fontSize:13,fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>SIGN IN</div></div>
+            <div style={{textAlign:"center",marginBottom:18}}>
+              {isReturning && localStorage.getItem("ll_name") && (
+                <div style={{fontSize:16,fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>
+                  Welcome back, {localStorage.getItem("ll_name")}! 👋
+                </div>
+              )}
+              <div style={{fontSize:13,fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>SIGN IN</div>
+              {isReturning && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>Sign in to sync your progress across devices</div>}
+            </div>
             {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
             {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSignIn()}/>
@@ -1279,6 +1289,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
         if (playerData?.name) { setPlayerName(playerData.name); playerNameRef.current = playerData.name; }
+        // Load photo from Supabase if not in localStorage
+        if (!localStorage.getItem('ll_photo')) {
+          const cloudPhoto = await loadPlayerPhoto(user.id);
+          if (cloudPhoto) { setProfilePhoto(cloudPhoto); localStorage.setItem('ll_photo', cloudPhoto); }
+        }
       } else {
         const savedName = localStorage.getItem("ll_name") || "";
         setPlayerName(savedName); playerNameRef.current = savedName;
@@ -1496,7 +1511,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     reader.onload = (ev) => {
       const dataUrl = ev.target.result;
       setProfilePhoto(dataUrl);
-      localStorage.setItem("ll_photo", dataUrl);
+      localStorage.setItem('ll_photo', dataUrl);
+      // Sync to Supabase if signed in
+      if (!isGuest && user) savePlayerPhoto(user.id, dataUrl);
     };
     reader.readAsDataURL(file);
   };

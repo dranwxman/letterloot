@@ -1786,6 +1786,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                     🔑 Sign In to sync across devices
                   </button>
                 )}
+                {/* Show sign out option if authenticated */}
+                {!isGuest && (
+                  <button onClick={onSignOut} style={{marginTop:6,padding:"3px 10px",borderRadius:10,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.4)",fontSize:9,fontFamily:"Georgia,serif",cursor:"pointer"}}>
+                    Sign Out
+                  </button>
+                )}
               </div>
             </div>
           ) : (

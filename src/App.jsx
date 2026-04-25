@@ -189,7 +189,7 @@ const BADGE_DEFS = [
   { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",              cat:"level",   scope:"lifetime" },
   { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",              cat:"level",   scope:"lifetime" },
   { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",              cat:"level",   scope:"lifetime" },
-  { id:"perfect_day",  icon:"🌈", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",        cat:"level",   scope:"lifetime" },
+  { id:"perfect_day",  icon:"🌈🏆", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",        cat:"level",   scope:"lifetime" },
   { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min",       cat:"word",    scope:"lifetime" },
   { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting",      cat:"word",    scope:"lifetime" },
   { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",          cat:"word",    scope:"lifetime" },
@@ -387,39 +387,43 @@ function ConfettiCanvas({ active, rainbow }) {
 }
 
 function PencilLogo({ size = 120 }) {
-  const w = size; const h = Math.round(size * 0.28);
-  return (
-    <svg viewBox="0 0 300 68" width={w} height={h} xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="16" width="18" height="36" rx="2" fill="#C8C8C8"/>
-      <rect x="0" y="16" width="18" height="8" rx="2" fill="#E0E0E0"/>
-      <rect x="0" y="44" width="18" height="8" rx="2" fill="#B0B0B0"/>
-      <rect x="18" y="14" width="226" height="40" rx="2" fill="#F5C518"/>
-      <rect x="18" y="14" width="226" height="8" rx="2" fill="#F9D84A" opacity="0.7"/>
-      <rect x="18" y="46" width="226" height="8" rx="2" fill="#D4A017" opacity="0.5"/>
-      <polygon points="244,14 268,34 244,54" fill="#DEB887"/>
-      <polygon points="268,28 300,34 268,40" fill="#5a5a5a"/>
-      <polygon points="268,30 298,34 268,38" fill="#3a3a3a"/>
-      <text x="131" y="30" textAnchor="middle" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="#1a1100">LetterLoot</text>
-      <text x="55" y="42" textAnchor="middle" fontFamily="Georgia,serif" fontSize="10" fontWeight="bold" fill="#1a1100">No.2</text>
-      <rect x="0" y="16" width="6" height="36" rx="2" fill="#2D8B4E"/>
-    </svg>
-  );
+  const fontSize = Math.round(size * 0.35);
+  return <span style={{fontSize:fontSize, lineHeight:1, display:"inline-block"}}>&#9999;&#65039;</span>;
 }
 
 function PencilIcon({ size = 32 }) {
-  const w = size; const h = Math.round(size * 0.28);
+  const fontSize = Math.round(size * 0.35);
+  return <span style={{fontSize:fontSize, lineHeight:1, display:"inline-block"}}>&#9999;&#65039;</span>;
+}
+
+
+function RainbowPot({ size = 120 }) {
+  const w = size; const h = Math.round(size * 0.9);
   return (
-    <svg viewBox="0 0 300 68" width={w} height={h} xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="16" width="18" height="36" rx="2" fill="#C8C8C8"/>
-      <rect x="18" y="14" width="226" height="40" rx="2" fill="#F5C518"/>
-      <rect x="18" y="14" width="226" height="8" rx="2" fill="#F9D84A" opacity="0.7"/>
-      <rect x="18" y="46" width="226" height="8" rx="2" fill="#D4A017" opacity="0.5"/>
-      <polygon points="244,14 268,34 244,54" fill="#DEB887"/>
-      <polygon points="268,28 300,34 268,40" fill="#5a5a5a"/>
-      <polygon points="268,30 298,34 268,38" fill="#3a3a3a"/>
-      <text x="131" y="30" textAnchor="middle" fontFamily="Georgia,serif" fontSize="11" fontWeight="bold" fill="#1a1100">LetterLoot</text>
-      <text x="55" y="42" textAnchor="middle" fontFamily="Georgia,serif" fontSize="10" fontWeight="bold" fill="#1a1100">No.2</text>
-      <rect x="0" y="16" width="6" height="36" rx="2" fill="#2D8B4E"/>
+    <svg viewBox="0 0 300 160" width={w} height={h} xmlns="http://www.w3.org/2000/svg">
+      <path d="M 10 140 A 160 150 0 0 1 200 80" fill="none" stroke="#8B00FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 20 143 A 147 137 0 0 1 197 86" fill="none" stroke="#4400CC" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 30 146 A 134 124 0 0 1 194 92" fill="none" stroke="#0055FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 40 149 A 121 111 0 0 1 191 98" fill="none" stroke="#00AA00" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 50 152 A 108 98 0 0 1 188 104" fill="none" stroke="#FFD700" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 60 155 A 95 85 0 0 1 185 110" fill="none" stroke="#FF8C00" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 70 158 A 82 72 0 0 1 182 116" fill="none" stroke="#FF2200" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <ellipse cx="200" cy="150" rx="30" ry="9" fill="#FFD700" opacity="0.25"/>
+      <ellipse cx="200" cy="150" rx="28" ry="10" fill="#1a1a1a" stroke="#555" strokeWidth="1.2"/>
+      <path d="M 172 138 Q 170 150 172 162 L 228 162 Q 230 150 228 138 Z" fill="#1c1c1c" stroke="#555" strokeWidth="1.2"/>
+      <ellipse cx="200" cy="162" rx="28" ry="8" fill="#111" stroke="#444" strokeWidth="1"/>
+      <path d="M 172 138 Q 175 128 200 126 Q 225 128 228 138 Z" fill="#333" stroke="#555" strokeWidth="1"/>
+      <ellipse cx="200" cy="138" rx="28" ry="9" fill="#2a2a2a" stroke="#777" strokeWidth="1.5"/>
+      <ellipse cx="188" cy="133" rx="8" ry="4" fill="#B8860B" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="200" cy="129" rx="9" ry="4.5" fill="#DAA520" stroke="#FFD700" strokeWidth="0.8"/>
+      <ellipse cx="212" cy="133" rx="8" ry="4" fill="#B8860B" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="193" cy="135" rx="8.5" ry="4" fill="#FFD700" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="207" cy="135" rx="8.5" ry="4" fill="#FFD700" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="200" cy="131" rx="10" ry="5" fill="#FFE555" stroke="#DAA520" strokeWidth="1.2"/>
+      <text x="200" y="133" textAnchor="middle" fontFamily="Georgia,serif" fontSize="5" fontWeight="bold" fill="#8B6914">LL</text>
+      <text x="230" y="126" fontFamily="Georgia,serif" fontSize="10" fill="#FFD700" opacity="0.9">✦</text>
+      <text x="166" y="128" fontFamily="Georgia,serif" fontSize="8" fill="#FFD700" opacity="0.8">✦</text>
+      <text x="238" y="140" fontFamily="Georgia,serif" fontSize="7" fill="#FFD700" opacity="0.7">✦</text>
     </svg>
   );
 }
@@ -967,7 +971,7 @@ function AdminScreen({ onExit }) {
             {gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
             <table style={tbl}><thead><tr><th style={th}></th><th style={th}>Player</th><th style={th}>Perfect Days</th><th style={th}>Streak</th></tr></thead><tbody>
               {[...gs].sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,8).map((g,i)=>(
-                <tr key={i}><td style={td}>{medal(i)}</td><td style={td}>{g.player_name||'Guest'}</td><td style={{...td,color:'#6ee7b7',fontWeight:'bold'}}>🌈 {g.stats?.perfectDaysAllTime||0}</td><td style={{...td,color:'#fda085',fontSize:10}}>🔥 {g.current_streak||0}d</td></tr>
+                <tr key={i}><td style={td}>{medal(i)}</td><td style={td}>{g.player_name||'Guest'}</td><td style={{...td,color:'#6ee7b7',fontWeight:'bold'}}>🌈🏆 {g.stats?.perfectDaysAllTime||0}</td><td style={{...td,color:'#fda085',fontSize:10}}>🔥 {g.current_streak||0}d</td></tr>
               ))}
             </tbody></table>}
           </div>
@@ -1017,7 +1021,7 @@ function AdminScreen({ onExit }) {
                 <td style={{...td,color:'#f6d365',fontWeight:'bold'}}>{(g.lifetime_points||0).toLocaleString()}</td>
                 <td style={{...td,color:'#fda085'}}>{g.current_streak?'🔥 '+g.current_streak+'d':'—'}</td>
                 <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{g.longest_streak||0}d</td>
-                <td style={{...td,color:'#6ee7b7'}}>{g.stats?.perfectDaysAllTime?'🌈 '+g.stats.perfectDaysAllTime:'—'}</td>
+                <td style={{...td,color:'#6ee7b7'}}>{g.stats?.perfectDaysAllTime?'🌈🏆 '+g.stats.perfectDaysAllTime:'—'}</td>
                 <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{(g.badges||[]).length} earned</td>
                 <td style={{...td,color:'rgba(255,255,255,0.4)',fontSize:10}}>{timeAgo(g.last_played_date)}</td>
               </tr>
@@ -1060,11 +1064,11 @@ export default function App() {
       <Starfield/>
       <ConfettiCanvas active={true} rainbow={true}/>
       <div style={{position:'relative',zIndex:1,textAlign:'center',maxWidth:340}}>
-        <div style={{fontSize:64,marginBottom:16}}>🌈</div>
+        <div style={{marginBottom:16,display:"flex",justifyContent:"center"}}><RainbowPot size={140}/></div>
         <div style={{background:'rgba(139,92,246,0.25)',border:'2.5px solid rgba(167,139,250,0.95)',borderRadius:14,padding:'10px 24px',marginBottom:20,boxShadow:'0 0 28px rgba(139,92,246,0.5)'}}>
           <span style={{fontSize:26,fontWeight:'bold',letterSpacing:4,color:'#fff',textShadow:'0 0 16px rgba(167,139,250,0.85)'}}>LetterLoot</span>
         </div>
-        <div style={{fontSize:22,fontWeight:'bold',color:'#f6d365',marginBottom:12}}>🎉 Someone had a Perfect Day!</div>
+        <div style={{fontSize:22,fontWeight:'bold',color:'#f6d365',marginBottom:12}}>🎉 Someone had a 🌈🏆 Perfect Day!</div>
         <div style={{fontSize:14,color:'#f5f0e8',lineHeight:1.8,marginBottom:20}}>A friend just crushed all 5 levels of LetterLoot — and wanted you to know about it!</div>
         <div style={{background:'rgba(255,255,255,0.07)',borderRadius:14,padding:'16px',marginBottom:20,border:'1px solid rgba(255,255,255,0.18)',fontSize:13,color:'rgba(255,255,255,0.7)',lineHeight:1.7}}>
           Daily word puzzle · Every letter has a value · Free to play!
@@ -1182,6 +1186,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   ];
   const [congratsMsg] = useState(() => CONGRATS_MSGS[Math.floor(Math.random() * CONGRATS_MSGS.length)]);
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
+  const [perfectDayStreakBonus, setPerfectDayStreakBonus] = useState(0);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
   const [showReadyScreen, setShowReadyScreen] = useState(false);
   const [leaderboardFromPerfectDay, setLeaderboardFromPerfectDay] = useState(false);
@@ -1418,6 +1423,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setShowRepeatPerfect(false); setNewBestTime(false);
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
+    setPerfectDayStreakBonus(0);
     levelResetCount.current = 0; clearedLevelsRef.current = {};
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
@@ -1482,9 +1488,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const allValid = submittedRef.current.filter(s => s.valid);
     const bestWord = allValid.reduce((b, s) => !b || s.score > b.score ? s : b, null);
     const longestW = allValid.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
-    const sharer = playerName ? `${playerName} had a Perfect Day on LetterLoot!` : "🌈 PERFECT DAY on LetterLoot!";
-    return `🌈 ${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈`;
-  }, [playerName]);
+    const sharer = playerName ? `${playerName} had a 🌈🏆 Perfect Day on LetterLoot!` : "🌈🏆 PERFECT DAY on LetterLoot!";
+    const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️${bonusLine}\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
+  }, [playerName, perfectDayStreakBonus]);
 
   const fetchLeaderboard = async () => {
     try {
@@ -1636,6 +1643,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               setTimeout(() => setShowRepeatPerfect(true), 1000);
             } else {
               setPerfectDayAchieved(true); awardBadge("perfect_day");
+              // ── Streak bonus: 2,000 × consecutive perfect days ──
+              const perfStreak = Math.max(1, (statsData.currentStreak || 1));
+              const streakBonus = perfStreak * 2000;
+              setPerfectDayStreakBonus(streakBonus);
+              totalRef.current += streakBonus; setTotalScore(totalRef.current);
+              lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
+              if (isGuest) saveLifetimeData(lifetimeRef.current);
               // ── Check bonus level unlock ──
               if (ENABLE_BONUS_LEVELS) {
                 const newConsecutive = getConsecutivePerfectDays({...statsData, perfectDaysAllTime: (statsData.perfectDaysAllTime||0)+1});
@@ -1737,7 +1751,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   // ── TIPS data (item 10) ────────────────────────────────────
   const TIPS = [
     { emoji:"👁️", title:"Watch Your Letters", body:"Remaining vowels and consonants are listed in the upper section of each level. Keep a close eye on these as tiles run low." },
-    { emoji:"🌈", title:"Perfect Day? Stay Relaxed", body:"Going for a Perfect Day (with rainbows!)? Don't stress the timer. Take your time, think it through, and enjoy the hunt." },
+    { emoji:"🌈🏆", title:"Perfect Day? Stay Relaxed", body:"Going for a Perfect Day (with rainbows!)? Don't stress the timer. Take your time, think it through, and enjoy the hunt." },
     { emoji:"⚠️", title:"Beware of Q's", body:"Only one U is guaranteed when a Q is present. Use it wisely before it's gone — a stranded Q can cost you the level." },
     { emoji:"💡", title:"Think Big First", body:"Start with big, high-value words. Long words with rare letters earn serious points — and long-word bonuses stack up fast." },
     { emoji:"✨", title:"Stack Bonus Tiles", body:"Gold (2×) and purple (3×) bonus tiles multiply your letter score. Save them for your longer words to maximize your loot." },
@@ -1837,7 +1851,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
         {/* Game info */}
         <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.15)",width:"100%"}}>
-          <div style={{fontSize:14,color:"#f5f0e8",lineHeight:1.8}}>Spell words from the tiles.<br/>Every letter has a point value.<br/>Clear all 5 levels for a <span style={{color:"#f6d365",fontWeight:"bold"}}>Perfect Day</span>!</div>
+          <div style={{fontSize:14,color:"#f5f0e8",lineHeight:1.8}}>Spell words from the tiles.<br/>Every letter has a point value.<br/>Clear all 5 levels for a <span style={{color:"#f6d365",fontWeight:"bold"}}>Perfect Day 🌈🏆</span>!</div>
           <div style={{marginTop:10,fontSize:12,color:"#22d3ee",fontFamily:"Georgia,serif",lineHeight:1.6}}>
             ✨ Fresh board every day at midnight<br/>
             <span style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>(your local time — {(()=>{ const d=new Date(); d.setHours(24,0,0,0); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', timeZoneName:'short'}); })()})</span>
@@ -1895,7 +1909,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         <div style={{background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px 20px",border:"1px solid rgba(255,255,255,0.12)",marginBottom:28,width:"100%",fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.9}}>
           <div>✦ Level 1 — 42 tiles ready</div>
           <div>✦ Timer starts on <strong style={{color:"#f6d365"}}>Let's Go!</strong></div>
-          <div>✦ Clear all 5 levels for a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day 🌈</span></div>
+          <div>✦ Clear all 5 levels for a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day 🌈🏆</span></div>
         </div>
         <button onClick={()=>{ setShowReadyScreen(false); startTimer(); }} style={{width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:20,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
           Let's Go! 🎯
@@ -2077,7 +2091,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
       {perfectDayAchieved&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%",margin:"20px auto"}}>
-          <div style={{fontSize:52}}>🌈</div>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={130}/></div>
           <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
           <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
           <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
@@ -2113,10 +2127,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
       {showRepeatPerfect&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%",margin:"20px auto"}}>
-          <div style={{fontSize:52}}>🌈</div>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={130}/></div>
           <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
           <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
-          <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
+          {perfectDayStreakBonus > 0 && (
+            <div style={{marginTop:10,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",borderRadius:12,padding:"10px",border:"1px solid rgba(246,211,101,0.5)",textAlign:"center"}}>
+              <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()} pts 🌈🏆</div>
+            </div>
+          )}
+          <div style={{marginTop:10,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
             🏆 {playerName||"You"}<br/>{getShortDate()}<br/>
             Score: {totalRef.current} pts · Time: {formatTime(totalTimeRef.current)}<br/>
             💰 Lifetime: {lifetimePoints.toLocaleString()} pts
@@ -2407,7 +2426,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </div>
           </div>
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAYS</div>
+            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🌈🏆 PERFECT DAYS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
@@ -2470,9 +2489,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:5}}><div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div><div style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
             }
             <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:2,marginBottom:8}}>🌈 PERFECT DAY TIMES</div>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:2,marginBottom:8}}>🌈🏆 PERFECT DAY TIMES</div>
               {!timeLeaderboard.perfect?.length?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0"}}>No Perfect Day times yet!</div>
-                :timeLeaderboard.perfect.slice(0,5).map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.06))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:4}}><div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div><div style={{fontSize:15,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
+                :timeLeaderboard.perfect.slice(0,5).map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.06))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:4}}><div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈🏆</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div><div style={{fontSize:15,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
               }
             </div>
           </div>
@@ -2554,7 +2573,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
-            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
               <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:8,background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
@@ -2665,14 +2684,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             if (leaderboardTab==="perfect") {
               let ranked = [];
               if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.perfectDaysAllTime>0).sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:g.stats.perfectDaysAllTime}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayPerfectById[g.player_id]).map(g=>({name:g.player_name,val:"🌈",pid:g.player_id})).slice(0,10);
+              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayPerfectById[g.player_id]).map(g=>({name:g.player_name,val:"🌈🏆",pid:g.player_id})).slice(0,10);
               if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekPerfectById[g.player_id]>0).sort((a,b)=>(weekPerfectById[b.player_id]||0)-(weekPerfectById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekPerfectById[g.player_id]}));
               if (!ranked.length) return empty;
               return <div>{ranked.map((r,i)=>(
                 <div key={i} style={rowStyle(r.name,i)}>
                   <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
                   <div style={{flex:1}}><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>{isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}</div>
-                  <span style={{fontSize:15,fontWeight:"bold",color:"#6ee7b7"}}>🌈 {r.val}</span>
+                  <span style={{fontSize:15,fontWeight:"bold",color:"#6ee7b7"}}>{r.val}</span>
                 </div>
               ))}</div>;
             }

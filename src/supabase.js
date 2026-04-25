@@ -85,16 +85,31 @@ export async function saveDailySession(playerId, dateKey, session) {
   }, { onConflict: "player_id, date_key" });
   return { error };
 }
-// ── Player name ────────────────────────────────────────────────
+// ── Player name & photo ────────────────────────────────────────
 export async function updatePlayerName(playerId, name) {
   const { error } = await supabase
     .from("players")
     .update({ name })
     .eq("id", playerId);
-  // Also update game_state so leaderboard stays current
   await supabase
     .from("game_state")
     .update({ player_name: name })
     .eq("player_id", playerId);
   return { error };
+}
+export async function savePlayerPhoto(playerId, photoBase64) {
+  const { error } = await supabase
+    .from("players")
+    .update({ photo: photoBase64 })
+    .eq("id", playerId);
+  return { error };
+}
+export async function loadPlayerPhoto(playerId) {
+  const { data, error } = await supabase
+    .from("players")
+    .select("photo")
+    .eq("id", playerId)
+    .single();
+  if (error || !data?.photo) return null;
+  return data.photo;
 }

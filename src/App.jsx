@@ -1120,7 +1120,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const playerNameRef = useRef("");
   const [editingName, setEditingName] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  const [tourStep, setTourStep] = useState(0);
   const [online, setOnline] = useState(navigator.onLine);
   const [savedIndicator, setSavedIndicator] = useState(false);
   const completeTour = () => { localStorage.setItem("ll_tour_done","1"); setShowTour(false); requestNotificationPermission(); };
@@ -2005,34 +2004,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       </div>}
 
       {showTour&&<VisualTour onDone={completeTour}/>}
-      {false&&<div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#1a0808,#2d1010)":"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"36px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:TOUR_STEPS[tourStep].warning?"2px solid rgba(220,38,38,0.5)":"2px solid rgba(167,139,250,0.5)",maxWidth:340,width:"90%"}}>
-          <div style={{fontSize:52}}>{TOUR_STEPS[tourStep].emoji}</div>
-          <div style={{fontSize:20,fontWeight:"bold",color:TOUR_STEPS[tourStep].warning?"#ef4444":"#f6d365",marginTop:12,lineHeight:1.3}}>{TOUR_STEPS[tourStep].title}</div>
-          {TOUR_STEPS[tourStep].warning?(
-            <div style={{marginTop:12}}>
-              <div style={{fontSize:13,color:"rgba(255,255,255,0.8)",lineHeight:1.7}}>Points carry over <span style={{color:"#6ee7b7",fontWeight:"bold"}}>every single day</span> — building your lifetime total.</div>
-              <div style={{marginTop:10,fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.7}}>Miss a day and lose <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span>. Miss two days and lose <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span>.</div>
-              <div className="warning-box" style={{marginTop:12,borderRadius:14,padding:"14px",border:"1px solid rgba(220,38,38,0.4)"}}>
-                <div style={{fontSize:14,fontWeight:"bold",color:"#ef4444"}}>⚠️ Miss 3 days in a row...</div>
-                <div style={{fontSize:18,fontWeight:"bold",color:"#fff",marginTop:4}}>ALL points → <span style={{color:"#ef4444"}}>ZERO</span></div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:6}}>We'll send reminders at noon and 6PM!</div>
-              </div>
-            </div>
-          ):(
-            <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",marginTop:12,lineHeight:1.7,whiteSpace:"pre-line"}}>{TOUR_STEPS[tourStep].body}</div>
-          )}
-          <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:20}}>
-            {TOUR_STEPS.map((_,i)=>(<div key={i} style={{width:i===tourStep?16:8,height:8,borderRadius:4,background:i===tourStep?"#a78bfa":"rgba(255,255,255,0.2)",transition:"all 0.3s"}}/>))}
-          </div>
-          <div style={{display:"flex",gap:8,marginTop:16}}>
-            <button className="ll-btn" onClick={completeTour} style={{flex:1,padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.45)",fontSize:12}}>Skip</button>
-            <button className="ll-btn" onClick={()=>{ if(tourStep<TOUR_STEPS.length-1) setTourStep(t=>t+1); else completeTour(); }} style={{flex:2,padding:"10px",borderRadius:12,background:TOUR_STEPS[tourStep].warning?"linear-gradient(135deg,#a78bfa,#7c3aed)":"linear-gradient(135deg,#f6d365,#fda085)",color:"#fff",fontSize:14,fontWeight:"bold"}}>
-              {tourStep<TOUR_STEPS.length-1?"Next →":"Let's Play! ✏️"}
-            </button>
-          </div>
-        </div>
-      </div>}
 
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
         <div style={{display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
@@ -2228,7 +2199,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
           <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>♫</button>
           <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Reset Full Game</button>
-          <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>
+          <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>
         </div>
 
         {/* ROW 2: History · Stats · Tips · Level pill */}
@@ -2567,7 +2538,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </div>
           )}
           <div style={{textAlign:"center",marginBottom:8}}>
-            <button onClick={()=>{setTourStep(0);setShowTour(true);}} style={{background:"rgba(139,92,246,0.15)",border:"1px solid rgba(167,139,250,0.4)",color:"#a78bfa",padding:"8px 20px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>↺ Replay Tour</button>
+            <button onClick={()=>setShowTour(true)} style={{background:"rgba(139,92,246,0.15)",border:"1px solid rgba(167,139,250,0.4)",color:"#a78bfa",padding:"8px 20px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>↺ Replay Tour</button>
           </div>
           <div style={{textAlign:"center",marginBottom:8}}>
             {!confirmResetStats

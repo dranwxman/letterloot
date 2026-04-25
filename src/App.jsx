@@ -1289,11 +1289,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
         if (playerData?.name) { setPlayerName(playerData.name); playerNameRef.current = playerData.name; }
-        // Load photo from Supabase if not in localStorage
-        if (!localStorage.getItem('ll_photo')) {
-          const cloudPhoto = await loadPlayerPhoto(user.id);
-          if (cloudPhoto) { setProfilePhoto(cloudPhoto); localStorage.setItem('ll_photo', cloudPhoto); }
-        }
+        // Load photo from Supabase — always try when signed in
+        const cloudPhoto = await loadPlayerPhoto(user.id);
+        if (cloudPhoto) { setProfilePhoto(cloudPhoto); localStorage.setItem('ll_photo', cloudPhoto); }
       } else {
         const savedName = localStorage.getItem("ll_name") || "";
         setPlayerName(savedName); playerNameRef.current = savedName;

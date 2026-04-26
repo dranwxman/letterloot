@@ -386,110 +386,164 @@ function ConfettiCanvas({ active, rainbow }) {
   return <canvas ref={canvasRef} style={{ position:"fixed", inset:0, zIndex:9999, pointerEvents:"none" }} />;
 }
 
-function VisualTour({ onDone }) {
-  const [cur, setCur] = useState(0);
-  const [callout, setCallout] = useState('');
+function TileScene({ tileStyle, onAnimDone }) {
   const [wordLetters, setWordLetters] = useState([]);
   const [selectedTiles, setSelectedTiles] = useState([]);
   const [wordScore, setWordScore] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [showClear, setShowClear] = useState(false);
-  const [fingerPos, setFingerPos] = useState(null);
-  const [fingerSize, setFingerSize] = useState(26);
-  const [pulseNext, setPulseNext] = useState(false);
+  const [fp, setFp] = useState(null);
+  const [fs2, setFs2] = useState(26);
+  const [pulsing, setPulsing] = useState(false);
   const [pulseOn, setPulseOn] = useState(false);
+  const containerRef = useRef(null);
+  const ran = useRef(false);
 
-  const SCORES = {Q:20,U:7,I:4,E:3,T:3};
-  const CALLOUTS = {
-    date:"Shows today date -- tiles reset at midnight local time",
-    music:"Toggle background music on or off",
-    reset:"Resets everything back to Level 1 -- WARNING: you will lose your Perfect Day status and streak bonus!",
-    tour:"Replays this visual walkthrough anytime",
-    history:"See every word played today, sorted by score",
-    stats:"Your scores, streaks, Perfect Days and personal records",
-    tips:"Hints and strategies to play smarter",
-    leaders:"Global Leaderboard -- Registered players only! Top Scores, Best Words, Longest Words, Perfect Days and Streaks",
-    level:"Shows your current level",
-    pause:"Stops your timer completely -- use it anytime",
-    share:"Copy a link to share the game with friends",
-    undo:"Reverse your last word for 1,000 pts -- one use per game",
-    submit:"Checks your word against the Merriam-Webster dictionary",
-    clear:"Removes your tile selection without submitting",
-    retry:"Retry the current level with the same tiles -- forfeits Perfect Day",
-    buy:"Spend earned points to unlock the next level -- forfeits Perfect Day"
-  };
-
-  // Pulse interval
   useEffect(() => {
-    if (!pulseNext) return;
+    if (!pulsing) return;
     let on = true;
-    const interval = setInterval(() => {
-      on = !on;
-      setPulseOn(on);
-    }, 700);
-    return () => clearInterval(interval);
-  }, [pulseNext]);
+    const iv = setInterval(() => { on=!on; setPulseOn(on); }, 700);
+    return () => clearInterval(iv);
+  }, [pulsing]);
 
-  // Reset animation state on scene change
   useEffect(() => {
-    setCallout(''); setWordLetters([]); setSelectedTiles([]);
-    setFingerPos(null); setFingerSize(26); setPulseNext(false);
-    setWordScore(0); setSubmitted(false); setShowClear(false);
-    if (cur === 1) runTileAnimation();
-    else setTimeout(()=>{ setPulseNext(true); }, 300);
-  }, [cur]);
+    if (ran.current) return;
+    ran.current = true;
+    const SCORES = {Q:20,I:4,U:7,E:3,T:3};
+    function getPos(id) {
+      const c = containerRef.current;
+      if (!c) return null;
+      const el = c.querySelector('#'+id);
+      if (!el) return null;
+      const cr = c.getBoundingClientRect();
+      const er = el.getBoundingClientRect();
+      return { x: er.left-cr.left+er.width/2-14, y: er.top-cr.top+er.height/2-14 };
+    }
+    const wrong = ['tQ','tI','tU','tE'];
+    const correct = ['tQ','tU','tI','tE','tT'];
+    let step=0; let letters=[];
+    function doWrong() {
+      if (step>=wrong.length) { step=0; setTimeout(doClear,800); return; }
+      const pos=getPos(wrong[step]); if(pos) setFp(pos);
+      setTimeout(()=>{
+        letters=[...letters,wrong[step].slice(1)];
+        const sc=letters.reduce((a,l)=>a+(SCORES[l]||0),0);
+        setWordLetters([...letters]); setWordScore(sc);
+        setSelectedTiles(t=>[...t,wrong[step].slice(1)]);
+        step++; setTimeout(doWrong,850);
+      },450);
+    }
+    function doClear() {
+      setFs2(36);
+      setTimeout(()=>{
+        const pos=getPos('tour-clear'); if(pos) setFp(pos);
+        setTimeout(()=>{
+          setShowClear(true);
+          setTimeout(()=>{
+            setShowClear(false); setFs2(26); setFp(null);
+            setWordLetters([]); setSelectedTiles([]); setWordScore(0);
+            letters=[];
+            setTimeout(doCorrect,700);
+          },600);
+        },600);
+      },300);
+    }
+    function doCorrect() {
+      if (step>=correct.length) {
+        setTimeout(()=>{
+          const pos=getPos('tour-submit'); if(pos) setFp(pos);
+          setTimeout(()=>{ setFp(null); setSubmitted(true); setPulsing(true); if(onAnimDone) onAnimDone(); },600);
+        },400);
+        return;
+      }
+      const pos=getPos(correct[step]); if(pos) setFp(pos);
+      setTimeout(()=>{
+        letters=[...letters,correct[step].slice(1)];
+        const sc=letters.reduce((a,l)=>a+(SCORES[l]||0),0);
+        setWordLetters([...letters]); setWordScore(sc);
+        setSelectedTiles(t=>[...t,correct[step].slice(1)]);
+        step++; setTimeout(doCorrect,750);
+      },450);
+    }
+    setTimeout(doWrong,900);
+  }, []);
 
-  const TILE_POSITIONS = {
-    Q:{x:14,y:8},I:{x:64,y:8},U:{x:114,y:58},E:{x:164,y:8},T:{x:214,y:108},
+  const VALS = {Q:20,U:7,I:4,E:3,T:3,R:5,A:4,N:4,L:6,B:8,S:5,M:7,D:6,F:8,H:6,W:9,O:4,P:8,V:11,K:12};
+  return (
+    <div style={{position:'relative'}} ref={containerRef}>
+      {fp && <div style={{position:'absolute',left:fp.x,top:fp.y,fontSize:fs2,transition:'left 0.4s ease,top 0.4s ease,font-size 0.3s',pointerEvents:'none',zIndex:10}}>&#128070;</div>}
+      {[['Q','R','A','N','E'],['L','B','S','M','D'],['F','U','H','W','O'],['P','V','I','K','T']].map((row,ri)=>(
+        <div key={ri} style={{display:'flex',justifyContent:'center',marginBottom:4}}>
+          {row.map(letter=>(
+            <div key={letter} id={'t'+letter} style={tileStyle(letter,selectedTiles.includes(letter))}>
+              {letter}<span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{VALS[letter]||4}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+      <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${submitted?'#22d3ee':showClear?'rgba(216,180,254,0.8)':'rgba(255,255,255,0.8)'}`,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
+        {wordLetters.length===0
+          ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
+          : <>{wordLetters.map((l,i)=><span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>)}<span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>{submitted?'✓ +37 pts!':'+'+wordScore+' pts'}</span></>
+        }
+      </div>
+      <div style={{display:'flex',gap:6,marginBottom:6}}>
+        <div id="tour-submit" style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
+        <div id="tour-clear" style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>&#10005; Clear</div>
+      </div>
+      <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere &#8212; no adjacency needed!</div>
+      {pulsing && <div style={{marginTop:8,textAlign:'center',fontSize:11,color:'rgba(246,211,101,0.7)',fontStyle:'italic',animation:'none',opacity:pulseOn?1:0.3,transition:'opacity 0.7s'}}>Tap Next &#8594;</div>}
+    </div>
+  );
+}
+
+function VisualTour({ onDone }) {
+  const [cur, setCur] = useState(0);
+  const [callout, setCallout] = useState('');
+  const [pulseOn, setPulseOn] = useState(false);
+  const pulseRef = useRef(null);
+
+  const CALLOUTS = {
+    date:   "Shows today's date — tiles reset at midnight your local time",
+    music:  "Toggle background music on or off",
+    reset:  "Resets back to Level 1 — WARNING: you will lose your Perfect Day status and streak bonus!",
+    tour:   "Replays this visual walkthrough anytime",
+    history:"See every word you played today, sorted by score",
+    stats:  "Your scores, streaks, Perfect Days and personal records",
+    tips:   "Hints and strategies to play smarter",
+    leaders:"Global Leaderboard — Registered players only! Top Scores, Best Words, Longest Words, Perfect Days and Streaks",
+    level:  "Shows your current level",
+    pause:  "Stops your timer completely — use it anytime",
+    share:  "Copy a link to share the game with friends",
+    undo:   "Reverse your last word for 1,000 pts — one use per game",
+    submit: "Checks your word against the Merriam-Webster dictionary",
+    clear:  "Removes your tile selection without submitting",
+    retry:  "Retry the current level with the same tiles — forfeits Perfect Day",
+    buy:    "Spend earned points to unlock the next level — forfeits Perfect Day"
   };
-  function runTileAnimation() {
-    const wrong = ['Q','I','U','E'];
-    const wrongIds = ['Q','I','U','E'];
-    const correct = ['Q','U','I','E','T'];
-    let step = 0; let letters = [];
-    function nextWrong() {
-      if (step >= wrong.length) {
-        setFingerSize(36); setTimeout(() => { setFingerPos({x:160,y:140}); setShowClear(true); setTimeout(() => {
-          setShowClear(false); setFingerSize(26); setFingerPos(null); setWordLetters([]); setSelectedTiles([]); setWordScore(0);
-          step = 0; letters = [];
-          setTimeout(nextCorrect, 800);
-        }, 900); }, 700);
-        return;
-      }
-      const wl = wrong[step];
-      setFingerPos(TILE_POSITIONS[wl]||{x:60,y:30});
-      letters = [...letters, wl];
-      const score = letters.reduce((a,l) => a+(SCORES[l]||0), 0);
-      setWordLetters([...letters]); setWordScore(score);
-      setSelectedTiles(t => [...t, wl]);
-      step++;
-      setTimeout(nextWrong, 900);
-    }
-    function nextCorrect() {
-      if (step >= correct.length) {
-        setFingerPos({x:60,y:145}); setTimeout(() => { setFingerPos(null); setSubmitted(true); setTimeout(()=>setPulseNext(true),600); }, 700);
-        return;
-      }
-      const cl = correct[step];
-      setFingerPos(TILE_POSITIONS[cl]||{x:60,y:30});
-      letters = [...letters, cl];
-      const score = letters.reduce((a,l) => a+(SCORES[l]||0), 0);
-      setWordLetters([...letters]); setWordScore(score);
-      setSelectedTiles(t => [...t, cl]);
-      step++;
-      setTimeout(nextCorrect, 750);
-    }
-    setTimeout(nextWrong, 800);
+
+  function startPulse() {
+    if (pulseRef.current) clearInterval(pulseRef.current);
+    let on = true;
+    pulseRef.current = setInterval(() => { on = !on; setPulseOn(on); }, 700);
   }
 
+  useEffect(() => {
+    setCallout('');
+    setPulseOn(false);
+    if (pulseRef.current) clearInterval(pulseRef.current);
+    if (cur !== 1) setTimeout(startPulse, 400);
+    return () => { if (pulseRef.current) clearInterval(pulseRef.current); };
+  }, [cur]);
+
   const tileStyle = (letter, sel) => ({
-    width:42, height:48, borderRadius:8,
+    width: 42, height: 48, borderRadius: 8,
     background: sel ? 'linear-gradient(135deg,#5c6bc0,#512da8)' : 'linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))',
     border: sel ? '1px solid #9fa8da' : '1px solid rgba(255,255,255,0.22)',
-    display:'inline-flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-    fontWeight:'bold', fontSize:16, color:'#fff',
+    display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    fontWeight: 'bold', fontSize: 16, color: '#fff',
     transform: sel ? 'translateY(-4px) scale(1.08)' : 'none',
-    transition:'all 0.2s', margin:2, position:'relative', cursor:'default'
+    transition: 'all 0.2s', margin: 2, position: 'relative', cursor: 'default'
   });
 
   const SmallPot = () => (
@@ -532,8 +586,8 @@ function VisualTour({ onDone }) {
 
   const scenes = [
     {
-      title:"Welcome to LetterLoot!",
-      desc:"A daily word puzzle where every letter has a point value.",
+      title: "Welcome to LetterLoot!",
+      desc:  "A daily word puzzle where every letter has a point value.",
       content: () => (
         <div style={{textAlign:'center',padding:'10px 0'}}>
           <div style={{fontSize:64,marginBottom:14}}>✏️</div>
@@ -552,125 +606,20 @@ function VisualTour({ onDone }) {
       )
     },
     {
-      title:"Tap Tiles to Spell a Word",
-      desc:"Tap any tiles in any order — no adjacency rules!",
-      content: () => {
-        const containerRef = useRef(null);
-        const [fp, setFp] = useState(null);
-        const [fs2, setFs2] = useState(26);
-        const running = useRef(false);
-
-        useEffect(() => {
-          if (running.current) return;
-          running.current = true;
-          function getPos(id) {
-            const c = containerRef.current;
-            if (!c) return null;
-            const el = c.querySelector('#'+id);
-            if (!el) return null;
-            const cr = c.getBoundingClientRect();
-            const er = el.getBoundingClientRect();
-            return { x: er.left - cr.left + er.width/2 - 14, y: er.top - cr.top + er.height/2 - 14 };
-          }
-          const wrong = ['tQ','tI','tU','tE'];
-          const correct = ['tQ','tU','tI','tE','tT'];
-          let step = 0; let letters = [];
-          function doWrong() {
-            if (step >= wrong.length) { step=0; setTimeout(doClear,800); return; }
-            const pos = getPos(wrong[step]);
-            if(pos) setFp(pos);
-            setTimeout(() => {
-              letters = [...letters, wrong[step].slice(1)];
-              const sc = letters.reduce((a,l)=>a+({Q:20,I:4,U:7,E:3,T:3}[l]||0),0);
-              setWordLetters([...letters]); setWordScore(sc);
-              setSelectedTiles(t=>[...t, wrong[step].slice(1)]);
-              step++; setTimeout(doWrong, 850);
-            }, 450);
-          }
-          function doClear() {
-            setFs2(36);
-            setTimeout(() => {
-              const pos = getPos('tour-clear');
-              if(pos) setFp(pos);
-              setTimeout(() => {
-                setShowClear(true);
-                setTimeout(() => {
-                  setShowClear(false); setFs2(26); setFp(null);
-                  setWordLetters([]); setSelectedTiles([]); setWordScore(0);
-                  letters = [];
-                  setTimeout(doCorrect, 700);
-                }, 600);
-              }, 600);
-            }, 300);
-          }
-          function doCorrect() {
-            if (step >= correct.length) {
-              setTimeout(() => {
-                const pos = getPos('tour-submit');
-                if(pos) setFp(pos);
-                setTimeout(() => { setFp(null); setSubmitted(true); setPulseNext(true); }, 600);
-              }, 400);
-              return;
-            }
-            const pos = getPos(correct[step]);
-            if(pos) setFp(pos);
-            setTimeout(() => {
-              letters = [...letters, correct[step].slice(1)];
-              const sc = letters.reduce((a,l)=>a+({Q:20,I:4,U:7,E:3,T:3}[l]||0),0);
-              setWordLetters([...letters]); setWordScore(sc);
-              setSelectedTiles(t=>[...t, correct[step].slice(1)]);
-              step++; setTimeout(doCorrect, 750);
-            }, 450);
-          }
-          setTimeout(doWrong, 900);
-        }, []);
-
-        return (
-          <div style={{position:'relative'}} ref={containerRef}>
-            {fp && <div style={{position:'absolute',left:fp.x,top:fp.y,fontSize:fs2,transition:'left 0.4s ease,top 0.4s ease,font-size 0.3s',pointerEvents:'none',zIndex:10}}>👆</div>}
-            {[
-              ['Q','R','A','N','E'],
-              ['L','B','S','M','D'],
-              ['F','U','H','W','O'],
-              ['P','V','I','K','T'],
-            ].map((row,ri) => (
-              <div key={ri} style={{display:'flex',justifyContent:'center',marginBottom:4}}>
-                {row.map(letter => (
-                  <div key={letter} id={'t'+letter} style={tileStyle(letter, selectedTiles.includes(letter))}>
-                    {letter}
-                    <span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{({Q:20,U:7,I:4,E:3,T:3,R:5,A:4,N:4,L:6,B:8,S:5,M:7,D:6,F:8,H:6,W:9,O:4,P:8,V:11,K:12})[letter]||4}</span>
-                  </div>
-                ))}
-              </div>
-            ))}
-            <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${submitted?'#22d3ee':showClear?'rgba(216,180,254,0.8)':'rgba(255,255,255,0.8)'}`,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
-              {wordLetters.length===0
-                ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
-                : <>
-                    {wordLetters.map((l,i) => <span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>)}
-                    <span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>{submitted?'✓ +37 pts!':'+'+wordScore+' pts'}</span>
-                  </>
-              }
-            </div>
-            <div style={{display:'flex',gap:6,marginBottom:6}}>
-              <div id="tour-submit" style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
-              <div id="tour-clear" style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>✕ Clear</div>
-            </div>
-            <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere — no adjacency needed!</div>
-          </div>
-        );
-      }
+      title: "Tap Tiles to Spell a Word",
+      desc:  "Tap any tiles in any order — no adjacency rules!",
+      content: () => <TileScene tileStyle={tileStyle} onAnimDone={startPulse}/>
     },
     {
-      title:"Letter Values",
-      desc:"Every letter has value.",
+      title: "Letter Values",
+      desc:  "Every letter has value.",
       content: () => (
         <div>
           <div style={{marginBottom:10,textAlign:'center'}}>
             <div style={{fontSize:12,color:'rgba(255,255,255,0.85)',marginBottom:8,fontWeight:'bold'}}>Rare letters score big!</div>
             <div style={{display:'flex',gap:6,justifyContent:'center'}}>
               {[['Z',22],['J',16],['K',12],['X',14]].map(([l,v]) => (
-                <div key={l} style={{...tileStyle(l,false),width:44,height:50,fontSize:16}}>
+                <div key={l} style={tileStyle(l,false)}>
                   {l}<span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{v}</span>
                 </div>
               ))}
@@ -691,47 +640,70 @@ function VisualTour({ onDone }) {
               <div style={{fontSize:10,color:'#e040fb'}}>Purple = 3x letter value</div>
             </div>
           </div>
-          <div style={{background:'rgba(110,231,183,0.08)',border:'1px solid rgba(110,231,183,0.3)',borderRadius:10,padding:8,textAlign:'center',fontSize:11,color:'#6ee7b7'}}>💡 Spell 8+ letter words for long-word bonuses!</div>
+          <div style={{background:'rgba(110,231,183,0.08)',border:'1px solid rgba(110,231,183,0.3)',borderRadius:10,padding:8,textAlign:'center',fontSize:11,color:'#6ee7b7'}}>
+            💡 Spell 8+ letter words for long-word bonuses!
+          </div>
           <div style={{marginTop:6,background:'rgba(255,255,255,0.06)',borderRadius:10,padding:8,textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.85)',lineHeight:1.6}}>
-            Words checked against<br/><strong style={{color:'#f6d365'}}>Merriam-Webster Dictionary</strong><br/>Collegiate + Medical editions
+            Words checked against<br/>
+            <strong style={{color:'#f6d365'}}>Merriam-Webster Dictionary</strong><br/>
+            Collegiate + Medical editions
           </div>
         </div>
       )
     },
     {
-      title:"Your Buttons",
-      desc:"",
+      title: "Your Buttons",
+      desc:  "",
       content: () => (
         <div>
-          <div style={{fontSize:15,fontWeight:'bold',color:'#f6d365',textAlign:'center',marginBottom:10}}>👉 Tap any button to learn what it does!</div>
+          <div style={{fontSize:15,fontWeight:'bold',color:'#f6d365',textAlign:'center',marginBottom:10}}>
+            👉 Tap any button to learn what it does!
+          </div>
           {[
-            {label:'TOP ROW', btns:[{k:'date',t:'📅 Date'},{k:'music',t:'♫ Music'},{k:'reset',t:'↺ Reset Full Game'},{k:'tour',t:'↺ Tour'}]},
-            {label:'NAV TABS', btns:[{k:'history',t:'📜 History'},{k:'stats',t:'📊 Stats'},{k:'tips',t:'ℹ️ Tips'},{k:'leaders',t:'🏆 Leaders'},{k:'level',t:'✦ L1 ✦',special:'level'}]},
-            {label:'GAME CONTROLS', btns:[{k:'pause',t:'⏸ Pause'},{k:'share',t:'📤 Share'},{k:'undo',t:'↩️ UNDO',special:'undo'}]},
-            {label:'', btns:[{k:'submit',t:'Submit Word',special:'submit'},{k:'clear',t:'✕ Clear'},{k:'retry',t:'🔄 Replay L1'},{k:'buy',t:'🔓 Buy L2'}]},
+            { label:'TOP ROW', btns:[
+              {k:'date',t:'📅 Date'},{k:'music',t:'♫ Music'},
+              {k:'reset',t:'↺ Reset Full Game'},{k:'tour',t:'↺ Tour'}
+            ]},
+            { label:'NAV TABS', btns:[
+              {k:'history',t:'📜 History'},{k:'stats',t:'📊 Stats'},
+              {k:'tips',t:'ℹ️ Tips'},{k:'leaders',t:'🏆 Leaders'},
+              {k:'level',t:'✦ L1 ✦',sp:'level'}
+            ]},
+            { label:'GAME CONTROLS', btns:[
+              {k:'pause',t:'⏸ Pause'},{k:'share',t:'📤 Share'},
+              {k:'undo',t:'↩️ UNDO',sp:'undo'}
+            ]},
+            { label:'', btns:[
+              {k:'submit',t:'Submit Word',sp:'submit'},{k:'clear',t:'✕ Clear'},
+              {k:'retry',t:'🔄 Replay L1'},{k:'buy',t:'🔓 Buy L2'}
+            ]},
           ].map(({label,btns},i) => (
             <div key={i}>
-              {label && <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',letterSpacing:2,marginBottom:3,marginTop:i>0?6:0}}>{label}</div>}
-              <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:3}}>
-                {btns.map(({k,t,special}) => (
+              {label && <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',letterSpacing:2,marginBottom:3,marginTop:i>0?5:0}}>{label}</div>}
+              <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:2}}>
+                {btns.map(({k,t,sp}) => (
                   <button key={k} onClick={()=>setCallout(CALLOUTS[k]||'')} style={{
                     padding:'5px 7px',borderRadius:8,fontSize:9,fontFamily:'Georgia,serif',cursor:'pointer',whiteSpace:'nowrap',
-                    background: special==='submit'?'linear-gradient(135deg,#f6d365,#fda085)':special==='level'?'rgba(139,92,246,0.22)':special==='undo'?'rgba(225,29,72,0.2)':'rgba(255,255,255,0.08)',
-                    border: special==='submit'?'none':special==='level'?'1.5px solid rgba(167,139,250,0.7)':special==='undo'?'1px solid rgba(251,113,133,0.8)':'1px solid rgba(255,255,255,0.25)',
-                    color: special==='submit'?'#1a1a2e':special==='level'?'#e9d5ff':special==='undo'?'#fda4af':'#f0e8d8',
-                    fontWeight: special==='submit'?'bold':'normal'
+                    background: sp==='submit'?'linear-gradient(135deg,#f6d365,#fda085)':sp==='level'?'rgba(139,92,246,0.22)':sp==='undo'?'rgba(225,29,72,0.2)':'rgba(255,255,255,0.08)',
+                    border: sp==='submit'?'none':sp==='level'?'1.5px solid rgba(167,139,250,0.7)':sp==='undo'?'1px solid rgba(251,113,133,0.8)':'1px solid rgba(255,255,255,0.25)',
+                    color: sp==='submit'?'#1a1a2e':sp==='level'?'#e9d5ff':sp==='undo'?'#fda4af':'#f0e8d8',
+                    fontWeight: sp==='submit'?'bold':'normal'
                   }}>{t}</button>
                 ))}
               </div>
             </div>
           ))}
-          {callout && <div style={{background:'rgba(246,211,101,0.15)',border:'1.5px solid rgba(246,211,101,0.6)',borderRadius:12,padding:'10px 14px',fontSize:12,color:'#f6d365',textAlign:'center',marginTop:8,lineHeight:1.6}}>{callout}</div>}
+          {callout && (
+            <div style={{background:'rgba(246,211,101,0.15)',border:'1.5px solid rgba(246,211,101,0.6)',borderRadius:12,padding:'10px 14px',fontSize:12,color:'#f6d365',textAlign:'center',marginTop:8,lineHeight:1.6}}>
+              {callout}
+            </div>
+          )}
         </div>
       )
     },
     {
-      title:"5 Levels of Looting",
-      desc:"Each level has more tiles. Clear the board for a bonus!",
+      title: "5 Levels of Looting",
+      desc:  "Each level has more tiles. Clear the board for a bonus!",
       content: () => (
         <div style={{display:'flex',flexDirection:'column',gap:7}}>
           {[{l:1,t:42,b:100,c:'#6ee7b7'},{l:2,t:48,b:200,c:'#60a5fa'},{l:3,t:54,b:300,c:'#a78bfa'},{l:4,t:60,b:400,c:'#fda085'},{l:5,t:66,b:500,c:'#f6d365'}].map(lv=>(
@@ -751,8 +723,8 @@ function VisualTour({ onDone }) {
       )
     },
     {
-      title:"The Perfect Day",
-      desc:"Find the Pot of Loot at the end of the Rainbow!",
+      title: "The Perfect Day",
+      desc:  "Find the Pot of Loot at the end of the Rainbow!",
       content: () => (
         <div style={{textAlign:'center'}}>
           <div style={{display:'flex',justifyContent:'center',marginBottom:8}}><BigPot/></div>
@@ -769,9 +741,9 @@ function VisualTour({ onDone }) {
       )
     },
     {
-      title:"Ready to Loot!",
-      desc:"You have everything you need. Now get to Looting!",
-      last: true,
+      title: "Ready to Loot!",
+      desc:  "You have everything you need. Now get to Looting!",
+      last:  true,
       content: () => (
         <div style={{textAlign:'center',padding:'8px 0'}}>
           <div style={{fontSize:48,marginBottom:6}}>✏️</div>
@@ -790,29 +762,44 @@ function VisualTour({ onDone }) {
   ];
 
   const scene = scenes[cur];
+  const nextBtnStyle = {
+    flex:2, padding:12, borderRadius:12,
+    background:'linear-gradient(135deg,#f6d365,#fda085)',
+    color:'#1a1a2e', fontFamily:'Georgia,serif', fontSize:14,
+    fontWeight:'bold', border:'none', cursor:'pointer',
+    boxShadow: pulseOn ? '0 0 20px 6px rgba(246,211,101,0.9)' : 'none',
+    transform: pulseOn ? 'scale(1.05)' : 'scale(1)',
+    transition: 'box-shadow 0.7s ease, transform 0.7s ease'
+  };
+  const doneBtnStyle = {
+    flex:2, padding:12, borderRadius:12,
+    background:'linear-gradient(135deg,#00c853,#00e676)',
+    color:'#003300', fontFamily:'Georgia,serif', fontSize:14,
+    fontWeight:'bold', border:'none', cursor:'pointer',
+    boxShadow: pulseOn ? '0 0 20px 6px rgba(0,200,83,0.9)' : 'none',
+    transform: pulseOn ? 'scale(1.05)' : 'scale(1)',
+    transition: 'box-shadow 0.7s ease, transform 0.7s ease'
+  };
 
   return (
     <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'16px',overflowY:'auto'}}>
       <div style={{width:'100%',maxWidth:400}}>
-        {/* Progress dots */}
         <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:10}}>
-          {scenes.map((_,i)=>(
+          {scenes.map((_,i) => (
             <div key={i} onClick={()=>setCur(i)} style={{width:i===cur?20:8,height:8,borderRadius:4,background:i===cur?'#a78bfa':i<cur?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.2)',transition:'all 0.3s',cursor:'pointer'}}/>
           ))}
         </div>
-        {/* Scene card */}
         <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:20,border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
           <div style={{fontSize:16,fontWeight:'bold',color:'#f6d365',marginBottom:6,textAlign:'center'}}>{scene.title}</div>
-          {scene.desc && <div style={{fontSize:13,color:'rgba(255,255,255,0.88)',textAlign:'center',lineHeight:1.7,marginBottom:14,fontWeight:'bold'}}>{scene.desc}</div>}
+          {scene.desc ? <div style={{fontSize:13,color:'rgba(255,255,255,0.88)',textAlign:'center',lineHeight:1.7,marginBottom:14,fontWeight:'bold'}}>{scene.desc}</div> : null}
           {scene.content()}
-          {/* Nav buttons */}
           <div style={{display:'flex',gap:10,marginTop:16}}>
             <button className="ll-btn" onClick={()=>cur>0?setCur(c=>c-1):onDone()} style={{flex:1,padding:10,borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:12,cursor:'pointer'}}>
               {cur===0?'Skip':'← Back'}
             </button>
             {scene.last
-              ? <button className="ll-btn" onClick={onDone} style={{flex:2,padding:12,borderRadius:12,background:'linear-gradient(135deg,#00c853,#00e676)',color:'#003300',fontFamily:'Georgia,serif',fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer'}}>✏️ Lets Play!</button>
-              : <button className="ll-btn" onClick={()=>setCur(c=>c+1)} style={{flex:2,padding:12,borderRadius:12,background:'linear-gradient(135deg,#f6d365,#fda085)',color:'#1a1a2e',fontFamily:'Georgia,serif',fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer'}}>Next →</button>
+              ? <button className="ll-btn" onClick={onDone} style={doneBtnStyle}>✏️ Lets Play!</button>
+              : <button className="ll-btn" onClick={()=>setCur(c=>c+1)} style={nextBtnStyle}>Next →</button>
             }
           </div>
         </div>

@@ -553,7 +553,7 @@ function VisualTour({ onDone }) {
           ].map((row,ri) => (
             <div key={ri} style={{display:'flex',justifyContent:'center',marginBottom:4}}>
               {row.map(letter => (
-                <div key={letter} style={tileStyle(letter, selectedTiles.includes(letter))}>
+                <div key={letter} id={'tile-'+letter} style={tileStyle(letter, selectedTiles.includes(letter))}>
                   {letter}
                   <span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{SCORES[letter]||4}</span>
                 </div>
@@ -570,8 +570,8 @@ function VisualTour({ onDone }) {
             }
           </div>
           <div style={{display:'flex',gap:6,marginBottom:6}}>
-            <div style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
-            <div style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>✕ Clear</div>
+            <div id="tour-submit" style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
+            <div id="tour-clear" style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>✕ Clear</div>
           </div>
           <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere on the board — no adjacency needed!</div>
         </div>

@@ -387,17 +387,339 @@ function ConfettiCanvas({ active, rainbow }) {
 }
 
 function VisualTour({ onDone }) {
-  const [html, setHtml] = React.useState(null);
+  const [cur, setCur] = React.useState(0);
+  const [callout, setCallout] = React.useState('');
+  const [wordLetters, setWordLetters] = React.useState([]);
+  const [selectedTiles, setSelectedTiles] = React.useState([]);
+  const [wordScore, setWordScore] = React.useState(0);
+  const [submitted, setSubmitted] = React.useState(false);
+  const [showClear, setShowClear] = React.useState(false);
+
+  const SCORES = {Q:20,U:7,I:4,E:3,T:3};
+  const CALLOUTS = {
+    date:"Shows today date -- tiles reset at midnight local time",
+    music:"Toggle background music on or off",
+    reset:"Resets everything back to Level 1 -- WARNING: you will lose your Perfect Day status and streak bonus!",
+    tour:"Replays this visual walkthrough anytime",
+    history:"See every word played today, sorted by score",
+    stats:"Your scores, streaks, Perfect Days and personal records",
+    tips:"Hints and strategies to play smarter",
+    leaders:"Global Leaderboard -- Registered players only! Top Scores, Best Words, Longest Words, Perfect Days and Streaks",
+    level:"Shows your current level",
+    pause:"Stops your timer completely -- use it anytime",
+    share:"Copy a link to share the game with friends",
+    undo:"Reverse your last word for 1,000 pts -- one use per game",
+    submit:"Checks your word against the Merriam-Webster dictionary",
+    clear:"Removes your tile selection without submitting",
+    retry:"Retry the current level with the same tiles -- forfeits Perfect Day",
+    buy:"Spend earned points to unlock the next level -- forfeits Perfect Day"
+  };
+
+  // Reset animation state on scene change
   React.useEffect(() => {
-    const h = (e) => { if (e.data === "tour-done") onDone(); };
-    window.addEventListener("message", h);
-    fetch("/tour.html").then(r=>r.text()).then(setHtml).catch(()=>setHtml("<h1 style='color:#fff;padding:40px'>Tour unavailable</h1>"));
-    return () => window.removeEventListener("message", h);
-  }, [onDone]);
-  if (!html) return <div style={{position:"fixed",inset:0,zIndex:99999,background:"#0a0820",display:"flex",alignItems:"center",justifyContent:"center",color:"#f6d365",fontSize:18}}>Loading Tour...</div>;
+    setCallout(''); setWordLetters([]); setSelectedTiles([]);
+    setWordScore(0); setSubmitted(false); setShowClear(false);
+    if (cur === 1) runTileAnimation();
+  }, [cur]);
+
+  function runTileAnimation() {
+    const wrong = ['Q','I','U','E'];
+    const wrongIds = ['Q','I','U','E'];
+    const correct = ['Q','U','I','E','T'];
+    let step = 0; let letters = [];
+    function nextWrong() {
+      if (step >= wrong.length) {
+        setTimeout(() => { setShowClear(true); setTimeout(() => {
+          setShowClear(false); setWordLetters([]); setSelectedTiles([]); setWordScore(0);
+          step = 0; letters = [];
+          setTimeout(nextCorrect, 800);
+        }, 900); }, 700);
+        return;
+      }
+      letters = [...letters, wrong[step]];
+      const score = letters.reduce((a,l) => a+(SCORES[l]||0), 0);
+      setWordLetters([...letters]); setWordScore(score);
+      setSelectedTiles(t => [...t, wrong[step]]);
+      step++;
+      setTimeout(nextWrong, 900);
+    }
+    function nextCorrect() {
+      if (step >= correct.length) {
+        setTimeout(() => setSubmitted(true), 500);
+        return;
+      }
+      letters = [...letters, correct[step]];
+      const score = letters.reduce((a,l) => a+(SCORES[l]||0), 0);
+      setWordLetters([...letters]); setWordScore(score);
+      setSelectedTiles(t => [...t, correct[step]]);
+      step++;
+      setTimeout(nextCorrect, 750);
+    }
+    setTimeout(nextWrong, 800);
+  }
+
+  const tileStyle = (letter, sel) => ({
+    width:42, height:48, borderRadius:8,
+    background: sel ? 'linear-gradient(135deg,#5c6bc0,#512da8)' : 'linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))',
+    border: sel ? '1px solid #9fa8da' : '1px solid rgba(255,255,255,0.22)',
+    display:'inline-flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+    fontWeight:'bold', fontSize:16, color:'#fff',
+    transform: sel ? 'translateY(-4px) scale(1.08)' : 'none',
+    transition:'all 0.2s', margin:2, position:'relative', cursor:'default'
+  });
+
+  const SmallPot = () => (
+    <svg viewBox="0 0 300 160" width="72" height="44" xmlns="http://www.w3.org/2000/svg" style={{verticalAlign:'-12px',display:'inline-block'}}>
+      <path d="M 5 130 A 130 120 0 0 1 185 68" fill="none" stroke="#8B00FF" strokeWidth="14" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 17 135 A 116 106 0 0 1 181 76" fill="none" stroke="#0055FF" strokeWidth="14" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 29 140 A 102 92 0 0 1 177 84" fill="none" stroke="#00AA00" strokeWidth="14" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 41 145 A 88 78 0 0 1 173 92" fill="none" stroke="#FFD700" strokeWidth="14" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 53 150 A 74 64 0 0 1 169 100" fill="none" stroke="#FF2200" strokeWidth="14" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 179 158 Q 179 132 215 132 Q 251 132 251 158 Z" fill="#111111"/>
+      <rect x="179" y="130" width="72" height="28" fill="#111111"/>
+      <ellipse cx="215" cy="158" rx="36" ry="9" fill="#111111" stroke="#666" strokeWidth="1.5"/>
+      <ellipse cx="215" cy="130" rx="36" ry="11" fill="#333333" stroke="#888" strokeWidth="2"/>
+      <ellipse cx="215" cy="119" rx="13" ry="6" fill="#FFD700" stroke="#FFEE88" strokeWidth="2"/>
+      <text x="215" y="122" textAnchor="middle" fontFamily="Georgia,serif" fontSize="7" fontWeight="bold" fill="#5a3a00">LL</text>
+    </svg>
+  );
+
+  const BigPot = () => (
+    <svg viewBox="0 0 300 160" width="220" height="118" xmlns="http://www.w3.org/2000/svg">
+      <path d="M 10 140 A 160 150 0 0 1 200 80" fill="none" stroke="#8B00FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 20 143 A 147 137 0 0 1 197 86" fill="none" stroke="#4400CC" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 30 146 A 134 124 0 0 1 194 92" fill="none" stroke="#0055FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 40 149 A 121 111 0 0 1 191 98" fill="none" stroke="#00AA00" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 50 152 A 108 98 0 0 1 188 104" fill="none" stroke="#FFD700" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 60 155 A 95 85 0 0 1 185 110" fill="none" stroke="#FF8C00" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 70 158 A 82 72 0 0 1 182 116" fill="none" stroke="#FF2200" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+      <path d="M 172 158 Q 172 132 200 132 Q 228 132 228 158 Z" fill="#111"/>
+      <rect x="172" y="130" width="56" height="28" fill="#111"/>
+      <ellipse cx="200" cy="158" rx="28" ry="8" fill="#111" stroke="#666" strokeWidth="1.5"/>
+      <ellipse cx="200" cy="130" rx="28" ry="9" fill="#333" stroke="#888" strokeWidth="2"/>
+      <ellipse cx="191" cy="123" rx="10" ry="5" fill="#CC9900" stroke="#FFD700" strokeWidth="1.5"/>
+      <ellipse cx="209" cy="123" rx="10" ry="5" fill="#CC9900" stroke="#FFD700" strokeWidth="1.5"/>
+      <ellipse cx="200" cy="119" rx="12" ry="6" fill="#FFD700" stroke="#FFEE88" strokeWidth="2"/>
+      <text x="200" y="122" textAnchor="middle" fontFamily="Georgia,serif" fontSize="6" fontWeight="bold" fill="#5a3a00">LL</text>
+      <text x="228" y="119" fontFamily="Georgia,serif" fontSize="10" fill="#FFD700" opacity="0.9">✦</text>
+      <text x="166" y="122" fontFamily="Georgia,serif" fontSize="8" fill="#FFD700" opacity="0.8">✦</text>
+    </svg>
+  );
+
+  const scenes = [
+    {
+      title:"Welcome to LetterLoot!",
+      desc:"A daily word puzzle where every letter has a point value.",
+      content: () => (
+        <div style={{textAlign:'center',padding:'10px 0'}}>
+          <div style={{fontSize:64,marginBottom:14}}>✏️</div>
+          <div style={{fontSize:13,color:'#f5f0e8',lineHeight:1.9}}>
+            Every day you get a <strong style={{color:'#f6d365'}}>fresh set of tiles</strong>.<br/>
+            Every letter has a <strong style={{color:'#fda085'}}>point value</strong>.<br/>
+            Spell words · Score points · Clear 5 levels<br/>
+            for a <strong style={{color:'#a78bfa'}}>PERFECT DAY!</strong> <SmallPot/>
+          </div>
+          <div style={{marginTop:16,background:'rgba(255,255,255,0.06)',borderRadius:12,padding:14,fontSize:11,color:'rgba(255,255,255,0.6)',lineHeight:1.8}}>
+            ✦ Same tiles for every player worldwide<br/>
+            ✦ Resets at midnight your local time<br/>
+            ✦ Compete on the Global Leaderboard
+          </div>
+        </div>
+      )
+    },
+    {
+      title:"Tap Tiles to Spell a Word",
+      desc:"Tap any tiles in any order — no adjacency rules!",
+      content: () => (
+        <div style={{position:'relative'}}>
+          {[
+            ['Q','R','A','N','E'],
+            ['L','B','S','M','D'],
+            ['F','U','H','W','O'],
+            ['P','V','I','K','T'],
+          ].map((row,ri) => (
+            <div key={ri} style={{display:'flex',justifyContent:'center',marginBottom:4}}>
+              {row.map(letter => (
+                <div key={letter} style={tileStyle(letter, selectedTiles.includes(letter))}>
+                  {letter}
+                  <span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{SCORES[letter]||4}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+          <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${submitted?'#22d3ee':showClear?'rgba(216,180,254,0.8)':'rgba(255,255,255,0.8)'}`,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
+            {wordLetters.length===0
+              ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
+              : <>
+                  {wordLetters.map((l,i) => <span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>)}
+                  <span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>{submitted?'✓ +37 pts!':'+'+wordScore+' pts'}</span>
+                </>
+            }
+          </div>
+          <div style={{display:'flex',gap:6,marginBottom:6}}>
+            <div style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
+            <div style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>✕ Clear</div>
+          </div>
+          <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere on the board — no adjacency needed!</div>
+        </div>
+      )
+    },
+    {
+      title:"Letter Values",
+      desc:"Every letter has value.",
+      content: () => (
+        <div>
+          <div style={{marginBottom:10,textAlign:'center'}}>
+            <div style={{fontSize:12,color:'rgba(255,255,255,0.85)',marginBottom:8,fontWeight:'bold'}}>Rare letters score big!</div>
+            <div style={{display:'flex',gap:6,justifyContent:'center'}}>
+              {[['Z',22],['J',16],['K',12],['X',14]].map(([l,v]) => (
+                <div key={l} style={{...tileStyle(l,false),width:44,height:50,fontSize:16}}>
+                  {l}<span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{v}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{fontSize:12,color:'rgba(255,255,255,0.85)',textAlign:'center',marginBottom:6,fontWeight:'bold'}}>Bonus tiles multiply your score!</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
+            <div style={{background:'rgba(255,215,0,0.08)',border:'1px solid rgba(255,215,0,0.4)',borderRadius:10,padding:10,textAlign:'center'}}>
+              <div style={{...tileStyle('B',false),width:40,height:46,fontSize:15,margin:'0 auto 6px',boxShadow:'0 0 12px 3px rgba(255,215,0,0.8)',borderColor:'rgba(255,215,0,0.7)'}}>
+                B<span style={{fontSize:7,color:'#ffd700',fontWeight:'bold'}}>2x</span>
+              </div>
+              <div style={{fontSize:10,color:'#ffd700'}}>Gold = 2x letter value</div>
+            </div>
+            <div style={{background:'rgba(224,64,251,0.08)',border:'1px solid rgba(224,64,251,0.4)',borderRadius:10,padding:10,textAlign:'center'}}>
+              <div style={{...tileStyle('V',false),width:40,height:46,fontSize:15,margin:'0 auto 6px',boxShadow:'0 0 14px 4px rgba(255,100,255,0.9)',borderColor:'rgba(224,64,251,0.7)'}}>
+                V<span style={{fontSize:7,color:'#e040fb',fontWeight:'bold'}}>3x</span>
+              </div>
+              <div style={{fontSize:10,color:'#e040fb'}}>Purple = 3x letter value</div>
+            </div>
+          </div>
+          <div style={{background:'rgba(110,231,183,0.08)',border:'1px solid rgba(110,231,183,0.3)',borderRadius:10,padding:8,textAlign:'center',fontSize:11,color:'#6ee7b7'}}>💡 Spell 8+ letter words for long-word bonuses!</div>
+          <div style={{marginTop:6,background:'rgba(255,255,255,0.06)',borderRadius:10,padding:8,textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.85)',lineHeight:1.6}}>
+            Words checked against<br/><strong style={{color:'#f6d365'}}>Merriam-Webster Dictionary</strong><br/>Collegiate + Medical editions
+          </div>
+        </div>
+      )
+    },
+    {
+      title:"Your Buttons",
+      desc:"",
+      content: () => (
+        <div>
+          <div style={{fontSize:15,fontWeight:'bold',color:'#f6d365',textAlign:'center',marginBottom:10}}>👉 Tap any button to learn what it does!</div>
+          {[
+            {label:'TOP ROW', btns:[{k:'date',t:'📅 Date'},{k:'music',t:'♫ Music'},{k:'reset',t:'↺ Reset Full Game'},{k:'tour',t:'↺ Tour'}]},
+            {label:'NAV TABS', btns:[{k:'history',t:'📜 History'},{k:'stats',t:'📊 Stats'},{k:'tips',t:'ℹ️ Tips'},{k:'leaders',t:'🏆 Leaders'},{k:'level',t:'✦ L1 ✦',special:'level'}]},
+            {label:'GAME CONTROLS', btns:[{k:'pause',t:'⏸ Pause'},{k:'share',t:'📤 Share'},{k:'undo',t:'↩️ UNDO',special:'undo'}]},
+            {label:'', btns:[{k:'submit',t:'Submit Word',special:'submit'},{k:'clear',t:'✕ Clear'},{k:'retry',t:'🔄 Replay L1'},{k:'buy',t:'🔓 Buy L2'}]},
+          ].map(({label,btns},i) => (
+            <div key={i}>
+              {label && <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',letterSpacing:2,marginBottom:3,marginTop:i>0?6:0}}>{label}</div>}
+              <div style={{display:'flex',flexWrap:'wrap',gap:3,marginBottom:3}}>
+                {btns.map(({k,t,special}) => (
+                  <button key={k} onClick={()=>setCallout(CALLOUTS[k]||'')} style={{
+                    padding:'5px 7px',borderRadius:8,fontSize:9,fontFamily:'Georgia,serif',cursor:'pointer',whiteSpace:'nowrap',
+                    background: special==='submit'?'linear-gradient(135deg,#f6d365,#fda085)':special==='level'?'rgba(139,92,246,0.22)':special==='undo'?'rgba(225,29,72,0.2)':'rgba(255,255,255,0.08)',
+                    border: special==='submit'?'none':special==='level'?'1.5px solid rgba(167,139,250,0.7)':special==='undo'?'1px solid rgba(251,113,133,0.8)':'1px solid rgba(255,255,255,0.25)',
+                    color: special==='submit'?'#1a1a2e':special==='level'?'#e9d5ff':special==='undo'?'#fda4af':'#f0e8d8',
+                    fontWeight: special==='submit'?'bold':'normal'
+                  }}>{t}</button>
+                ))}
+              </div>
+            </div>
+          ))}
+          {callout && <div style={{background:'rgba(246,211,101,0.15)',border:'1.5px solid rgba(246,211,101,0.6)',borderRadius:12,padding:'10px 14px',fontSize:12,color:'#f6d365',textAlign:'center',marginTop:8,lineHeight:1.6}}>{callout}</div>}
+        </div>
+      )
+    },
+    {
+      title:"5 Levels of Looting",
+      desc:"Each level has more tiles. Clear the board for a bonus!",
+      content: () => (
+        <div style={{display:'flex',flexDirection:'column',gap:7}}>
+          {[{l:1,t:42,b:100,c:'#6ee7b7'},{l:2,t:48,b:200,c:'#60a5fa'},{l:3,t:54,b:300,c:'#a78bfa'},{l:4,t:60,b:400,c:'#fda085'},{l:5,t:66,b:500,c:'#f6d365'}].map(lv=>(
+            <div key={lv.l} style={{display:'flex',alignItems:'center',gap:10,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:10,padding:'9px 12px'}}>
+              <div style={{fontSize:15,fontWeight:'bold',color:lv.c,minWidth:22}}>L{lv.l}</div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:11,color:'#f5f0e8',fontWeight:'bold'}}>{lv.t} tiles</div>
+                <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',marginTop:2}}>Clear all for +{lv.b} bonus pts</div>
+              </div>
+              <div style={{background:'rgba(255,255,255,0.06)',borderRadius:6,padding:'3px 8px',fontSize:9,color:lv.c}}>+{lv.b}</div>
+            </div>
+          ))}
+          <div style={{textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>
+            Stuck? <span style={{color:'#fda085'}}>Buy next level</span> with points or <span style={{color:'#60a5fa'}}>Replay</span> same tiles
+          </div>
+        </div>
+      )
+    },
+    {
+      title:"The Perfect Day",
+      desc:"Find the Pot of Loot at the end of the Rainbow!",
+      content: () => (
+        <div style={{textAlign:'center'}}>
+          <div style={{display:'flex',justifyContent:'center',marginBottom:8}}><BigPot/></div>
+          <div style={{background:'rgba(255,255,255,0.07)',border:'1.5px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:13,color:'#f5f0e8',lineHeight:2.1,textAlign:'left'}}>
+            ✨ Clear all 5 levels without buying or repeating<br/>
+            <SmallPot/> Experience a <strong>PERFECT DAY</strong><br/>
+            🎉 Big Bonuses at the end of the Rainbow!
+          </div>
+          <div style={{marginTop:10,background:'rgba(246,211,101,0.1)',border:'1px solid rgba(246,211,101,0.4)',borderRadius:12,padding:10,fontSize:12,color:'rgba(255,255,255,0.75)',lineHeight:1.7}}>
+            Score a Perfect Day to find out what's waiting...<br/>
+            <strong style={{color:'#f6d365'}}>Perfect Day streaks earn increasingly large bonuses!</strong>
+          </div>
+        </div>
+      )
+    },
+    {
+      title:"Ready to Loot!",
+      desc:"You have everything you need. Now go get that loot!",
+      last: true,
+      content: () => (
+        <div style={{textAlign:'center',padding:'8px 0'}}>
+          <div style={{fontSize:48,marginBottom:6}}>✏️</div>
+          <div style={{fontSize:13,color:'#f5f0e8',lineHeight:1.9,marginBottom:10}}>
+            Tap <strong style={{color:'#f6d365'}}>any tiles</strong> to build words<br/>
+            <strong style={{color:'#fda085'}}>Score big</strong> with rare letters and bonus tiles<br/>
+            Compete on the <strong style={{color:'#a78bfa'}}>Global Leaderboard</strong>
+          </div>
+          <div style={{display:'flex',justifyContent:'center',marginBottom:10}}><BigPot/></div>
+          <div style={{background:'rgba(246,211,101,0.1)',border:'1px solid rgba(246,211,101,0.3)',borderRadius:14,padding:12,fontSize:12,color:'rgba(255,255,255,0.7)',lineHeight:1.7}}>
+            💡 Tap <strong style={{color:'#f6d365'}}>↺ Tour</strong> anytime to replay this walkthrough!
+          </div>
+        </div>
+      )
+    }
+  ];
+
+  const scene = scenes[cur];
+
   return (
-    <div style={{position:"fixed",inset:0,zIndex:99999}}>
-      <iframe srcDoc={html} style={{width:"100%",height:"100%",border:"none",display:"block"}} title="Tour" sandbox="allow-scripts allow-same-origin"/>
+    <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'16px',overflowY:'auto'}}>
+      <div style={{width:'100%',maxWidth:400}}>
+        {/* Progress dots */}
+        <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:10}}>
+          {scenes.map((_,i)=>(
+            <div key={i} onClick={()=>setCur(i)} style={{width:i===cur?20:8,height:8,borderRadius:4,background:i===cur?'#a78bfa':i<cur?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.2)',transition:'all 0.3s',cursor:'pointer'}}/>
+          ))}
+        </div>
+        {/* Scene card */}
+        <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:20,border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
+          <div style={{fontSize:16,fontWeight:'bold',color:'#f6d365',marginBottom:6,textAlign:'center'}}>{scene.title}</div>
+          {scene.desc && <div style={{fontSize:13,color:'rgba(255,255,255,0.88)',textAlign:'center',lineHeight:1.7,marginBottom:14,fontWeight:'bold'}}>{scene.desc}</div>}
+          {scene.content()}
+          {/* Nav buttons */}
+          <div style={{display:'flex',gap:10,marginTop:16}}>
+            <button className="ll-btn" onClick={()=>cur>0?setCur(c=>c-1):onDone()} style={{flex:1,padding:10,borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:12,cursor:'pointer'}}>
+              {cur===0?'Skip':'← Back'}
+            </button>
+            {scene.last
+              ? <button className="ll-btn" onClick={onDone} style={{flex:2,padding:12,borderRadius:12,background:'linear-gradient(135deg,#00c853,#00e676)',color:'#003300',fontFamily:'Georgia,serif',fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer'}}>✏️ Lets Play!</button>
+              : <button className="ll-btn" onClick={()=>setCur(c=>c+1)} style={{flex:2,padding:12,borderRadius:12,background:'linear-gradient(135deg,#f6d365,#fda085)',color:'#1a1a2e',fontFamily:'Georgia,serif',fontSize:14,fontWeight:'bold',border:'none',cursor:'pointer'}}>Next →</button>
+            }
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

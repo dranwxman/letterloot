@@ -387,13 +387,13 @@ function ConfettiCanvas({ active, rainbow }) {
 }
 
 function VisualTour({ onDone }) {
-  const [cur, setCur] = React.useState(0);
-  const [callout, setCallout] = React.useState('');
-  const [wordLetters, setWordLetters] = React.useState([]);
-  const [selectedTiles, setSelectedTiles] = React.useState([]);
-  const [wordScore, setWordScore] = React.useState(0);
-  const [submitted, setSubmitted] = React.useState(false);
-  const [showClear, setShowClear] = React.useState(false);
+  const [cur, setCur] = useState(0);
+  const [callout, setCallout] = useState('');
+  const [wordLetters, setWordLetters] = useState([]);
+  const [selectedTiles, setSelectedTiles] = useState([]);
+  const [wordScore, setWordScore] = useState(0);
+  const [submitted, setSubmitted] = useState(false);
+  const [showClear, setShowClear] = useState(false);
 
   const SCORES = {Q:20,U:7,I:4,E:3,T:3};
   const CALLOUTS = {
@@ -416,7 +416,7 @@ function VisualTour({ onDone }) {
   };
 
   // Reset animation state on scene change
-  React.useEffect(() => {
+  useEffect(() => {
     setCallout(''); setWordLetters([]); setSelectedTiles([]);
     setWordScore(0); setSubmitted(false); setShowClear(false);
     if (cur === 1) runTileAnimation();
@@ -665,7 +665,7 @@ function VisualTour({ onDone }) {
             🎉 Big Bonuses at the end of the Rainbow!
           </div>
           <div style={{marginTop:10,background:'rgba(246,211,101,0.1)',border:'1px solid rgba(246,211,101,0.4)',borderRadius:12,padding:10,fontSize:12,color:'rgba(255,255,255,0.75)',lineHeight:1.7}}>
-            Score a Perfect Day to find out what's waiting...<br/>
+            Score a Perfect Day to find out what is waiting...<br/>
             <strong style={{color:'#f6d365'}}>Perfect Day streaks earn increasingly large bonuses!</strong>
           </div>
         </div>

@@ -397,6 +397,7 @@ function VisualTour({ onDone }) {
   const [fingerPos, setFingerPos] = useState(null);
   const [fingerSize, setFingerSize] = useState(26);
   const [pulseNext, setPulseNext] = useState(false);
+  const [pulseOn, setPulseOn] = useState(false);
 
   const SCORES = {Q:20,U:7,I:4,E:3,T:3};
   const CALLOUTS = {
@@ -418,13 +419,24 @@ function VisualTour({ onDone }) {
     buy:"Spend earned points to unlock the next level -- forfeits Perfect Day"
   };
 
+  // Pulse interval
+  useEffect(() => {
+    if (!pulseNext) return;
+    let on = true;
+    const interval = setInterval(() => {
+      on = !on;
+      setPulseOn(on);
+    }, 700);
+    return () => clearInterval(interval);
+  }, [pulseNext]);
+
   // Reset animation state on scene change
   useEffect(() => {
     setCallout(''); setWordLetters([]); setSelectedTiles([]);
     setFingerPos(null); setFingerSize(26); setPulseNext(false);
     setWordScore(0); setSubmitted(false); setShowClear(false);
     if (cur === 1) runTileAnimation();
-    else setTimeout(()=>setPulseNext(true), 300);
+    else setTimeout(()=>{ setPulseNext(true); }, 300);
   }, [cur]);
 
   const TILE_POSITIONS = {
@@ -542,40 +554,112 @@ function VisualTour({ onDone }) {
     {
       title:"Tap Tiles to Spell a Word",
       desc:"Tap any tiles in any order — no adjacency rules!",
-      content: () => (
-        <div style={{position:'relative'}}>
-          {fingerPos && <div style={{position:'absolute',left:fingerPos.x,top:fingerPos.y,fontSize:fingerSize,transition:'left 0.4s ease,top 0.4s ease,font-size 0.3s',pointerEvents:'none',zIndex:10,filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'}}>👆</div>}
-          {[
-            ['Q','R','A','N','E'],
-            ['L','B','S','M','D'],
-            ['F','U','H','W','O'],
-            ['P','V','I','K','T'],
-          ].map((row,ri) => (
-            <div key={ri} style={{display:'flex',justifyContent:'center',marginBottom:4}}>
-              {row.map(letter => (
-                <div key={letter} id={'tile-'+letter} style={tileStyle(letter, selectedTiles.includes(letter))}>
-                  {letter}
-                  <span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{SCORES[letter]||4}</span>
-                </div>
-              ))}
-            </div>
-          ))}
-          <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${submitted?'#22d3ee':showClear?'rgba(216,180,254,0.8)':'rgba(255,255,255,0.8)'}`,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
-            {wordLetters.length===0
-              ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
-              : <>
-                  {wordLetters.map((l,i) => <span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>)}
-                  <span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>{submitted?'✓ +37 pts!':'+'+wordScore+' pts'}</span>
-                </>
+      content: () => {
+        const containerRef = useRef(null);
+        const [fp, setFp] = useState(null);
+        const [fs2, setFs2] = useState(26);
+        const running = useRef(false);
+
+        useEffect(() => {
+          if (running.current) return;
+          running.current = true;
+          function getPos(id) {
+            const c = containerRef.current;
+            if (!c) return null;
+            const el = c.querySelector('#'+id);
+            if (!el) return null;
+            const cr = c.getBoundingClientRect();
+            const er = el.getBoundingClientRect();
+            return { x: er.left - cr.left + er.width/2 - 14, y: er.top - cr.top + er.height/2 - 14 };
+          }
+          const wrong = ['tQ','tI','tU','tE'];
+          const correct = ['tQ','tU','tI','tE','tT'];
+          let step = 0; let letters = [];
+          function doWrong() {
+            if (step >= wrong.length) { step=0; setTimeout(doClear,800); return; }
+            const pos = getPos(wrong[step]);
+            if(pos) setFp(pos);
+            setTimeout(() => {
+              letters = [...letters, wrong[step].slice(1)];
+              const sc = letters.reduce((a,l)=>a+({Q:20,I:4,U:7,E:3,T:3}[l]||0),0);
+              setWordLetters([...letters]); setWordScore(sc);
+              setSelectedTiles(t=>[...t, wrong[step].slice(1)]);
+              step++; setTimeout(doWrong, 850);
+            }, 450);
+          }
+          function doClear() {
+            setFs2(36);
+            setTimeout(() => {
+              const pos = getPos('tour-clear');
+              if(pos) setFp(pos);
+              setTimeout(() => {
+                setShowClear(true);
+                setTimeout(() => {
+                  setShowClear(false); setFs2(26); setFp(null);
+                  setWordLetters([]); setSelectedTiles([]); setWordScore(0);
+                  letters = [];
+                  setTimeout(doCorrect, 700);
+                }, 600);
+              }, 600);
+            }, 300);
+          }
+          function doCorrect() {
+            if (step >= correct.length) {
+              setTimeout(() => {
+                const pos = getPos('tour-submit');
+                if(pos) setFp(pos);
+                setTimeout(() => { setFp(null); setSubmitted(true); setPulseNext(true); }, 600);
+              }, 400);
+              return;
             }
+            const pos = getPos(correct[step]);
+            if(pos) setFp(pos);
+            setTimeout(() => {
+              letters = [...letters, correct[step].slice(1)];
+              const sc = letters.reduce((a,l)=>a+({Q:20,I:4,U:7,E:3,T:3}[l]||0),0);
+              setWordLetters([...letters]); setWordScore(sc);
+              setSelectedTiles(t=>[...t, correct[step].slice(1)]);
+              step++; setTimeout(doCorrect, 750);
+            }, 450);
+          }
+          setTimeout(doWrong, 900);
+        }, []);
+
+        return (
+          <div style={{position:'relative'}} ref={containerRef}>
+            {fp && <div style={{position:'absolute',left:fp.x,top:fp.y,fontSize:fs2,transition:'left 0.4s ease,top 0.4s ease,font-size 0.3s',pointerEvents:'none',zIndex:10}}>👆</div>}
+            {[
+              ['Q','R','A','N','E'],
+              ['L','B','S','M','D'],
+              ['F','U','H','W','O'],
+              ['P','V','I','K','T'],
+            ].map((row,ri) => (
+              <div key={ri} style={{display:'flex',justifyContent:'center',marginBottom:4}}>
+                {row.map(letter => (
+                  <div key={letter} id={'t'+letter} style={tileStyle(letter, selectedTiles.includes(letter))}>
+                    {letter}
+                    <span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{({Q:20,U:7,I:4,E:3,T:3,R:5,A:4,N:4,L:6,B:8,S:5,M:7,D:6,F:8,H:6,W:9,O:4,P:8,V:11,K:12})[letter]||4}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+            <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${submitted?'#22d3ee':showClear?'rgba(216,180,254,0.8)':'rgba(255,255,255,0.8)'}`,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
+              {wordLetters.length===0
+                ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
+                : <>
+                    {wordLetters.map((l,i) => <span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>)}
+                    <span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>{submitted?'✓ +37 pts!':'+'+wordScore+' pts'}</span>
+                  </>
+              }
+            </div>
+            <div style={{display:'flex',gap:6,marginBottom:6}}>
+              <div id="tour-submit" style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
+              <div id="tour-clear" style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>✕ Clear</div>
+            </div>
+            <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere — no adjacency needed!</div>
           </div>
-          <div style={{display:'flex',gap:6,marginBottom:6}}>
-            <div id="tour-submit" style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
-            <div id="tour-clear" style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>✕ Clear</div>
-          </div>
-          <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere on the board — no adjacency needed!</div>
-        </div>
-      )
+        );
+      }
     },
     {
       title:"Letter Values",

@@ -708,7 +708,6 @@ function VisualTour({ onDone }) {
   const scene = scenes[cur];
 
   return (
-    <>
     <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'16px',overflowY:'auto'}}>
       <div style={{width:'100%',maxWidth:400}}>
         {/* Progress dots */}

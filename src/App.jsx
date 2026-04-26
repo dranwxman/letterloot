@@ -481,7 +481,7 @@ function TileScene({ tileStyle, onAnimDone }) {
           ))}
         </div>
       ))}
-      <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:`1.5px solid ${submitted?'#22d3ee':showClear?'rgba(216,180,254,0.8)':'rgba(255,255,255,0.8)'}`,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
+      <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1.5px solid '+(submitted?'#22d3ee':showClear?'rgba(216,180,254,0.8)':'rgba(255,255,255,0.8)'),borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
         {wordLetters.length===0
           ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
           : <>{wordLetters.map((l,i)=><span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>)}<span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>{submitted?'✓ +37 pts!':'+'+wordScore+' pts'}</span></>

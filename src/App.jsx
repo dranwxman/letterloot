@@ -394,6 +394,9 @@ function VisualTour({ onDone }) {
   const [wordScore, setWordScore] = useState(0);
   const [submitted, setSubmitted] = useState(false);
   const [showClear, setShowClear] = useState(false);
+  const [fingerPos, setFingerPos] = useState(null);
+  const [fingerSize, setFingerSize] = useState(26);
+  const [pulseNext, setPulseNext] = useState(false);
 
   const SCORES = {Q:20,U:7,I:4,E:3,T:3};
   const CALLOUTS = {
@@ -418,10 +421,15 @@ function VisualTour({ onDone }) {
   // Reset animation state on scene change
   useEffect(() => {
     setCallout(''); setWordLetters([]); setSelectedTiles([]);
+    setFingerPos(null); setFingerSize(26); setPulseNext(false);
     setWordScore(0); setSubmitted(false); setShowClear(false);
     if (cur === 1) runTileAnimation();
+    else setTimeout(()=>setPulseNext(true), 300);
   }, [cur]);
 
+  const TILE_POSITIONS = {
+    Q:{x:14,y:8},I:{x:64,y:8},U:{x:114,y:58},E:{x:164,y:8},T:{x:214,y:108},
+  };
   function runTileAnimation() {
     const wrong = ['Q','I','U','E'];
     const wrongIds = ['Q','I','U','E'];
@@ -429,29 +437,33 @@ function VisualTour({ onDone }) {
     let step = 0; let letters = [];
     function nextWrong() {
       if (step >= wrong.length) {
-        setTimeout(() => { setShowClear(true); setTimeout(() => {
-          setShowClear(false); setWordLetters([]); setSelectedTiles([]); setWordScore(0);
+        setFingerSize(36); setTimeout(() => { setFingerPos({x:160,y:140}); setShowClear(true); setTimeout(() => {
+          setShowClear(false); setFingerSize(26); setFingerPos(null); setWordLetters([]); setSelectedTiles([]); setWordScore(0);
           step = 0; letters = [];
           setTimeout(nextCorrect, 800);
         }, 900); }, 700);
         return;
       }
-      letters = [...letters, wrong[step]];
+      const wl = wrong[step];
+      setFingerPos(TILE_POSITIONS[wl]||{x:60,y:30});
+      letters = [...letters, wl];
       const score = letters.reduce((a,l) => a+(SCORES[l]||0), 0);
       setWordLetters([...letters]); setWordScore(score);
-      setSelectedTiles(t => [...t, wrong[step]]);
+      setSelectedTiles(t => [...t, wl]);
       step++;
       setTimeout(nextWrong, 900);
     }
     function nextCorrect() {
       if (step >= correct.length) {
-        setTimeout(() => setSubmitted(true), 500);
+        setFingerPos({x:60,y:145}); setTimeout(() => { setFingerPos(null); setSubmitted(true); setTimeout(()=>setPulseNext(true),600); }, 700);
         return;
       }
-      letters = [...letters, correct[step]];
+      const cl = correct[step];
+      setFingerPos(TILE_POSITIONS[cl]||{x:60,y:30});
+      letters = [...letters, cl];
       const score = letters.reduce((a,l) => a+(SCORES[l]||0), 0);
       setWordLetters([...letters]); setWordScore(score);
-      setSelectedTiles(t => [...t, correct[step]]);
+      setSelectedTiles(t => [...t, cl]);
       step++;
       setTimeout(nextCorrect, 750);
     }
@@ -532,6 +544,7 @@ function VisualTour({ onDone }) {
       desc:"Tap any tiles in any order — no adjacency rules!",
       content: () => (
         <div style={{position:'relative'}}>
+          {fingerPos && <div style={{position:'absolute',left:fingerPos.x,top:fingerPos.y,fontSize:fingerSize,transition:'left 0.4s ease,top 0.4s ease,font-size 0.3s',pointerEvents:'none',zIndex:10,filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.5))'}}>👆</div>}
           {[
             ['Q','R','A','N','E'],
             ['L','B','S','M','D'],
@@ -673,7 +686,7 @@ function VisualTour({ onDone }) {
     },
     {
       title:"Ready to Loot!",
-      desc:"You have everything you need. Now go get that loot!",
+      desc:"You have everything you need. Now get to Looting!",
       last: true,
       content: () => (
         <div style={{textAlign:'center',padding:'8px 0'}}>
@@ -695,6 +708,7 @@ function VisualTour({ onDone }) {
   const scene = scenes[cur];
 
   return (
+    <>
     <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'16px',overflowY:'auto'}}>
       <div style={{width:'100%',maxWidth:400}}>
         {/* Progress dots */}
@@ -2264,7 +2278,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         @keyframes pop{0%{transform:translate(-50%,-50%) scale(0.6);opacity:0}60%{transform:translate(-50%,-50%) scale(1.08)}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
         @keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
         @keyframes badgePop{0%{transform:translateX(-50%) translateY(40px) scale(0.8);opacity:0}20%{transform:translateX(-50%) translateY(0) scale(1.05);opacity:1}80%{transform:translateX(-50%) translateY(0) scale(1);opacity:1}100%{transform:translateX(-50%) translateY(-20px) scale(0.9);opacity:0}}
-        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+        @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes ll-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
         @keyframes rainbow{0%{color:#ff0000}16%{color:#ff8800}33%{color:#ffff00}50%{color:#00ff00}66%{color:#0088ff}83%{color:#8800ff}100%{color:#ff0000}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
         @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}

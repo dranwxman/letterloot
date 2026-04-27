@@ -430,7 +430,7 @@ function TileScene({ tileStyle, onAnimDone }) {
       const s = stateRef.current;
       if (s.step >= WRONG.length) {
         s.step = 0;
-        setTimeout(moveToClear, 416);
+        setTimeout(moveToClear, 374);
         return;
       }
       const id = WRONG[s.step];
@@ -444,8 +444,8 @@ function TileScene({ tileStyle, onAnimDone }) {
         setWordScore(score);
         setSelectedTiles([...s.letters]);
         s.step++;
-        setTimeout(tapWrong, 442);
-      }, 234);
+        setTimeout(tapWrong, 398);
+      }, 211);
     }
 
     function moveToClear() {
@@ -465,10 +465,10 @@ function TileScene({ tileStyle, onAnimDone }) {
             setSelectedTiles([]);
             setWordScore(0);
             stateRef.current.letters = [];
-            setTimeout(tapCorrect, 416);
+            setTimeout(tapCorrect, 374);
           }, 390);
         }, 390);
-      }, 156);
+      }, 140);
     }
 
     function tapCorrect() {
@@ -483,7 +483,7 @@ function TileScene({ tileStyle, onAnimDone }) {
             setPulsing(true);
             if (onAnimDone) onAnimDone();
           }, 600);
-        }, 208);
+        }, 187);
         return;
       }
       const id = CORRECT[s.step];
@@ -497,11 +497,11 @@ function TileScene({ tileStyle, onAnimDone }) {
         setWordScore(score);
         setSelectedTiles([...s.letters]);
         s.step++;
-        setTimeout(tapCorrect, 390);
-      }, 234);
+        setTimeout(tapCorrect, 351);
+      }, 211);
     }
 
-    setTimeout(tapWrong, 468);
+    setTimeout(tapWrong, 421);
   }, []);
 
   const VALS = {Q:20,U:7,I:4,E:3,T:3,R:5,A:4,N:4,L:6,B:8,S:5,M:7,D:6,F:8,H:6,W:9,O:4,P:8,V:11,K:12};
@@ -646,20 +646,15 @@ function VisualTour({ onDone }) {
   const scenes = [
     {
       title: "Welcome to LetterLoot!",
-      desc:  "A daily word puzzle where every letter has a point value.",
+      desc:  "",
       content: () => (
         <div style={{textAlign:'center',padding:'10px 0'}}>
-          <div style={{fontSize:64,marginBottom:14}}>✏️</div>
-          <div style={{fontSize:13,color:'#f5f0e8',lineHeight:1.9}}>
-            Every day you get a <strong style={{color:'#f6d365'}}>fresh set of tiles</strong>.<br/>
-            Every letter has a <strong style={{color:'#fda085'}}>point value</strong>.<br/>
-            Spell words · Score points · Clear 5 levels<br/>
-            for a <strong style={{color:'#a78bfa'}}>PERFECT DAY!</strong> <SmallPot/>
-          </div>
-          <div style={{marginTop:16,background:'rgba(255,255,255,0.06)',borderRadius:12,padding:14,fontSize:11,color:'rgba(255,255,255,0.6)',lineHeight:1.8}}>
-            ✦ Same tiles for every player worldwide<br/>
-            ✦ Resets at midnight your local time<br/>
-            ✦ Compete on the Global Leaderboard
+          <div style={{fontSize:64,marginBottom:20}}>✏️</div>
+          <div style={{display:'flex',flexDirection:'column',gap:14,fontSize:15,fontWeight:'bold'}}>
+            <div style={{color:'#22d3ee'}}>🌅 Fresh Tiles Daily</div>
+            <div style={{color:'#f6d365'}}>💎 Every letter is worth points</div>
+            <div style={{color:'#fda085'}}>⭐ Bonuses increase points</div>
+            <div style={{color:'#a78bfa'}}>🌈 Clear 5 levels for a Perfect Day! <SmallPot/></div>
           </div>
         </div>
       )

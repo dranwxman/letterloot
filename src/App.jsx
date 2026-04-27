@@ -570,7 +570,7 @@ function VisualTour({ onDone }) {
     history:"See every word you played today, sorted by score",
     stats:  "Your scores, streaks, Perfect Days and personal records",
     tips:   "Hints and strategies to play smarter",
-    leaders:"Global Leaderboard — Registered players only! Top Scores, Best Words, Longest Words, Perfect Days and Streaks",
+    leaders:"Leaderboard — Registered players only! Top Scores, Best Words, Longest Words, Perfect Days and Streaks",
     level:  "Shows your current level",
     pause:  "Stops your timer completely — use it anytime",
     share:  "Copy a link to share the game with friends",
@@ -2099,11 +2099,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
           if (perfectDayRef.current) {
-            const alreadyPerfectToday = (statsData.perfectDaysWeek?.[getTodayKey()] || 0) >= 1;
-            if (alreadyPerfectToday) {
-              setTimeout(() => setShowRepeatPerfect(true), 1000);
-            } else {
-              setPerfectDayAchieved(true); awardBadge("perfect_day");
+            setPerfectDayAchieved(true); awardBadge("perfect_day");
               // ── Streak bonus: 2,000 × consecutive perfect days ──
               const perfStreak = Math.max(1, (statsData.currentStreak || 1));
               const streakBonus = perfStreak * 2000;
@@ -2125,7 +2121,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
               setTimeLeaderboard(updatedTimes2);
               setTimeout(() => setShowNameInput(true), 1000);
-            }
           } else setTimeout(() => setShowNameInput(true), 1500);
         }
         if (!isGuest && user) await syncToCloud();
@@ -2318,7 +2313,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <span style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>(your local time — {(()=>{ const d=new Date(); d.setHours(24,0,0,0); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', timeZoneName:'short'}); })()})</span>
           </div>
           <div style={{marginTop:10,background:"rgba(246,211,101,0.1)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(246,211,101,0.3)"}}>
-            <div style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>🏆 Global Leaderboard available to all registered players!</div>
+            <div style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>🏆 Leaderboard available to all registered players!</div>
             <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:3}}>Top Scores · Best Words · Longest Words · Perfect Days · Streaks</div>
           </div>
         </div>
@@ -2575,7 +2570,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             💰 Lifetime: {lifetimePoints.toLocaleString()} pts
           </div>
           <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
-            Only 1 Perfect Day counts per day toward your total — but every one is worth celebrating!
+            Perfect Days are tracked daily toward your total — but every one is worth celebrating!
           </div>
           <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
             🏆 Check Leaderboard

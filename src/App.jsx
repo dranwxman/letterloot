@@ -674,38 +674,40 @@ function VisualTour({ onDone }) {
       desc:  "Every letter has value.",
       content: () => (
         <div>
-          <div style={{marginBottom:10,textAlign:'center'}}>
-            <div style={{fontSize:12,color:'rgba(255,255,255,0.85)',marginBottom:8,fontWeight:'bold'}}>Rare letters score big!</div>
-            <div style={{display:'flex',gap:6,justifyContent:'center'}}>
+          {/* Line 1: Spell 8+ — bigger */}
+          <div style={{background:'rgba(110,231,183,0.08)',border:'1px solid rgba(110,231,183,0.4)',borderRadius:10,padding:10,textAlign:'center',fontSize:14,color:'#6ee7b7',fontWeight:'bold',marginBottom:10}}>
+            💡 Spell 8+ letter words for long-word bonuses!
+          </div>
+          {/* Line 2: Bonus tiles — slightly smaller */}
+          <div style={{fontSize:11,color:'rgba(255,255,255,0.75)',textAlign:'center',marginBottom:6,fontWeight:'bold'}}>Bonus tiles multiply your score!</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+            <div style={{background:'rgba(255,215,0,0.08)',border:'1px solid rgba(255,215,0,0.4)',borderRadius:10,padding:8,textAlign:'center'}}>
+              <div style={{...tileStyle('B',false),width:38,height:44,fontSize:14,margin:'0 auto 5px',boxShadow:'0 0 12px 3px rgba(255,215,0,0.8)',borderColor:'rgba(255,215,0,0.7)'}}>
+                B<span style={{fontSize:7,color:'#ffd700',fontWeight:'bold'}}>2x</span>
+              </div>
+              <div style={{fontSize:9,color:'#ffd700'}}>Gold = 2x letter value</div>
+            </div>
+            <div style={{background:'rgba(224,64,251,0.08)',border:'1px solid rgba(224,64,251,0.4)',borderRadius:10,padding:8,textAlign:'center'}}>
+              <div style={{...tileStyle('V',false),width:38,height:44,fontSize:14,margin:'0 auto 5px',boxShadow:'0 0 14px 4px rgba(255,100,255,0.9)',borderColor:'rgba(224,64,251,0.7)'}}>
+                V<span style={{fontSize:7,color:'#e040fb',fontWeight:'bold'}}>3x</span>
+              </div>
+              <div style={{fontSize:9,color:'#e040fb'}}>Purple = 3x letter value</div>
+            </div>
+          </div>
+          {/* Line 3: Rare letters */}
+          <div style={{textAlign:'center',marginBottom:10}}>
+            <div style={{fontSize:11,color:'rgba(255,255,255,0.75)',marginBottom:6,fontWeight:'bold'}}>Rare letters score big!</div>
+            <div style={{display:'flex',gap:5,justifyContent:'center'}}>
               {[['Z',22],['J',16],['K',12],['X',14]].map(([l,v]) => (
-                <div key={l} style={tileStyle(l,false)}>
+                <div key={l} style={{...tileStyle(l,false),width:38,height:44,fontSize:14}}>
                   {l}<span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{v}</span>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{fontSize:12,color:'rgba(255,255,255,0.85)',textAlign:'center',marginBottom:6,fontWeight:'bold'}}>Bonus tiles multiply your score!</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:8}}>
-            <div style={{background:'rgba(255,215,0,0.08)',border:'1px solid rgba(255,215,0,0.4)',borderRadius:10,padding:10,textAlign:'center'}}>
-              <div style={{...tileStyle('B',false),width:40,height:46,fontSize:15,margin:'0 auto 6px',boxShadow:'0 0 12px 3px rgba(255,215,0,0.8)',borderColor:'rgba(255,215,0,0.7)'}}>
-                B<span style={{fontSize:7,color:'#ffd700',fontWeight:'bold'}}>2x</span>
-              </div>
-              <div style={{fontSize:10,color:'#ffd700'}}>Gold = 2x letter value</div>
-            </div>
-            <div style={{background:'rgba(224,64,251,0.08)',border:'1px solid rgba(224,64,251,0.4)',borderRadius:10,padding:10,textAlign:'center'}}>
-              <div style={{...tileStyle('V',false),width:40,height:46,fontSize:15,margin:'0 auto 6px',boxShadow:'0 0 14px 4px rgba(255,100,255,0.9)',borderColor:'rgba(224,64,251,0.7)'}}>
-                V<span style={{fontSize:7,color:'#e040fb',fontWeight:'bold'}}>3x</span>
-              </div>
-              <div style={{fontSize:10,color:'#e040fb'}}>Purple = 3x letter value</div>
-            </div>
-          </div>
-          <div style={{background:'rgba(110,231,183,0.08)',border:'1px solid rgba(110,231,183,0.3)',borderRadius:10,padding:8,textAlign:'center',fontSize:11,color:'#6ee7b7'}}>
-            💡 Spell 8+ letter words for long-word bonuses!
-          </div>
-          <div style={{marginTop:6,background:'rgba(255,255,255,0.06)',borderRadius:10,padding:8,textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.85)',lineHeight:1.6}}>
-            Words checked against<br/>
-            <strong style={{color:'#f6d365'}}>Merriam-Webster Dictionary</strong><br/>
-            Collegiate + Medical editions
+          {/* Line 4: MW note — smaller */}
+          <div style={{background:'rgba(255,255,255,0.05)',borderRadius:10,padding:7,textAlign:'center',fontSize:10,color:'rgba(255,255,255,0.55)',lineHeight:1.6}}>
+            Words checked against <strong style={{color:'rgba(246,211,101,0.7)'}}>Merriam-Webster Dictionary</strong> — Collegiate + Medical
           </div>
         </div>
       )

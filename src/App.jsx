@@ -763,39 +763,43 @@ function VisualTour({ onDone }) {
       )
     },
 
-    {
+        {
       title: "The Perfect Day",
-      desc:  "Find the Pot of Loot at the end of the Rainbow!",
-      content: () => (
-        <div style={{textAlign:'center'}}>
-          <div style={{display:'flex',justifyContent:'center',marginBottom:8}}><BigPot/></div>
-          <div style={{background:'rgba(255,255,255,0.07)',border:'1.5px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:13,color:'#f5f0e8',lineHeight:2.1,textAlign:'left'}}>
-            ✨ Clear all 5 levels without buying or repeating<br/>
-            <SmallPot/> Experience a <strong>PERFECT DAY</strong><br/>
-            🎉 Big Bonuses at the end of the Rainbow!
-          </div>
-          <div style={{marginTop:10,background:'rgba(246,211,101,0.1)',border:'1px solid rgba(246,211,101,0.4)',borderRadius:12,padding:10,fontSize:12,color:'rgba(255,255,255,0.75)',lineHeight:1.7}}>
-            Score a Perfect Day to find out what is waiting...<br/>
-            <strong style={{color:'#f6d365'}}>Perfect Day streaks earn increasingly large bonuses!</strong>
-          </div>
-        </div>
-      )
-    },
-    {
-      title: "Ready to Loot!",
-      desc:  "You have everything you need. Now get to Looting!",
+      desc:  "",
       last:  true,
       content: () => (
-        <div style={{textAlign:'center',padding:'8px 0'}}>
-          <div style={{fontSize:48,marginBottom:6}}>✏️</div>
-          <div style={{fontSize:13,color:'#f5f0e8',lineHeight:1.9,marginBottom:10}}>
-            Tap <strong style={{color:'#f6d365'}}>any tiles</strong> to build words<br/>
-            <strong style={{color:'#fda085'}}>Score big</strong> with rare letters and bonus tiles<br/>
-            Compete on the <strong style={{color:'#a78bfa'}}>Global Leaderboard</strong>
+        <div style={{textAlign:'center'}}>
+          <div style={{display:'flex',justifyContent:'center',marginBottom:6}}>
+            <svg viewBox="0 0 300 160" width="160" height="86" xmlns="http://www.w3.org/2000/svg">
+              <path d="M 10 140 A 160 150 0 0 1 200 80" fill="none" stroke="#8B00FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+              <path d="M 20 143 A 147 137 0 0 1 197 86" fill="none" stroke="#4400CC" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+              <path d="M 30 146 A 134 124 0 0 1 194 92" fill="none" stroke="#0055FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+              <path d="M 40 149 A 121 111 0 0 1 191 98" fill="none" stroke="#00AA00" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+              <path d="M 50 152 A 108 98 0 0 1 188 104" fill="none" stroke="#FFD700" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+              <path d="M 60 155 A 95 85 0 0 1 185 110" fill="none" stroke="#FF8C00" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+              <path d="M 70 158 A 82 72 0 0 1 182 116" fill="none" stroke="#FF2200" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
+              <path d="M 172 158 Q 172 132 200 132 Q 228 132 228 158 Z" fill="#111"/>
+              <rect x="172" y="130" width="56" height="28" fill="#111"/>
+              <ellipse cx="200" cy="158" rx="28" ry="8" fill="#111" stroke="#666" strokeWidth="1.5"/>
+              <ellipse cx="200" cy="130" rx="28" ry="9" fill="#333" stroke="#888" strokeWidth="2"/>
+              <ellipse cx="191" cy="123" rx="10" ry="5" fill="#CC9900" stroke="#FFD700" strokeWidth="1.5"/>
+              <ellipse cx="209" cy="123" rx="10" ry="5" fill="#CC9900" stroke="#FFD700" strokeWidth="1.5"/>
+              <ellipse cx="200" cy="119" rx="12" ry="6" fill="#FFD700" stroke="#FFEE88" strokeWidth="2"/>
+              <text x="200" y="122" textAnchor="middle" fontFamily="Georgia,serif" fontSize="6" fontWeight="bold" fill="#5a3a00">LL</text>
+              <text x="228" y="119" fontFamily="Georgia,serif" fontSize="10" fill="#FFD700" opacity="0.9">&#10022;</text>
+              <text x="166" y="122" fontFamily="Georgia,serif" fontSize="8" fill="#FFD700" opacity="0.8">&#10022;</text>
+            </svg>
           </div>
-          <div style={{display:'flex',justifyContent:'center',marginBottom:10}}><BigPot/></div>
-          <div style={{background:'rgba(246,211,101,0.1)',border:'1px solid rgba(246,211,101,0.3)',borderRadius:14,padding:12,fontSize:12,color:'rgba(255,255,255,0.7)',lineHeight:1.7}}>
-            💡 Tap <strong style={{color:'#f6d365'}}>↺ Tour</strong> anytime to replay this walkthrough!
+          <div style={{background:'rgba(255,255,255,0.07)',border:'1.5px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:13,color:'#f5f0e8',lineHeight:2,textAlign:'left',marginBottom:10}}>
+            ✨ Clear all 5 levels — no buying or repeating<br/>
+            🎉 Experience the big bonuses at Rainbow's End!<br/>
+            <strong style={{color:'#f6d365'}}>Streaks increase your bonuses!</strong>
+          </div>
+          <div style={{fontSize:20,fontWeight:'bold',color:'#f6d365',marginBottom:10,letterSpacing:1}}>
+            Now Get to Looting! ✏️
+          </div>
+          <div style={{fontSize:10,color:'rgba(255,255,255,0.35)',fontStyle:'italic'}}>
+            Tap ↺ Tour anytime to replay this walkthrough
           </div>
         </div>
       )

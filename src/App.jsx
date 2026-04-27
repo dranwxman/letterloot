@@ -3053,96 +3053,135 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
             const empty = <div style={{textAlign:"center",padding:"20px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>No data yet for this period</div>;
 
-            // ── SCORES ──
-            if (leaderboardTab==="scores") {
-              let ranked = [];
-              if (leaderboardPeriod==="alltime") ranked = [...gs].sort((a,b)=>(b.lifetime_points||0)-(a.lifetime_points||0)).slice(0,10).map(g=>({name:g.player_name,val:(g.lifetime_points||0).toLocaleString(),suffix:"pts"}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestById[g.player_id]>0).sort((a,b)=>(todayBestById[b.player_id]||0)-(todayBestById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:(todayBestById[g.player_id]||0).toLocaleString(),suffix:"pts"}));
-              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]>0).sort((a,b)=>(weekBestById[b.player_id]||0)-(weekBestById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:(weekBestById[g.player_id]||0).toLocaleString(),suffix:"pts"}));
-              if (!ranked.length) return empty;
-              return <div>{ranked.map((r,i)=>(
-                <div key={i} style={rowStyle(r.name,i)}>
-                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
-                  <div style={{flex:1}}><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>{isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}</div>
-                  <span style={{fontSize:15,fontWeight:"bold",color:"#f6d365"}}>{r.val}</span>
-                  <span style={{fontSize:9,color:"rgba(255,255,255,0.35)",marginLeft:2}}>{r.suffix}</span>
+            // ── Helper to render a ranked list ──
+            const renderRows = (rows) => (
+              <div>
+                {rows.map((r,i)=>(
+                  <div key={i} style={rowStyle(r.name,i)}>
+                    <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
+                    <div style={{flex:1}}>
+                      {r.word
+                        ? <><div style={{fontSize:13,fontWeight:"bold",color:r.wordColor||"#f093fb",letterSpacing:2}}>{r.word}</div>
+                            <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}</div></>
+                        : <><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>
+                            {isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}
+                            {r.sub&&<div style={{fontSize:9,color:"#fda085",marginTop:1}}>{r.sub}</div>}</>
+                      }
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <span style={{fontSize:15,fontWeight:"bold",color:r.valColor||"#f6d365"}}>{r.val}</span>
+                      {r.suffix&&<span style={{fontSize:9,color:"rgba(255,255,255,0.35)",marginLeft:2}}>{r.suffix}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+
+            // ── Your Best panel ──
+            const myData = gs.find(g=>g.player_name===playerName);
+            const yourBest = !isGuest && myData ? (
+              <div style={{marginTop:12,background:"rgba(167,139,250,0.1)",border:"1.5px solid rgba(167,139,250,0.4)",borderRadius:12,padding:"12px 14px"}}>
+                <div style={{fontSize:10,color:"#a78bfa",fontWeight:"bold",letterSpacing:2,textAlign:"center",marginBottom:10}}>── YOUR BEST ──</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>🏆 Top Score</div>
+                    <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365"}}>{(myData.lifetime_points||0).toLocaleString()}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>lifetime pts</div>
+                  </div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>📏 Longest Word</div>
+                    <div style={{fontSize:14,fontWeight:"bold",color:"#a78bfa"}}>{myData.stats?.longestWordAllTime||"—"}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{myData.stats?.longestWordAllTime?(myData.stats.longestWordAllTime.length+" letters"):"none yet"}</div>
+                  </div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>💎 Best Word</div>
+                    <div style={{fontSize:14,fontWeight:"bold",color:"#f093fb"}}>{myData.stats?.highWordAllTimeWord||"—"}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{myData.stats?.highWordAllTime?(myData.stats.highWordAllTime+" pts"):"none yet"}</div>
+                  </div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>🌈🏆 Perfect Days</div>
+                    <div style={{fontSize:14,fontWeight:"bold",color:"#6ee7b7"}}>{myData.stats?.perfectDaysAllTime||0}</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>all-time</div>
+                  </div>
                 </div>
-              ))}</div>;
+              </div>
+            ) : null;
+
+            // ── SCORES — multiple entries per player ──
+            if (leaderboardTab==="scores") {
+              let rows = [];
+              if (leaderboardPeriod==="alltime") {
+                // Collect all sessions scored + lifetime, allow multiple per player
+                const allScores = [];
+                gs.forEach(g => {
+                  if (g.lifetime_points > 0) allScores.push({name:g.player_name, val:(g.lifetime_points||0).toLocaleString(), suffix:"pts", raw:g.lifetime_points||0});
+                });
+                rows = allScores.sort((a,b)=>b.raw-a.raw).slice(0,10);
+              }
+              if (leaderboardPeriod==="daily") {
+                const allScores = [];
+                todaySessions.forEach(s => {
+                  const g = gs.find(x=>x.player_id===s.player_id);
+                  if (s.total_score > 0) allScores.push({name:g?.player_name||"Guest", val:(s.total_score||0).toLocaleString(), suffix:"pts", raw:s.total_score||0});
+                });
+                rows = allScores.sort((a,b)=>b.raw-a.raw).slice(0,10);
+              }
+              if (leaderboardPeriod==="weekly") {
+                const allScores = [];
+                weekSessions.forEach(s => {
+                  const g = gs.find(x=>x.player_id===s.player_id);
+                  if (s.total_score > 0) allScores.push({name:g?.player_name||"Guest", val:(s.total_score||0).toLocaleString(), suffix:"pts", raw:s.total_score||0});
+                });
+                rows = allScores.sort((a,b)=>b.raw-a.raw).slice(0,10);
+              }
+              if (!rows.length) return <div>{empty}{yourBest}</div>;
+              return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
             // ── BEST WORD SCORES ──
             if (leaderboardTab==="words") {
-              let ranked = [];
-              if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayBestById[g.player_id]&&g.stats?.highWordTodayWord&&g.stats?.highWordToday>0).sort((a,b)=>(b.stats?.highWordToday||0)-(a.stats?.highWordToday||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordTodayWord,val:g.stats.highWordToday||0}));
-              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,val:g.stats.highWordAllTime||0}));
-              if (!ranked.length) return empty;
-              return <div>{ranked.map((r,i)=>(
-                <div key={i} style={rowStyle(r.name,i)}>
-                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{r.word}</div>
-                    <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}</div>
-                  </div>
-                  <span style={{fontSize:15,fontWeight:"bold",color:"#f6d365"}}>{r.val} pts</span>
-                </div>
-              ))}</div>;
+              let rows = [];
+              if (leaderboardPeriod==="alltime") rows = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,wordColor:"#f093fb",val:g.stats.highWordAllTime+" pts",valColor:"#f6d365"}));
+              if (leaderboardPeriod==="daily") rows = [...gs].filter(g=>todayBestById[g.player_id]&&g.stats?.highWordTodayWord).sort((a,b)=>(b.stats?.highWordToday||0)-(a.stats?.highWordToday||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordTodayWord,wordColor:"#f093fb",val:g.stats.highWordToday+" pts",valColor:"#f6d365"}));
+              if (leaderboardPeriod==="weekly") rows = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,wordColor:"#f093fb",val:g.stats.highWordAllTime+" pts",valColor:"#f6d365"}));
+              if (!rows.length) return <div>{empty}{yourBest}</div>;
+              return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
             // ── LONGEST WORDS ──
             if (leaderboardTab==="longest") {
-              let ranked = [];
-              if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayLongestById[g.player_id]).sort((a,b)=>(todayLongestById[b.player_id]?.length||0)-(todayLongestById[a.player_id]?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:todayLongestById[g.player_id]?.word||"—",val:todayLongestById[g.player_id]?.length||0}));
-              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,val:g.stats.longestWordAllTime?.length||0}));
-              if (!ranked.length) return empty;
-              return <div>{ranked.map((r,i)=>(
-                <div key={i} style={rowStyle(r.name,i)}>
-                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{r.word}</div>
-                    <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}</div>
-                  </div>
-                  <span style={{fontSize:15,fontWeight:"bold",color:"#22d3ee"}}>{r.val}</span>
-                  <span style={{fontSize:9,color:"rgba(255,255,255,0.35)",marginLeft:2}}>ltrs</span>
-                </div>
-              ))}</div>;
+              let rows = [];
+              if (leaderboardPeriod==="alltime") rows = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,wordColor:"#a78bfa",val:g.stats.longestWordAllTime?.length||0,suffix:"ltrs",valColor:"#22d3ee"}));
+              if (leaderboardPeriod==="daily") rows = [...gs].filter(g=>todayLongestById[g.player_id]).sort((a,b)=>(todayLongestById[b.player_id]?.length||0)-(todayLongestById[a.player_id]?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:todayLongestById[g.player_id]?.word||"—",wordColor:"#a78bfa",val:todayLongestById[g.player_id]?.length||0,suffix:"ltrs",valColor:"#22d3ee"}));
+              if (leaderboardPeriod==="weekly") rows = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,wordColor:"#a78bfa",val:g.stats.longestWordAllTime?.length||0,suffix:"ltrs",valColor:"#22d3ee"}));
+              if (!rows.length) return <div>{empty}{yourBest}</div>;
+              return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
             // ── PERFECT DAYS ──
             if (leaderboardTab==="perfect") {
-              let ranked = [];
-              if (leaderboardPeriod==="alltime") ranked = [...gs].filter(g=>g.stats?.perfectDaysAllTime>0).sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:g.stats.perfectDaysAllTime}));
-              if (leaderboardPeriod==="daily") ranked = [...gs].filter(g=>todayPerfectById[g.player_id]).map(g=>({name:g.player_name,val:"🌈🏆",pid:g.player_id})).slice(0,10);
-              if (leaderboardPeriod==="weekly") ranked = [...gs].filter(g=>weekPerfectById[g.player_id]>0).sort((a,b)=>(weekPerfectById[b.player_id]||0)-(weekPerfectById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekPerfectById[g.player_id]}));
-              if (!ranked.length) return empty;
-              return <div>{ranked.map((r,i)=>(
-                <div key={i} style={rowStyle(r.name,i)}>
-                  <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
-                  <div style={{flex:1}}><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>{isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}</div>
-                  <span style={{fontSize:15,fontWeight:"bold",color:"#6ee7b7"}}>{r.val}</span>
-                </div>
-              ))}</div>;
+              let rows = [];
+              if (leaderboardPeriod==="alltime") rows = [...gs].filter(g=>g.stats?.perfectDaysAllTime>0).sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:g.stats.perfectDaysAllTime,suffix:"days",valColor:"#6ee7b7"}));
+              if (leaderboardPeriod==="daily") rows = [...gs].filter(g=>todayPerfectById[g.player_id]).map(g=>({name:g.player_name,val:"🌈🏆",valColor:"#6ee7b7"})).slice(0,10);
+              if (leaderboardPeriod==="weekly") rows = [...gs].filter(g=>weekPerfectById[g.player_id]>0).sort((a,b)=>(weekPerfectById[b.player_id]||0)-(weekPerfectById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekPerfectById[g.player_id],suffix:"days",valColor:"#6ee7b7"}));
+              if (!rows.length) return <div>{empty}{yourBest}</div>;
+              return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
             // ── STREAKS — ALL-TIME ONLY ──
             if (leaderboardTab==="streaks") {
-              const ranked = [...gs].sort((a,b)=>(b.longest_streak||0)-(a.longest_streak||0)).slice(0,10);
-              if (!ranked.length) return empty;
+              const rows = [...gs].sort((a,b)=>(b.longest_streak||0)-(a.longest_streak||0)).slice(0,10).map(g=>({
+                name:g.player_name,
+                val:"🔥 "+( g.longest_streak||0)+"d",
+                valColor:"#fda085",
+                sub:g.current_streak>0?"🔥 On "+g.current_streak+"d streak":null
+              }));
+              if (!rows.length) return <div>{empty}{yourBest}</div>;
               return (
                 <div>
                   <div style={{textAlign:"center",fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:1}}>ALL-TIME LONGEST STREAKS</div>
-                  {ranked.map((g,i)=>(
-                    <div key={i} style={rowStyle(g.player_name,i)}>
-                      <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
-                      <div style={{flex:1}}>
-                        <span style={{fontSize:12,fontWeight:"bold",color:isMe(g.player_name)?"#22d3ee":"#f5f0e8"}}>{g.player_name||"Guest"}</span>
-                        {isMe(g.player_name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}
-                        {g.current_streak>0&&<div style={{fontSize:9,color:"#fda085",marginTop:1}}>🔥 Currently on {g.current_streak}d streak</div>}
-                      </div>
-                      <span style={{fontSize:15,fontWeight:"bold",color:"#fda085"}}>🔥 {g.longest_streak||0}d</span>
-                    </div>
-                  ))}
+                  {renderRows(rows)}
+                  {yourBest}
                 </div>
               );
             }

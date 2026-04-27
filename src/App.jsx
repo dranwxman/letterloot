@@ -395,6 +395,7 @@ function TileScene({ tileStyle, onAnimDone }) {
   const [fp, setFp] = useState(null);
   const [fs2, setFs2] = useState(26);
   const [pulsing, setPulsing] = useState(false);
+  const [showOops, setShowOops] = useState(false);
   const [pulseOn, setPulseOn] = useState(false);
   const containerRef = useRef(null);
   const ran = useRef(false);
@@ -429,7 +430,7 @@ function TileScene({ tileStyle, onAnimDone }) {
       const s = stateRef.current;
       if (s.step >= WRONG.length) {
         s.step = 0;
-        setTimeout(moveToClear, 520);
+        setTimeout(moveToClear, 416);
         return;
       }
       const id = WRONG[s.step];
@@ -443,11 +444,13 @@ function TileScene({ tileStyle, onAnimDone }) {
         setWordScore(score);
         setSelectedTiles([...s.letters]);
         s.step++;
-        setTimeout(tapWrong, 553);
-      }, 293);
+        setTimeout(tapWrong, 442);
+      }, 234);
     }
 
     function moveToClear() {
+      setShowOops(true);
+      setTimeout(() => { setShowOops(false); }, 900);
       setFs2(36);
       setTimeout(() => {
         const pos = getPos('tour-clear');
@@ -462,10 +465,10 @@ function TileScene({ tileStyle, onAnimDone }) {
             setSelectedTiles([]);
             setWordScore(0);
             stateRef.current.letters = [];
-            setTimeout(tapCorrect, 520);
+            setTimeout(tapCorrect, 416);
           }, 390);
         }, 390);
-      }, 195);
+      }, 156);
     }
 
     function tapCorrect() {
@@ -480,7 +483,7 @@ function TileScene({ tileStyle, onAnimDone }) {
             setPulsing(true);
             if (onAnimDone) onAnimDone();
           }, 600);
-        }, 260);
+        }, 208);
         return;
       }
       const id = CORRECT[s.step];
@@ -494,11 +497,11 @@ function TileScene({ tileStyle, onAnimDone }) {
         setWordScore(score);
         setSelectedTiles([...s.letters]);
         s.step++;
-        setTimeout(tapCorrect, 488);
-      }, 293);
+        setTimeout(tapCorrect, 390);
+      }, 234);
     }
 
-    setTimeout(tapWrong, 585);
+    setTimeout(tapWrong, 468);
   }, []);
 
   const VALS = {Q:20,U:7,I:4,E:3,T:3,R:5,A:4,N:4,L:6,B:8,S:5,M:7,D:6,F:8,H:6,W:9,O:4,P:8,V:11,K:12};
@@ -521,6 +524,11 @@ function TileScene({ tileStyle, onAnimDone }) {
           ))}
         </div>
       ))}
+      {showOops && (
+        <div style={{position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(220,38,38,0.95)',borderRadius:14,padding:'10px 20px',fontSize:16,fontWeight:'bold',color:'#fff',zIndex:20,whiteSpace:'nowrap',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
+          Oops! ✕
+        </div>
+      )}
       <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1.5px solid '+borderColor,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
         {wordLetters.length === 0
           ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
@@ -529,7 +537,7 @@ function TileScene({ tileStyle, onAnimDone }) {
                 <span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>
               ))}
               <span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>
-                {submitted ? '&#10003; +37 pts!' : '+' + wordScore + ' pts'}
+                {submitted ? '✓ +37 pts!' : '+' + wordScore + ' pts'}
               </span>
             </>
         }

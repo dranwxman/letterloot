@@ -1,9 +1,3 @@
-// Boot cleanup — runs before React mounts
-try {
-  const _sess = JSON.parse(localStorage.getItem("ll_session") || "null");
-  if (_sess && _sess.level === 5) { localStorage.removeItem("ll_session"); }
-} catch(e) {}
-
 import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto } from "./supabase";
 

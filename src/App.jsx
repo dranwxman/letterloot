@@ -429,7 +429,7 @@ function TileScene({ tileStyle, onAnimDone }) {
       const s = stateRef.current;
       if (s.step >= WRONG.length) {
         s.step = 0;
-        setTimeout(moveToClear, 800);
+        setTimeout(moveToClear, 520);
         return;
       }
       const id = WRONG[s.step];
@@ -443,8 +443,8 @@ function TileScene({ tileStyle, onAnimDone }) {
         setWordScore(score);
         setSelectedTiles([...s.letters]);
         s.step++;
-        setTimeout(tapWrong, 850);
-      }, 450);
+        setTimeout(tapWrong, 553);
+      }, 293);
     }
 
     function moveToClear() {
@@ -462,10 +462,10 @@ function TileScene({ tileStyle, onAnimDone }) {
             setSelectedTiles([]);
             setWordScore(0);
             stateRef.current.letters = [];
-            setTimeout(tapCorrect, 800);
-          }, 600);
-        }, 600);
-      }, 300);
+            setTimeout(tapCorrect, 520);
+          }, 390);
+        }, 390);
+      }, 195);
     }
 
     function tapCorrect() {
@@ -480,7 +480,7 @@ function TileScene({ tileStyle, onAnimDone }) {
             setPulsing(true);
             if (onAnimDone) onAnimDone();
           }, 600);
-        }, 400);
+        }, 260);
         return;
       }
       const id = CORRECT[s.step];
@@ -494,11 +494,11 @@ function TileScene({ tileStyle, onAnimDone }) {
         setWordScore(score);
         setSelectedTiles([...s.letters]);
         s.step++;
-        setTimeout(tapCorrect, 750);
-      }, 450);
+        setTimeout(tapCorrect, 488);
+      }, 293);
     }
 
-    setTimeout(tapWrong, 900);
+    setTimeout(tapWrong, 585);
   }, []);
 
   const VALS = {Q:20,U:7,I:4,E:3,T:3,R:5,A:4,N:4,L:6,B:8,S:5,M:7,D:6,F:8,H:6,W:9,O:4,P:8,V:11,K:12};
@@ -752,27 +752,7 @@ function VisualTour({ onDone }) {
         </div>
       )
     },
-    {
-      title: "5 Levels of Looting",
-      desc:  "Each level has more tiles. Clear the board for a bonus!",
-      content: () => (
-        <div style={{display:'flex',flexDirection:'column',gap:7}}>
-          {[{l:1,t:42,b:100,c:'#6ee7b7'},{l:2,t:48,b:200,c:'#60a5fa'},{l:3,t:54,b:300,c:'#a78bfa'},{l:4,t:60,b:400,c:'#fda085'},{l:5,t:66,b:500,c:'#f6d365'}].map(lv=>(
-            <div key={lv.l} style={{display:'flex',alignItems:'center',gap:10,background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.1)',borderRadius:10,padding:'9px 12px'}}>
-              <div style={{fontSize:15,fontWeight:'bold',color:lv.c,minWidth:22}}>L{lv.l}</div>
-              <div style={{flex:1}}>
-                <div style={{fontSize:11,color:'#f5f0e8',fontWeight:'bold'}}>{lv.t} tiles</div>
-                <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',marginTop:2}}>Clear all for +{lv.b} bonus pts</div>
-              </div>
-              <div style={{background:'rgba(255,255,255,0.06)',borderRadius:6,padding:'3px 8px',fontSize:9,color:lv.c}}>+{lv.b}</div>
-            </div>
-          ))}
-          <div style={{textAlign:'center',fontSize:11,color:'rgba(255,255,255,0.5)',marginTop:4}}>
-            Stuck? <span style={{color:'#fda085'}}>Buy next level</span> with points or <span style={{color:'#60a5fa'}}>Replay</span> same tiles
-          </div>
-        </div>
-      )
-    },
+
     {
       title: "The Perfect Day",
       desc:  "Find the Pot of Loot at the end of the Rainbow!",

@@ -660,7 +660,7 @@ function VisualTour({ onDone }) {
     },
     {
       title: "Letter Values",
-      desc:  "Every letter has value.",
+      desc:  "",
       content: () => (
         <div>
           {/* Line 1: Spell 8+ — bigger */}
@@ -1645,6 +1645,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [congratsMsg] = useState(() => CONGRATS_MSGS[Math.floor(Math.random() * CONGRATS_MSGS.length)]);
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [perfectDayStreakBonus, setPerfectDayStreakBonus] = useState(0);
+  const [showStreakBonus, setShowStreakBonus] = useState(false);
+  const [streakBonusCount, setStreakBonusCount] = useState(1);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
   const [showReadyScreen, setShowReadyScreen] = useState(false);
   const [leaderboardFromPerfectDay, setLeaderboardFromPerfectDay] = useState(false);
@@ -1892,7 +1894,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setShowRepeatPerfect(false); setNewBestTime(false);
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
-    setPerfectDayStreakBonus(0);
+    setPerfectDayStreakBonus(0); setShowStreakBonus(false); setStreakBonusCount(1);
     levelResetCount.current = 0; clearedLevelsRef.current = {};
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
@@ -2112,9 +2114,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               const perfStreak = Math.max(1, (statsData.currentStreak || 1));
               const streakBonus = perfStreak * 2000;
               setPerfectDayStreakBonus(streakBonus);
+              setStreakBonusCount(perfStreak);
               totalRef.current += streakBonus; setTotalScore(totalRef.current);
               lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
               if (isGuest) saveLifetimeData(lifetimeRef.current);
+              setTimeout(() => setShowStreakBonus(true), 1200);
               // ── Check bonus level unlock ──
               if (ENABLE_BONUS_LEVELS) {
                 const newConsecutive = getConsecutivePerfectDays({...statsData, perfectDaysAllTime: (statsData.perfectDaysAllTime||0)+1});
@@ -2527,6 +2531,31 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       </div>}
 
+      {showStreakBonus&&<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+        <div style={{background:"linear-gradient(135deg,#1a0a40,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 0 60px rgba(246,211,101,0.4)",border:"2px solid rgba(246,211,101,0.6)",maxWidth:340,width:"100%",position:"relative"}}>
+          <ConfettiCanvas active={true} rainbow={true}/>
+          <div style={{fontSize:52,marginBottom:8}}>🌈🏆</div>
+          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:6,lineHeight:1.3}}>
+            {streakBonusCount === 1 ? "Perfect Day Bonus!" : `${streakBonusCount} Consecutive Perfect Days!`}
+          </div>
+          <div style={{fontSize:14,color:"rgba(255,255,255,0.7)",marginBottom:20,lineHeight:1.7}}>
+            {streakBonusCount === 1
+              ? "You earned a Perfect Day bonus!"
+              : `Amazing! ${streakBonusCount} Perfect Days in a row!`
+            }
+          </div>
+          <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.6)",borderRadius:16,padding:"16px",marginBottom:20}}>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Rainbow's End Bonus</div>
+            <div style={{fontSize:36,fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()}</div>
+            <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>pts added to your score</div>
+            {streakBonusCount > 1 && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>{streakBonusCount} × 2,000 pts streak bonus</div>}
+          </div>
+          <button className="ll-btn" onClick={()=>setShowStreakBonus(false)} style={{width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold",border:"none",cursor:"pointer"}}>
+            🎉 Awesome! Continue →
+          </button>
+        </div>
+      </div>}
+
       {perfectDayAchieved&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%",margin:"20px auto"}}>
           <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={130}/></div>
@@ -2546,10 +2575,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           {!playAgainChoice&&(
             <div style={{marginTop:14}}>
               <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginBottom:8}}>Want to play again?</div>
-              <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                <button className="ll-btn replay-btn" onClick={()=>{ setPlayAgainChoice("now"); setTimeout(()=>{ setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset(); },2000); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
-                <button className="ll-btn" onClick={()=>setPlayAgainChoice("later")} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:14,fontWeight:"bold"}}>🌅 Later Today</button>
-                <button className="ll-btn" onClick={()=>setPlayAgainChoice("tomorrow")} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:14,fontWeight:"bold"}}>🌙 Tomorrow</button>
+              <div style={{display:"flex",gap:6}}>
+                <button className="ll-btn replay-btn" onClick={()=>{ setPlayAgainChoice("now"); setTimeout(()=>{ setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset(); },2000); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:11,fontWeight:"bold",border:"none"}}>✏️ Now</button>
+                <button className="ll-btn" onClick={()=>setPlayAgainChoice("later")} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:11,fontWeight:"bold"}}>🌅 Later</button>
+                <button className="ll-btn" onClick={()=>setPlayAgainChoice("tomorrow")} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:11,fontWeight:"bold"}}>🌙 Tomorrow</button>
               </div>
             </div>
           )}
@@ -2798,7 +2827,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── HISTORY TAB ── */}
       {tab==="history"&&(()=>{
         const history = getDailyHistory();
-        const returnButton = (<button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>✏️ Return to Game</button>);
+        const returnButton = (<button className="ll-btn" onClick={()=>{ setTab("play"); if(perfectDayRef.current && !perfectDayAchieved) setPerfectDayAchieved(true); }} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>✏️ Return to Game</button>);
         const allGames = history.games || [];
         const hasAny = allGames.some(g => g && g.length > 0);
         const grandTotal = allGames.flat().filter(s=>s&&s.valid).reduce((a,s)=>a+s.score,0);
@@ -3197,7 +3226,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           })()}
 
           {leaderboardFromPerfectDay&&(
-            <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(false); setTab('play'); perfectDayAchieved ? setPerfectDayAchieved(true) : setShowRepeatPerfect(true); }} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,165,0,0.2))",border:"2px solid rgba(255,215,0,0.6)",color:"#f6d365",fontSize:13,fontWeight:"bold",marginBottom:8}}>
+            <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(false); setTab('play'); setPerfectDayAchieved(true); }} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,165,0,0.2))",border:"2px solid rgba(255,215,0,0.6)",color:"#f6d365",fontSize:13,fontWeight:"bold",marginBottom:8}}>
               🌈 ← Back to Perfect Day
             </button>
           )}

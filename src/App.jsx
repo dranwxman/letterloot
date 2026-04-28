@@ -1623,7 +1623,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       const sess = JSON.parse(localStorage.getItem("ll_session") || "null");
       const d = new Date();
       const todayKey = d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
-      const hasActiveGame = sess && sess.savedDate === todayKey && sess.submitted && sess.submitted.length > 0;
+      // Restore if: same day AND (has submitted words OR is on level > 1)
+      const hasActiveGame = sess && sess.savedDate === todayKey && (
+        (sess.submitted && sess.submitted.length > 0) || (sess.level && sess.level > 1)
+      );
       return !hasActiveGame;
     } catch { return true; }
   });
@@ -1796,6 +1799,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current });
     showSavedIndicator();
     scheduleSyncToCloud();
+  }, [level, tiles, badgeStore, streak, longestWordToday, levelComplete, newBestTime, undoUsed]);
+
+  // Save immediately when user switches away (text message, other app, etc.)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [level, tiles, badgeStore, streak, longestWordToday, levelComplete, newBestTime, undoUsed]);
 
   const startTimer = useCallback(() => {
@@ -2314,9 +2328,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
         <button onClick={()=>{
           setEditingProfile(false);
-          // If all tiles used (completed game), force a fresh reset before showing play screen
+          // Only reset if game is truly finished (all tiles used on level 5)
           const allUsed = tiles.every(t => t.used);
-          if (allUsed || level === 5) {
+          const gameComplete = allUsed && level === 5;
+          if (gameComplete) {
             const rng = seededRandom(getDailySeed());
             const bp = getBonusPositions(42, getBonusCount(1), rng);
             setTiles(generateLevelTiles(1, 0, rng, bp));

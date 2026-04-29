@@ -81,8 +81,7 @@ function getBonusLevelUnlocked(statsData) {
   return 0;
 }
 function getConsecutivePerfectDays(statsData) {
-  // How many consecutive perfect days (approximated via streak + perfectDaysWeek)
-  return Math.min(statsData.currentStreak || 0, statsData.perfectDaysAllTime || 0);
+  return statsData.consecutivePerfectDays || 0;
 }
 
 function seededRandom(seed) {
@@ -940,7 +939,7 @@ function saveLifetimeData(total) { try { localStorage.setItem("ll_lifetime", JSO
 function getLocalStats() {
   const def = {
     daysPlayed:0, lastPlayedDate:null, currentStreak:0, longestStreak:0, lastStreakDate:null,
-    perfectDaysAllTime:0, perfectDaysWeek:{}, weekKey:"",
+    perfectDaysAllTime:0, perfectDaysWeek:{}, weekKey:"", consecutivePerfectDays:0, lastPerfectDate:null,
     highScoreAllTime:0, highScoreWeek:{}, highScoreToday:0,
     highWordAllTime:0, highWordWeek:{}, highWordToday:0, highWordTodayWord:"", highWordAllTimeWord:"",
     fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},
@@ -1002,7 +1001,19 @@ function updateLocalStats(updates) {
     stats.longWordBonuses = stats.longWordBonuses || {};
     stats.longWordBonuses[key] = (stats.longWordBonuses[key]||0) + 1;
   }
-  if (updates.perfectDay) { stats.perfectDaysAllTime += 1; stats.perfectDaysWeek[todayKey] = (stats.perfectDaysWeek[todayKey]||0) + 1; }
+  if (updates.perfectDay) {
+    stats.perfectDaysAllTime += 1;
+    stats.perfectDaysWeek[todayKey] = (stats.perfectDaysWeek[todayKey]||0) + 1;
+    // Track consecutive perfect days
+    if (stats.lastPerfectDate === yesterdayKey) {
+      stats.consecutivePerfectDays = (stats.consecutivePerfectDays || 0) + 1;
+    } else if (stats.lastPerfectDate === todayKey) {
+      // Same day - keep current streak
+    } else {
+      stats.consecutivePerfectDays = 1;
+    }
+    stats.lastPerfectDate = todayKey;
+  }
   if (updates.levelTime !== undefined && updates.levelNum !== undefined) {
     const lvl = String(updates.levelNum);
     const existing = stats.fastestLevels[lvl];
@@ -2111,7 +2122,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           if (perfectDayRef.current) {
             setPerfectDayAchieved(true); awardBadge("perfect_day");
               // ── Streak bonus: 2,000 × consecutive perfect days ──
-              const perfStreak = Math.max(1, (statsData.currentStreak || 1));
+              const perfStreak = Math.max(1, (statsData.consecutivePerfectDays || 1));
               const streakBonus = perfStreak * 2000;
               setPerfectDayStreakBonus(streakBonus);
               setStreakBonusCount(perfStreak);

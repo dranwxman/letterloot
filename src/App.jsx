@@ -1306,6 +1306,7 @@ function AdminScreen({ onExit }) {
       const todaySessions = await adminQuery('daily_sessions', 'user_id,session_date,total_score,perfect_day', `&session_date=eq.${today}`);
       const recentSessions = await adminQuery('daily_sessions', 'session_date', `&session_date=gte.${twoWeeksAgo}`);
       const weekSessions = await adminQuery('daily_sessions', 'user_id,session_date', `&session_date=gte.${weekAgo}`);
+      const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
       // Build top 25 longest words and top word scores from stats
       const allWords = [];
       gameStates.forEach(g => {
@@ -1314,7 +1315,7 @@ function AdminScreen({ onExit }) {
       });
       const top25Longest = [...allWords].filter(w=>w.type==='longest').sort((a,b)=>b.letters-a.letters).slice(0,25);
       const top25Score = [...allWords].filter(w=>w.type==='score').sort((a,b)=>b.score-a.score).slice(0,25);
-      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score });
+      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0 });
       setLastUpdated(new Date().toLocaleTimeString());
     } catch(e) { console.error(e); }
     setLoading(false);
@@ -1358,6 +1359,7 @@ function AdminScreen({ onExit }) {
   const playedToday = data?.todaySessions?.length || 0;
   const newThisWeek = new Set((data?.weekSessions||[]).map(s=>s.user_id)).size;
   const perfectTotal = gs.reduce((a,g)=>a+(g.stats?.perfectDaysAllTime||0),0);
+  const guestPlays = data?.guestPlays || 0;
   const longestStreak = gs.reduce((a,g)=>Math.max(a,g.longest_streak||0),0);
 
   // Chart data
@@ -1389,13 +1391,23 @@ function AdminScreen({ onExit }) {
         </div>
 
         {/* Stat cards */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:8,marginBottom:14}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:8}}>
           {[
-            {label:'TOTAL PLAYERS',val:total,color:'246,211,101',vc:'#f6d365'},
+            {label:'REGISTERED PLAYERS',val:total,color:'246,211,101',vc:'#f6d365'},
             {label:'PLAYED TODAY',val:playedToday,color:'34,211,238',vc:'#22d3ee'},
             {label:'NEW THIS WEEK',val:newThisWeek,color:'167,139,250',vc:'#a78bfa'},
+          ].map((c,i)=>(
+            <div key={i} style={cardStyle(c.color)}>
+              <div style={{fontSize:28,fontWeight:'bold',color:c.vc}}>{c.val}</div>
+              <div style={{fontSize:8,color:'rgba(255,255,255,0.5)',letterSpacing:2,marginTop:4}}>{c.label}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:14}}>
+          {[
             {label:'PERFECT DAYS',val:perfectTotal,color:'110,231,183',vc:'#6ee7b7'},
             {label:'LONGEST STREAK',val:longestStreak+'d',color:'253,160,133',vc:'#fda085'},
+            {label:'GUEST GAMES PLAYED',val:guestPlays.toLocaleString(),color:'251,191,36',vc:'#fbbf24'},
           ].map((c,i)=>(
             <div key={i} style={cardStyle(c.color)}>
               <div style={{fontSize:28,fontWeight:'bold',color:c.vc}}>{c.val}</div>
@@ -2147,8 +2159,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
               const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
               setTimeLeaderboard(updatedTimes2);
-              // showNameInput disabled
-          } else // showNameInput disabled
+          } else {
+            setTimeout(() => setLevelComplete(true), 1200);
+          }
         }
         if (!isGuest && user) await syncToCloud();
       } else {

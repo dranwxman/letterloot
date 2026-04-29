@@ -2355,18 +2355,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           {(profileNickname||playerName) ? `Welcome back, ${profileNickname||playerName}! 👋` : "Welcome! 👋"}
         </div>
 
-        {/* Game info */}
-        <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.15)",width:"100%"}}>
-          <div style={{fontSize:14,color:"#f5f0e8",lineHeight:1.8}}>Spell words from the tiles.<br/>Every letter has a point value.<br/>Clear all 5 levels for a <span style={{color:"#f6d365",fontWeight:"bold"}}>Perfect Day 🌈🏆</span>!</div>
-          <div style={{marginTop:10,fontSize:12,color:"#22d3ee",fontFamily:"Georgia,serif",lineHeight:1.6}}>
-            ✨ Fresh board every day at midnight<br/>
-            <span style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>(your local time — {(()=>{ const d=new Date(); d.setHours(24,0,0,0); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', timeZoneName:'short'}); })()})</span>
-          </div>
-          <div style={{marginTop:10,background:"rgba(246,211,101,0.1)",borderRadius:10,padding:"8px 10px",border:"1px solid rgba(246,211,101,0.3)"}}>
-            <div style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>🏆 Leaderboard available to all registered players!</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:3}}>Top Scores · Best Words · Longest Words · Perfect Days · Streaks</div>
-          </div>
-        </div>
+
 
         <button onClick={()=>{
           setEditingProfile(false);
@@ -2576,12 +2565,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:6,lineHeight:1.3}}>
             {streakBonusCount === 1 ? "Perfect Day Bonus!" : `${streakBonusCount} Consecutive Perfect Days!`}
           </div>
-          <div style={{fontSize:14,color:"rgba(255,255,255,0.7)",marginBottom:20,lineHeight:1.7}}>
-            {streakBonusCount === 1
-              ? "You earned a Perfect Day bonus!"
-              : `Amazing! ${streakBonusCount} Perfect Days in a row!`
-            }
-          </div>
+
           <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.6)",borderRadius:16,padding:"16px",marginBottom:20}}>
             <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Rainbow's End Bonus</div>
             <div style={{fontSize:36,fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()}</div>

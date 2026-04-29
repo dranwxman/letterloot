@@ -2038,6 +2038,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
     appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current);
     setDailyHistory(getDailyHistory());
+    // Track guest games — fire once per session (when first word is submitted)
+    if (isGuest && submittedRef.current.length === 1) {
+      try { supabase.rpc('increment_guest_plays').catch(()=>{}); } catch(e) {}
+    }
 
     if (valid) {
       const newTotal = totalRef.current + score;
@@ -2143,8 +2147,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
               const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
               setTimeLeaderboard(updatedTimes2);
-              setTimeout(() => setShowNameInput(true), 1000);
-          } else setTimeout(() => setShowNameInput(true), 1500);
+              // showNameInput disabled
+          } else // showNameInput disabled
         }
         if (!isGuest && user) await syncToCloud();
       } else {
@@ -2212,7 +2216,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     if (!isGuest && user) { await updatePlayerName(user.id, playerName); await syncToCloud(); }
     setShowNameInput(false); clearLocalSession();
   };
-  const handleGiveUp = () => { setShowStuckModal(false); setShowNameInput(true); };
+  const handleGiveUp = () => { setShowStuckModal(false); handleFullReset(); };
   const medalFor = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
 
   const todayKey = getTodayKey();
@@ -2276,8 +2280,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                 {/* Show sign in prompt if not authenticated */}
                 {isGuest && (
                   <button onClick={onSignOut} style={{marginTop:6,padding:"4px 12px",borderRadius:10,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:10,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
-                    🔑 Sign In to sync across devices
+  🔑 Sign In to sync across devices
                   </button>
+                )}
+                {!isGuest && (
+                  <div style={{marginTop:4,fontSize:9,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>
+                    🏆 Leaderboard — Registered players only
+                  </div>
+                )}
+                {isGuest && (
+                  <div style={{marginTop:4,fontSize:9,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>
+                    🏆 Create an account to join the Leaderboard
+                  </div>
                 )}
                 {/* Show sign out option if authenticated */}
                 {!isGuest && (
@@ -2654,7 +2668,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       </div>}
 
-      {showNameInput&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      {false&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:`1px solid ${perfectDay?"rgba(255,215,0,0.35)":"rgba(255,255,255,0.18)"}`,maxWidth:320,width:"90%"}}>
           <div style={{fontSize:44}}>{perfectDay?"🌈":level===5?"🏆":"📊"}</div>
           <div style={{fontSize:22,fontWeight:"bold",color:perfectDay?"#f6d365":level===5?"#fda085":"#60a5fa",marginTop:8}}>{perfectDay?"Perfect Day!":level===5?"Level 5 Complete!":`Level ${level} — Game Over`}</div>

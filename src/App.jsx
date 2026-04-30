@@ -244,7 +244,7 @@ async function validateWord(word) {
   const key = word.toLowerCase();
   if (wordCache[key] !== undefined) return wordCache[key];
   if (!navigator.onLine) { wordCache[key] = { valid: false, source: "offline" }; return wordCache[key]; }
-  const fetchWithTimeout = (url, ms = 12000) => {
+  const fetchWithTimeout = (url, ms = 6000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
     return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
@@ -1700,7 +1700,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   useEffect(() => {
     if (tab === 'leaderboard' && !leaderboardData && !leaderboardLoading) {
       setLeaderboardLoading(true);
-      fetchLeaderboard().then(d => { setLeaderboardData(d); setLeaderboardLoading(false); });
+      const timer = setTimeout(() => { setLeaderboardLoading(false); setLeaderboardData(null); }, 10000);
+      fetchLeaderboard().then(d => { clearTimeout(timer); setLeaderboardData(d); setLeaderboardLoading(false); });
     }
   }, [tab]);
 
@@ -1747,10 +1748,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const [gameState, dailySession] = await Promise.all([loadGameState(user.id), loadDailySession(user.id, getTodayKey())]);
         setCloudSyncing(false);
         if (gameState && gameState.lifetime_points != null) {
-          lifetimeRef.current = gameState.lifetime_points || 0;
-          setLifetimePoints(gameState.lifetime_points || 0);
+          // Only use cloud value if it's greater than local — prevents stale 0 from wiping real points
+          const cloudPts = gameState.lifetime_points || 0;
+          const localPts = lifetimeRef.current || 0;
+          const bestPts = Math.max(cloudPts, localPts);
+          lifetimeRef.current = bestPts;
+          setLifetimePoints(bestPts);
           setBadgeStore(prev => ({ ...prev, lifetime: gameState.badges || prev.lifetime }));
-          setStatsData(prev => ({...prev, ...(gameState.stats || {})}));
+          // Merge stats — preserve local perfect days if cloud has fewer (data loss protection)
+          const cloudStats = gameState.stats || {};
+          const localStats = getLocalStats();
+          const mergedStats = {
+            ...localStats,
+            ...cloudStats,
+            perfectDaysAllTime: Math.max(cloudStats.perfectDaysAllTime||0, localStats.perfectDaysAllTime||0),
+            consecutivePerfectDays: Math.max(cloudStats.consecutivePerfectDays||0, localStats.consecutivePerfectDays||0),
+            longestStreak: Math.max(cloudStats.longestStreak||0, localStats.longestStreak||0),
+          };
+          setStatsData(mergedStats);
+          saveLocalStats(mergedStats);
           setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
         }
         if (dailySession && dailySession.level != null && !justResetRef.current) {
@@ -1991,10 +2007,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     try {
       const base = `${import.meta.env.VITE_SUPABASE_URL || "https://zcevszxmoggmcmvyxjtn.supabase.co"}/rest/v1`;
       const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM"}` };
+      const fetchWithAbort = (url) => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 8000);
+        return fetch(url, { headers:hdrs, signal:ctrl.signal }).finally(() => clearTimeout(timer));
+      };
       const [gsRes, todayRes, weekRes] = await Promise.all([
-        fetch(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`, {headers:hdrs}),
-        fetch(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`, {headers:hdrs}),
-        fetch(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`, {headers:hdrs}),
+        fetchWithAbort(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`),
       ]);
       const gs = gsRes.ok ? await gsRes.json() : [];
       const todaySessions = todayRes.ok ? await todayRes.json() : [];
@@ -2136,7 +2157,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
           if (perfectDayRef.current) {
-            setPerfectDayAchieved(true); awardBadge("perfect_day");
+            awardBadge("perfect_day"); // PD screen shown after streak bonus via Continue button
               // ── Streak bonus: 2,000 × consecutive perfect days ──
               const perfStreak = Math.max(1, (statsData.consecutivePerfectDays || 1));
               const streakBonus = perfStreak * 2000;
@@ -2145,6 +2166,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               totalRef.current += streakBonus; setTotalScore(totalRef.current);
               lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
               if (isGuest) saveLifetimeData(lifetimeRef.current);
+              // Show streak bonus first — PD screen shows when player taps Continue
               setTimeout(() => setShowStreakBonus(true), 1200);
               // ── Check bonus level unlock ──
               if (ENABLE_BONUS_LEVELS) {
@@ -2167,6 +2189,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       } else {
         scheduleSyncToCloud();
         stopTimer();
+        // Only check for stuck if game isn't complete
+        const allUsedNow = newTiles.every(t => t.used);
+        if (!allUsedNow) {
         setCheckingStuck(true);
         const hasWords = await hasValidWordsRemaining(newTiles);
         setCheckingStuck(false);
@@ -2183,6 +2208,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           } else {
             setTimeout(() => setShowStuckModal(true), 600);
           }
+        }
+        } else {
+          // All tiles used but didn't trigger board clear — just restart timer
+          if (!paused) startTimer();
         }
       }
     }
@@ -2572,7 +2601,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>pts added to your score</div>
             {streakBonusCount > 1 && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>{streakBonusCount} × 2,000 pts streak bonus</div>}
           </div>
-          <button className="ll-btn" onClick={()=>setShowStreakBonus(false)} style={{width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold",border:"none",cursor:"pointer"}}>
+          <button className="ll-btn" onClick={()=>{ setShowStreakBonus(false); setTimeout(()=>setPerfectDayAchieved(true), 200); }} style={{width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold",border:"none",cursor:"pointer"}}>
             🎉 Awesome! Continue →
           </button>
         </div>

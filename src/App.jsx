@@ -1590,7 +1590,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const decayInfo = lifetimeData.current;
 
   const ss = useRef(loadLocalSession()).current;
-  const [level, setLevel] = useState(ss?.level || 1);
+  const [level, setLevel] = useState(() => {
+    const lv = ss?.level || 1;
+    // Hard cap: never load beyond level 5 unless bonus levels enabled
+    if (!ENABLE_BONUS_LEVELS && lv > 5) return 5;
+    return lv;
+  });
   const [levelScore, setLevelScore] = useState(ss?.levelScore || 0);
   const [tiles, setTiles] = useState(() => {
     if (ss?.tiles) return ss.tiles;
@@ -1777,7 +1782,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           const cloudSubmitted = (dailySession.submitted || []).length;
           const useCloud = cloudLevel > localLevel || (cloudLevel === localLevel && cloudSubmitted >= localSubmitted);
           if (useCloud) {
-            setLevel(cloudLevel);
+            // Hard cap on cloud level
+            const safeCloudLevel = (!ENABLE_BONUS_LEVELS && cloudLevel > 5) ? 5 : cloudLevel;
+            setLevel(safeCloudLevel);
             setTotalScore(dailySession.total_score || 0); totalRef.current = dailySession.total_score || 0;
             setLevelScore(dailySession.level_score || 0); levelScoreRef.current = dailySession.level_score || 0;
             if (dailySession.tiles && dailySession.tiles.length > 0) setTiles(dailySession.tiles);
@@ -2220,6 +2227,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const handleNextLevel = (bought = false) => {
     if (bought) setPerfectDaySync(false);
+    // Hard cap: cannot go beyond Level 5 unless bonus levels are enabled
+    if (!ENABLE_BONUS_LEVELS && level >= 5) return;
     const newLevel = level + 1;
     setLevel(newLevel); setLevelComplete(false); setShowBuyModal(false);
     levelScoreRef.current = 0; setLevelScore(0);

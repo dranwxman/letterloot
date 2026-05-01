@@ -2053,7 +2053,21 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     if (currentWord.length < 3 || validating || paused) return;
     if (!online) { setFlash({ word: "No internet connection!", score: 0, valid: false }); setTimeout(() => setFlash(null), 2000); return; }
     setValidating(true);
-    const result = await validateWord(currentWord);
+    // Hard safety timeout — if validation hangs for any reason, force-clear after 15s
+    const safetyTimer = setTimeout(() => {
+      setValidating(false);
+      setFlash({ word: "Connection slow — try again", score: 0, valid: false });
+      setTimeout(() => setFlash(null), 2000);
+    }, 15000);
+    let result;
+    try {
+      result = await validateWord(currentWord);
+    } catch(e) {
+      clearTimeout(safetyTimer);
+      setValidating(false);
+      return;
+    }
+    clearTimeout(safetyTimer);
     if (result.source === "timeout") {
       setFlash({ word: "Dictionary lookup timed out — try again.", score: 0, valid: false });
       setTimeout(() => setFlash(null), 3000);
@@ -2200,7 +2214,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const allUsedNow = newTiles.every(t => t.used);
         if (!allUsedNow) {
         setCheckingStuck(true);
-        const hasWords = await hasValidWordsRemaining(newTiles);
+        // Safety: cap at 10s — if the scan hangs, just skip it
+        const scanPromise = hasValidWordsRemaining(newTiles);
+        const timeoutPromise = new Promise(resolve => setTimeout(() => resolve(true), 10000));
+        const hasWords = await Promise.race([scanPromise, timeoutPromise]);
         setCheckingStuck(false);
         if (!paused) startTimer();
         if (!hasWords) {
@@ -3292,7 +3309,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           )}
           <div style={{marginTop:10,display:"flex",gap:8}}>
             <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:"7px",borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:10,fontWeight:"bold"}}>↺ Refresh</button>
-            <button className="ll-btn" onClick={()=>setTab("play")} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Return to Your Game</button>
+            <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); } setTab("play"); }} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"✏️ Return to Your Game"}</button>
           </div>
         </div>
       )}

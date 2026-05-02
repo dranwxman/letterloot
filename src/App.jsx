@@ -2178,7 +2178,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
           if (perfectDayRef.current) {
-            awardBadge("perfect_day"); // PD screen shown after streak bonus via Continue button
+            awardBadge("perfect_day");
               // ── Streak bonus: 2,000 × consecutive perfect days ──
               const perfStreak = Math.max(1, (statsData.consecutivePerfectDays || 1));
               const streakBonus = 1000 + (perfStreak * 1000);
@@ -2203,7 +2203,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
               setTimeLeaderboard(updatedTimes2);
           } else {
-            setTimeout(() => setLevelComplete(true), 1200);
+            // Level 5 complete WITHOUT Perfect Day — game over, show farewell instead of "Play Level 6"
+            const perfStats = updateLocalStats({ perfectDay: false }); setStatsData(perfStats);
+            setTimeout(() => triggerFarewell(), 1500);
           }
         }
         if (!isGuest && user) await syncToCloud();
@@ -2715,8 +2717,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
           {newBestTime&&<div style={{fontSize:12,color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
           {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
-          <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>
-          <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
+          {level < 5 && <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>}
+          {level < 5
+            ? <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
+            : <button className="ll-btn" onClick={()=>{ setLevelComplete(false); triggerFarewell(); }} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:15,fontWeight:"bold"}}>📊 See Today's Summary</button>
+          }
         </div>
       </div>}
 

@@ -1137,6 +1137,80 @@ const TOUR_STEPS = [
   { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
 ];
 
+// ── Install Prompt (Add to Home Screen) ───────────────────────
+function detectPlatform() {
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+  const isAndroid = /Android/i.test(ua);
+  return isIOS ? "ios" : isAndroid ? "android" : "desktop";
+}
+
+function isInstalled() {
+  // Detect if game is running as installed PWA (standalone display mode)
+  return (
+    window.matchMedia && window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true
+  );
+}
+
+function InstallPrompt({ open, onClose, onPermanentDismiss, isSecondVisit }) {
+  const detected = detectPlatform();
+  const [platform, setPlatform] = useState(detected === "android" ? "android" : "ios");
+  if (!open) return null;
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={onClose}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:22,padding:"22px 18px",border:"2px solid rgba(167,139,250,0.6)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:340,width:"100%",boxShadow:"0 16px 60px rgba(0,0,0,0.8)"}}>
+        <div style={{fontSize:42,textAlign:"center",marginBottom:4}}>📱</div>
+        <div style={{fontSize:17,fontWeight:"bold",color:"#f6d365",textAlign:"center",marginBottom:6}}>Add LetterLoot to your phone!</div>
+        <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",textAlign:"center",lineHeight:1.55,marginBottom:12}}>One tap to play every day — no typing the URL.</div>
+        {/* Platform toggle */}
+        <div style={{display:"flex",gap:5,marginBottom:12}}>
+          <button onClick={()=>setPlatform("ios")} style={{flex:1,padding:"6px",borderRadius:8,fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",border:platform==="ios"?"none":"1px solid rgba(255,255,255,0.2)",background:platform==="ios"?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.05)",color:platform==="ios"?"#fff":"rgba(255,255,255,0.5)",fontWeight:platform==="ios"?"bold":"normal",textAlign:"center"}}>📱 iPhone</button>
+          <button onClick={()=>setPlatform("android")} style={{flex:1,padding:"6px",borderRadius:8,fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",border:platform==="android"?"none":"1px solid rgba(255,255,255,0.2)",background:platform==="android"?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.05)",color:platform==="android"?"#fff":"rgba(255,255,255,0.5)",fontWeight:platform==="android"?"bold":"normal",textAlign:"center"}}>🤖 Android</button>
+        </div>
+        {/* Steps */}
+        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
+          {platform==="ios" ? (
+            <>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>1</div>
+                <div>Tap the <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",background:"rgba(34,211,238,0.15)",borderRadius:5,padding:"1px 4px",verticalAlign:"middle"}}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                </span> <strong style={{color:"#22d3ee"}}>Share</strong> button at the bottom of Safari</div>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>2</div>
+                <div>Scroll down, tap <strong style={{color:"#f6d365"}}>"Add to Home Screen"</strong></div>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>3</div>
+                <div>Tap <strong style={{color:"#6ee7b7"}}>"Add"</strong> — done! 🎉</div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>1</div>
+                <div>Tap the <strong style={{color:"#22d3ee"}}>menu (⋮)</strong> at the top right of Chrome</div>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>2</div>
+                <div>Tap <strong style={{color:"#f6d365"}}>"Install app"</strong> or <strong style={{color:"#f6d365"}}>"Add to Home screen"</strong></div>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>3</div>
+                <div>Tap <strong style={{color:"#6ee7b7"}}>"Install"</strong> — done! 🎉</div>
+              </div>
+            </>
+          )}
+        </div>
+        <button onClick={onClose} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontFamily:"Georgia,serif",fontSize:14,fontWeight:"bold",cursor:"pointer"}}>Got it! ✓</button>
+        <button onClick={isSecondVisit ? onPermanentDismiss : onClose} style={{marginTop:8,width:"100%",padding:11,borderRadius:11,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif",fontSize:12,cursor:"pointer"}}>{isSecondVisit ? "Don't show this again" : "Maybe later"}</button>
+      </div>
+    </div>
+  );
+}
+
 function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats }) {
   const [opacity, setOpacity] = useState(1);
   const fadeTimerRef = useRef(null);
@@ -1575,6 +1649,37 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const playerNameRef = useRef("");
   const [editingName, setEditingName] = useState(false);
   const [showTour, setShowTour] = useState(false);
+  // Install prompt state — show on first visit (mobile only, not already installed)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(() => {
+    try {
+      if (isInstalled()) return false;
+      const platform = detectPlatform();
+      if (platform === "desktop") return false;
+      const dismissed = localStorage.getItem("ll_install_dismissed");
+      if (dismissed === "permanent") return false;
+      return true;
+    } catch { return false; }
+  });
+  const [installVisitCount, setInstallVisitCount] = useState(() => {
+    try { return parseInt(localStorage.getItem("ll_install_visit_count")||"0", 10); } catch { return 0; }
+  });
+  // Track that we've shown it
+  useEffect(() => {
+    if (showInstallPrompt) {
+      try {
+        const newCount = installVisitCount + 1;
+        localStorage.setItem("ll_install_visit_count", String(newCount));
+        setInstallVisitCount(newCount);
+      } catch {}
+    }
+  }, []);
+  const handleInstallClose = () => setShowInstallPrompt(false);
+  const handleInstallPermanentDismiss = () => {
+    try { localStorage.setItem("ll_install_dismissed", "permanent"); } catch {}
+    setShowInstallPrompt(false);
+  };
+  // Show floating help button only if not installed and not on desktop
+  const showInstallHelpFab = !isInstalled() && detectPlatform() !== "desktop" && localStorage.getItem("ll_install_dismissed") !== "permanent";
   const [online, setOnline] = useState(navigator.onLine);
   const [savedIndicator, setSavedIndicator] = useState(false);
   const completeTour = () => { localStorage.setItem("ll_tour_done","1"); setShowTour(false); requestNotificationPermission(); };
@@ -2541,6 +2646,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       </div>}
 
       {showTour&&<VisualTour onDone={completeTour}/>}
+
+      <InstallPrompt
+        open={showInstallPrompt}
+        onClose={handleInstallClose}
+        onPermanentDismiss={handleInstallPermanentDismiss}
+        isSecondVisit={installVisitCount >= 1}
+      />
+
+      {showInstallHelpFab && !showInstallPrompt && (
+        <button onClick={()=>setShowInstallPrompt(true)} style={{position:"fixed",bottom:14,right:14,zIndex:99,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"none",borderRadius:24,padding:"8px 14px",color:"#fff",fontFamily:"Georgia,serif",fontSize:11,fontWeight:"bold",cursor:"pointer",display:"flex",alignItems:"center",gap:5,boxShadow:"0 4px 16px rgba(167,139,250,0.5)"}}>
+          📱 Install Help
+        </button>
+      )}
 
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
         <div style={{display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>

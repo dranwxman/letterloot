@@ -1653,34 +1653,37 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const playerNameRef = useRef("");
   const [editingName, setEditingName] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  // Install prompt state — show on first visit (mobile only, not already installed)
-  const [showInstallPrompt, setShowInstallPrompt] = useState(() => {
+  // Install prompt state — shows after welcome screen (controlled by PLAY NOW handler)
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  // Should we show the install prompt this session?
+  const shouldShowInstallPrompt = (() => {
     try {
       if (isInstalled()) return false;
-      const platform = detectPlatform();
-      if (platform === "desktop") return false;
-      const dismissed = localStorage.getItem("ll_install_dismissed");
-      if (dismissed === "permanent") return false;
+      if (detectPlatform() === "desktop") return false;
+      if (localStorage.getItem("ll_install_dismissed") === "permanent") return false;
       return true;
     } catch { return false; }
-  });
+  })();
   const [installVisitCount, setInstallVisitCount] = useState(() => {
     try { return parseInt(localStorage.getItem("ll_install_visit_count")||"0", 10); } catch { return 0; }
   });
-  // Track that we've shown it
-  useEffect(() => {
-    if (showInstallPrompt) {
-      try {
-        const newCount = installVisitCount + 1;
-        localStorage.setItem("ll_install_visit_count", String(newCount));
-        setInstallVisitCount(newCount);
-      } catch {}
-    }
-  }, []);
-  const handleInstallClose = () => setShowInstallPrompt(false);
+  // Track count when shown
+  const trackInstallShown = () => {
+    try {
+      const newCount = installVisitCount + 1;
+      localStorage.setItem("ll_install_visit_count", String(newCount));
+      setInstallVisitCount(newCount);
+    } catch {}
+  };
+  const handleInstallClose = () => {
+    setShowInstallPrompt(false);
+    // If we came from the welcome flow (Ready screen not yet shown), advance to it
+    if (!showReadyToPlay && !showIntro) setShowReadyToPlay(true);
+  };
   const handleInstallPermanentDismiss = () => {
     try { localStorage.setItem("ll_install_dismissed", "permanent"); } catch {}
     setShowInstallPrompt(false);
+    if (!showReadyToPlay && !showIntro) setShowReadyToPlay(true);
   };
   // Show floating help button only if not installed and not on desktop
   const showInstallHelpFab = !isInstalled() && detectPlatform() !== "desktop" && localStorage.getItem("ll_install_dismissed") !== "permanent";
@@ -2553,7 +2556,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           // Show ready prompt — timer starts only when player taps Ready
           stopTimer();
           setShowIntro(false);
-          setShowReadyToPlay(true);
+          // If install prompt should be shown, show it first; otherwise go straight to ready
+          if (shouldShowInstallPrompt) {
+            trackInstallShown();
+            setShowInstallPrompt(true);
+          } else {
+            setShowReadyToPlay(true);
+          }
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
         </button>

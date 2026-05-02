@@ -2181,7 +2181,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             awardBadge("perfect_day"); // PD screen shown after streak bonus via Continue button
               // ── Streak bonus: 2,000 × consecutive perfect days ──
               const perfStreak = Math.max(1, (statsData.consecutivePerfectDays || 1));
-              const streakBonus = perfStreak * 2000;
+              const streakBonus = 1000 + (perfStreak * 1000);
               setPerfectDayStreakBonus(streakBonus);
               setStreakBonusCount(perfStreak);
               totalRef.current += streakBonus; setTotalScore(totalRef.current);
@@ -2625,7 +2625,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Rainbow's End Bonus</div>
             <div style={{fontSize:36,fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()}</div>
             <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>pts added to your score</div>
-            {streakBonusCount > 1 && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>{streakBonusCount} × 2,000 pts streak bonus</div>}
+            {streakBonusCount > 1 && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>2,000 + {streakBonusCount-1} × 1,000 pts streak bonus</div>}
           </div>
           <button className="ll-btn" onClick={()=>{ setShowStreakBonus(false); setTimeout(()=>setPerfectDayAchieved(true), 200); }} style={{width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold",border:"none",cursor:"pointer"}}>
             🎉 Awesome! Continue →

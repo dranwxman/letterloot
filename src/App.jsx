@@ -300,12 +300,28 @@ async function validateWord(word) {
   let result = await tryMW();
   // Auto-retry once on timeout
   if (result.source === "timeout") {
-    await new Promise(r => setTimeout(r, 1000)); // wait 1 sec before retry
+    await new Promise(r => setTimeout(r, 1000));
     result = await tryMW();
   }
   // If still timing out, use common words fallback so game stays playable
   if (result.source === "timeout") {
     result = { valid: COMMON_WORDS.has(key), source: "fallback" };
+  }
+  // Secondary check: if MW rejected, ask Free Dictionary API.
+  // If Free Dict accepts, mark as likelyValid so we offer to report it.
+  // If Free Dict also rejects, it's almost certainly a misspelling.
+  if (!result.valid && result.source !== "timeout" && result.source !== "fallback") {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      const r2 = await fetch("https://api.dictionaryapi.dev/api/v2/entries/en/" + encodeURIComponent(key), { signal: ctrl.signal }).finally(() => clearTimeout(timer));
+      if (r2.ok) {
+        const data2 = await r2.json();
+        if (Array.isArray(data2) && data2.length > 0 && data2[0].word) {
+          result = { valid: false, source: "mw_missing", likelyValid: true };
+        }
+      }
+    } catch(e) {}
   }
   wordCache[key] = result;
   return wordCache[key];
@@ -2250,7 +2266,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       setShake(true); setTimeout(() => setShake(false), 500);
       // Show report option for rejected words 3+ letters
       if (currentWord.length >= 3) {
-        setTimeout(() => { setRejectedWord(currentWord); setReportSent(false); }, 2000);
+        if (result.likelyValid) { setTimeout(() => { setRejectedWord(currentWord); setReportSent(false); }, 2000); }
       }
     }
     const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate };

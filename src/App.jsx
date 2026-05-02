@@ -1176,14 +1176,18 @@ function InstallPrompt({ open, onClose, onPermanentDismiss, isSecondVisit }) {
                 <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>1</div>
                 <div>Tap the <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",background:"rgba(34,211,238,0.15)",borderRadius:5,padding:"1px 4px",verticalAlign:"middle"}}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                </span> <strong style={{color:"#22d3ee"}}>Share</strong> button at the bottom of Safari</div>
+                </span> <strong style={{color:"#22d3ee"}}>Share</strong> button at the top of your screen (in URL box)</div>
               </div>
               <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
                 <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>2</div>
-                <div>Scroll down, tap <strong style={{color:"#f6d365"}}>"Add to Home Screen"</strong></div>
+                <div>Tap the <strong style={{color:"#f6d365"}}>"MORE"</strong> button (•••)</div>
               </div>
               <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
                 <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>3</div>
+                <div>Scroll down, tap <strong style={{color:"#f6d365"}}>"Add to Home Screen"</strong></div>
+              </div>
+              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
+                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>4</div>
                 <div>Tap <strong style={{color:"#6ee7b7"}}>"Add"</strong> — done! 🎉</div>
               </div>
             </>

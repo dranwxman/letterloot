@@ -240,8 +240,37 @@ function DoubloonIcon({ size = 40 }) {
 const wordCache = {};
 // Common words fallback — used when MW API is unreachable
 const COMMON_WORDS = new Set("the and for are but not you all can her was one our out day get has him his how its may new now old see two way who boy did let put say she too use add age ago air bad big bit car cut ear eat end far few fly got had hot ice job joy key kid law lay lid lot low man map mix net off oil own pan pay pen pet pit pop pot ran raw red rid rim rip rod row rub run sad sat saw sea set shy sin sit six sky sob son sow soy spy sun tab tan tap tar tax tea ten tie tin tip toe ton top toy tub tug urn van vat via vie vow war wax web wed wet wig win wit woe won yam yap yaw yea yes yet yew zap ace act ado aft ale amp ant ape arc ark ash ask asp ate awe awl axe aye bag ban bar bat bay bed beg bet bid bog bow bud bug bun bus cab cob cod cog cop cot cub cud cup dab dag dam dip doe dog don dot dry dub due dug dye eel egg ego elk elm emu eta eve ewe fad fan fat fax fed fen fib fig fin fit fix fob foe fog fop fox fry fur gab gag gap gar gas gay gem gig gnu gob god gum gun gut guy gym hag ham hap hat hay hen hew hey hid hip hit hob hoe hog hop hub hug hum hun hut ilk imp ink inn ion ire ivy jab jag jar jaw jay jib jig jog jot jug jut keg kin kit lab lad lag lap lax lea led leg lip lit log lop lug mad mar mat maw met mew mob mod mom mop mow mud mug nab nag nap nib nil nip nit nob nod nor nun oaf oak oar oat odd ode oft ohm opt orb ore owe owl pad pal pap par pat paw pea peg per pie pig pin ply pod pro pub pug pun pup pus rad rag raj ram rap rat ray reb ref rem rep rev rib rob rot rug rut rye sac sag sap sew sex sir ski sly sty sub sue sum sup tag tam tee thy tic tod tor tot tow try tun ugh vex vim wad wag wee woo yak zag zig zip zit zoo abs ads alb arb ass bib bop bub cad cam dim din dun duо fez fir gal gam gyp lac luv med cap able acid aged also area army away baby back ball band bank base bath bear beat been beer bell belt best bird bite blow blue boat bold bomb bond bone book boot born both bowl burn bush busy call calm came camp card care cart case cash cast cave city clam clap clay clip coal coat code coil cold come cook cool cope copy cord core corn cost crew crop cube cure curl damp dark date dawn dead deaf deal dear debt deck deed deep deny desk dial died diet dirt disk dock dome done door dose down draw drew drop drum dual dumb dump dune dusk dust each earn east easy edge even ever evil exam exit fact fade fail fair fall fame farm fast fate fear feat feel feet fell felt file fill film find fire firm fish fist flag flat flew flip flow foam fold folk fond food foot ford fore fork form fort four free from fuel full fund fury fuse gate gave gear gift girl give glad glee glue goal goes gold golf gone good grab gray grew grim grin grip grow gulf gust halt hand hang hard hare harm harp hate have hawk head heal heap heat heel held helm help herb here high hill hire hold hole home hood hope horn host hour huge hull hung hunt hurt idea idle inch into iron item jail jell jest join joke jump jury just keen keep kill kind king knew know lack laid lake lame land lane lark last late lawn lead leaf lean leap left lend less levy lied life lift like lily limp line link lion list live load loan loft lone long look lore lose loss lost loud love luck lump lung made maid mail main make male malt mane mare mark aby baa aal abb aby baa".split(" "));
+
+// ── Custom whitelist — words MW rejects but are valid English ──
+// Add words here as players report them and you verify them
+const CUSTOM_WHITELIST = new Set([
+  "acquisitioning",
+  "summiting",
+  "podiuming",
+  "medaling",
+  "medalled",
+  "medalling",
+  "googled","googling","tweeted","tweeting","tweets",
+  "selfie","selfies",
+  "texting","texted",
+  "unfriending","unfriended","unfriend",
+  "trending","retweet","retweeted",
+  "blogged","blogging","blogger",
+  "podcasting","podcaster",
+  "livestreamed","livestreaming","livestream",
+  "screenshotted","screenshotting","screenshot",
+  "uploaded","uploading","upload","downloads","downloaded","downloading",
+  "emailed","emailing",
+  "phoned","phoning",
+  "videoed","videoing",
+]);
 async function validateWord(word) {
   const key = word.toLowerCase();
+  // Check custom whitelist FIRST — overrides any cached "invalid" result
+  if (CUSTOM_WHITELIST.has(key)) {
+    wordCache[key] = { valid: true, source: "whitelist" };
+    return wordCache[key];
+  }
   if (wordCache[key] !== undefined) return wordCache[key];
   if (!navigator.onLine) { wordCache[key] = { valid: false, source: "offline" }; return wordCache[key]; }
   const fetchWithTimeout = (url, ms = 6000) => {
@@ -1385,6 +1414,7 @@ function AdminScreen({ onExit }) {
       const recentSessions = await adminQuery('daily_sessions', 'session_date', `&session_date=gte.${twoWeeksAgo}`);
       const weekSessions = await adminQuery('daily_sessions', 'user_id,session_date', `&session_date=gte.${weekAgo}`);
       const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
+      const wordReports = await adminQuery('word_reports', '*', '&order=reported_at.desc&limit=50').catch(()=>[]);
       // Build top 25 longest words and top word scores from stats
       const allWords = [];
       gameStates.forEach(g => {
@@ -1393,7 +1423,7 @@ function AdminScreen({ onExit }) {
       });
       const top25Longest = [...allWords].filter(w=>w.type==='longest').sort((a,b)=>b.letters-a.letters).slice(0,25);
       const top25Score = [...allWords].filter(w=>w.type==='score').sort((a,b)=>b.score-a.score).slice(0,25);
-      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0 });
+      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0, wordReports: wordReports || [] });
       setLastUpdated(new Date().toLocaleTimeString());
     } catch(e) { console.error(e); }
     setLoading(false);
@@ -1566,6 +1596,22 @@ function AdminScreen({ onExit }) {
           </div>
         </div>
 
+        {/* Word Reports */}
+        <div style={{background:'rgba(251,113,133,0.04)',borderRadius:14,padding:14,marginBottom:10,border:'1px solid rgba(251,113,133,0.2)'}}>
+          <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📝 REPORTED WORDS ({(data?.wordReports||[]).length})</div>
+          {!(data?.wordReports?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No words reported yet</div>:
+          <table style={tbl}><thead><tr><th style={th}>Word</th><th style={th}>Reported by</th><th style={th}>When</th></tr></thead><tbody>
+            {(data.wordReports||[]).map((r,i)=>(
+              <tr key={i}>
+                <td style={{...td,color:'#fda4af',fontWeight:'bold',letterSpacing:2}}>{r.word}</td>
+                <td style={td}>{r.player_name||'Guest'}</td>
+                <td style={{...td,color:'rgba(255,255,255,0.4)',fontSize:10}}>{new Date(r.reported_at).toLocaleString()}</td>
+              </tr>
+            ))}
+          </tbody></table>}
+          <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',marginTop:8,fontStyle:'italic'}}>Add valid ones to CUSTOM_WHITELIST in App.jsx</div>
+        </div>
+
         {/* All players table */}
         <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
           <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📋 ALL PLAYERS ({total})</div>
@@ -1655,6 +1701,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [showTour, setShowTour] = useState(false);
   // Install prompt state — shows after welcome screen (controlled by PLAY NOW handler)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [rejectedWord, setRejectedWord] = useState(null);
+  const [reportSent, setReportSent] = useState(false);
   // Should we show the install prompt this session?
   const shouldShowInstallPrompt = (() => {
     try {
@@ -2198,7 +2246,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     if (valid && longBonus > 0) flashMsg = `${currentWord}  +${longBonus} bonus!`;
     setFlash({ word: flashMsg, score, valid, medical: isMedical, collegiate: isCollegiate });
     setTimeout(() => setFlash(null), 2000);
-    if (!valid) { setShake(true); setTimeout(() => setShake(false), 500); }
+    if (!valid) {
+      setShake(true); setTimeout(() => setShake(false), 500);
+      // Show report option for rejected words 3+ letters
+      if (currentWord.length >= 3) {
+        setTimeout(() => { setRejectedWord(currentWord); setReportSent(false); }, 2000);
+      }
+    }
     const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate };
     const newSubmitted = [...submittedRef.current, newEntry];
     submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
@@ -2682,6 +2736,37 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}>
         <div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div>
         <div style={{fontSize:flash.valid?16:13,color:"#fff",marginTop:4}}>{flash.valid&&flash.score>0?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}`:flash.valid?"":("Not a valid word!")}</div>
+      </div>}
+
+      {rejectedWord&&<div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.78)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setRejectedWord(null)}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"22px 18px",border:"2px solid rgba(251,113,133,0.5)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:320,width:"100%",textAlign:"center"}}>
+          <div style={{fontSize:36,marginBottom:6}}>🤔</div>
+          <div style={{fontSize:14,color:"rgba(255,255,255,0.7)",marginBottom:6}}>Think this should be valid?</div>
+          <div style={{fontSize:22,fontWeight:"bold",color:"#fda4af",letterSpacing:3,marginBottom:14}}>{rejectedWord}</div>
+          {reportSent ? (
+            <div style={{background:"rgba(110,231,183,0.15)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:12,padding:"10px 12px",marginBottom:10}}>
+              <div style={{fontSize:13,color:"#6ee7b7",fontWeight:"bold"}}>✓ Reported!</div>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.5}}>Thanks for letting us know.<br/>We'll review and add it if it's valid.</div>
+            </div>
+          ) : (
+            <>
+              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:14,lineHeight:1.6}}>The Merriam-Webster dictionary doesn't include this word. If you think it should count, let us know and we'll review it!</div>
+              <button onClick={async()=>{
+                try {
+                  await supabase.from("word_reports").insert({
+                    word: rejectedWord.toLowerCase(),
+                    player_name: playerName||"Guest",
+                    reported_at: new Date().toISOString()
+                  });
+                } catch(e) {}
+                setReportSent(true);
+              }} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontFamily:"Georgia,serif",fontSize:13,fontWeight:"bold",cursor:"pointer",marginBottom:8}}>
+                📝 Report this word
+              </button>
+            </>
+          )}
+          <button onClick={()=>setRejectedWord(null)} style={{width:"100%",padding:11,borderRadius:11,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif",fontSize:12,cursor:"pointer"}}>Close</button>
+        </div>
       </div>}
 
       {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>

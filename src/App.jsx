@@ -2178,9 +2178,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
           if (perfectDayRef.current) {
+            // Force-clear any stuck validation/scanning overlays
+            setValidating(false); setCheckingStuck(false);
             awardBadge("perfect_day");
-              // ── Streak bonus: 2,000 × consecutive perfect days ──
-              const perfStreak = Math.max(1, (statsData.consecutivePerfectDays || 1));
+              // ── Streak bonus: First PD = 2,000 pts, each consecutive PD adds 1,000 ──
+              // Compute the NEW streak count (post-increment for today's Perfect Day)
+              const yesterdayKey = (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); })();
+              const wasPDYesterday = statsData.lastPerfectDate === yesterdayKey;
+              const newStreakCount = wasPDYesterday ? (statsData.consecutivePerfectDays || 0) + 1 : 1;
+              const perfStreak = newStreakCount;
               const streakBonus = 1000 + (perfStreak * 1000);
               setPerfectDayStreakBonus(streakBonus);
               setStreakBonusCount(perfStreak);
@@ -2204,6 +2210,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               setTimeLeaderboard(updatedTimes2);
           } else {
             // Level 5 complete WITHOUT Perfect Day — game over, show farewell instead of "Play Level 6"
+            setValidating(false); setCheckingStuck(false);
             const perfStats = updateLocalStats({ perfectDay: false }); setStatsData(perfStats);
             setTimeout(() => triggerFarewell(), 1500);
           }

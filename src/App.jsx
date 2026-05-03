@@ -1014,9 +1014,9 @@ function saveLocalStats(stats) { try { localStorage.setItem("ll_stats", JSON.str
 function updateLocalStats(updates) {
   const stats = getLocalStats();
   const todayKey = getTodayKey(); const weekKey = getWeekKey();
+  const yesterdayKey = getYesterdayKey();
   if (stats.lastPlayedDate !== todayKey) {
     stats.daysPlayed += 1;
-    const yesterdayKey = getYesterdayKey();
     if (stats.lastStreakDate === yesterdayKey) stats.currentStreak += 1; else stats.currentStreak = 1;
     if (stats.currentStreak > stats.longestStreak) stats.longestStreak = stats.currentStreak;
     stats.lastStreakDate = todayKey; stats.lastPlayedDate = todayKey;
@@ -2364,10 +2364,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             setValidating(false); setCheckingStuck(false);
             awardBadge("perfect_day");
               // ── Streak bonus: First PD = 2,000 pts, each consecutive PD adds 1,000 ──
-              // Compute the NEW streak count (post-increment for today's Perfect Day)
-              const yesterdayKey = (() => { const d = new Date(); d.setDate(d.getDate()-1); return d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate(); })();
-              const wasPDYesterday = statsData.lastPerfectDate === yesterdayKey;
-              const newStreakCount = wasPDYesterday ? (statsData.consecutivePerfectDays || 0) + 1 : 1;
+              // Read FRESH stats from localStorage (statsData state may be stale)
+              const freshStats = getLocalStats();
+              const yKey = getYesterdayKey();
+              const wasPDYesterday = freshStats.lastPerfectDate === yKey;
+              const alreadyPDToday = freshStats.lastPerfectDate === getTodayKey();
+              // If already PD today (replay): keep existing streak. Else if yesterday: increment. Else: reset to 1.
+              const newStreakCount = alreadyPDToday
+                ? (freshStats.consecutivePerfectDays || 1)
+                : (wasPDYesterday ? (freshStats.consecutivePerfectDays || 0) + 1 : 1);
               const perfStreak = newStreakCount;
               const streakBonus = 1000 + (perfStreak * 1000);
               setPerfectDayStreakBonus(streakBonus);
@@ -3083,8 +3088,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative"}}>
             {paused&&<div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.82)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:5,backdropFilter:"blur(2px)"}}>
               <div style={{fontSize:40,marginBottom:8}}>⏸️</div>
-              <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>PAUSED</div>
-              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:6}}>Tap Resume above to continue</div>
+              <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>Paused</div>
+              <button className="ll-btn" onClick={handlePause} style={{marginTop:18,padding:"12px 32px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:15,fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 20px rgba(0,200,83,0.5)"}}>▶️ Resume</button>
             </div>}
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:3,marginBottom:3}}>

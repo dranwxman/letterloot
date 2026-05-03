@@ -67,19 +67,38 @@ export async function loadDailySession(playerId, dateKey) {
   return data;
 }
 export async function saveDailySession(playerId, dateKey, session) {
+  // First, fetch existing record to preserve highest score of the day
+  const { data: existing } = await supabase
+    .from("daily_sessions")
+    .select("total_score, perfect_day, longest_word_today")
+    .eq("player_id", playerId)
+    .eq("date_key", dateKey)
+    .maybeSingle();
+
+  const existingScore = existing?.total_score || 0;
+  const newScore = session.totalScore || 0;
+  // Take the HIGHER of existing and new score for the day
+  const bestScore = Math.max(existingScore, newScore);
+  // Once perfect_day is true for the day, keep it true regardless of subsequent games
+  const bestPerfectDay = (existing?.perfect_day === true) || (session.perfectDay === true);
+  // Keep the longest word ever played today
+  const existingLongest = existing?.longest_word_today || "";
+  const newLongest = session.longestWordToday || "";
+  const bestLongest = newLongest.length > existingLongest.length ? newLongest : existingLongest;
+
   const { error } = await supabase.from("daily_sessions").upsert({
     player_id: playerId,
     date_key: dateKey,
     level: session.level || 1,
-    total_score: session.totalScore || 0,
+    total_score: bestScore,           // always the day's best
     level_score: session.levelScore || 0,
     tiles: session.tiles || null,
     submitted: session.submitted || [],
-    perfect_day: session.perfectDay ?? true,
+    perfect_day: bestPerfectDay,      // sticky once true
     tile_count: session.tileCount || 42,
     level_time: session.levelTime || 0,
     total_time: session.totalTime || 0,
-    longest_word_today: session.longestWordToday || "",
+    longest_word_today: bestLongest,  // longest of the day
     completed: session.completed || false,
     updated_at: new Date().toISOString(),
   }, { onConflict: "player_id, date_key" });

@@ -153,53 +153,40 @@ const BONUS_CONSECUTIVE_REQUIRED = 3; // perfect days in a row to unlock Level 6
 
 // ── Badge definitions ─────────────────────────────────────────
 const BADGE_DEFS = [
-  { id:"first_word",   icon:"✨", label:"First Loot",      desc:"Submit your first word",                cat:"core",    scope:"lifetime" },
-  { id:"rocket",       icon:"🚀", label:"Rocket",          desc:"Score 100+ in one word",                cat:"core",    scope:"lifetime" },
-  { id:"shuttle",      icon:"🛸", label:"Space Shuttle",   desc:"Score 125+ in one word",                cat:"core",    scope:"lifetime" },
-  { id:"moon",         icon:"🌙", label:"Moon",            desc:"Score 150+ in one word",                cat:"core",    scope:"lifetime" },
-  { id:"mars",         icon:"🔴", label:"Mars",            desc:"Score 175+ in one word",                cat:"core",    scope:"lifetime" },
-  { id:"jupiter",      icon:"🪐", label:"Jupiter",         desc:"Score 200+ in one word",                cat:"core",    scope:"lifetime" },
-  { id:"infinity",     icon:"∞",  label:"Infinity",        desc:"Score 200+ pts — shows your best!",     cat:"core",    scope:"lifetime" },
-  { id:"century",      icon:"💰", label:"Century",         desc:"Score 100+ in one word",                cat:"core",    scope:"all" },
-  { id:"score_200",    icon:"🚀", label:"Rocket (Legacy)", desc:"Score 200+ in one word",                cat:"core",    scope:"lifetime" },
-  { id:"long_word",    icon:"📏", label:"Long Haul",       desc:"Use 7+ letters in a word",              cat:"core",    scope:"lifetime" },
-  { id:"streak_3",     icon:"⚡", label:"Streak x3",       desc:"3 valid words in a row",                cat:"core",    scope:"daily" },
-  { id:"streak_5",     icon:"🌪️", label:"Streak x5",       desc:"5 valid words in a row",                cat:"core",    scope:"daily" },
-  { id:"daily_500",    icon:"🏆", label:"Loot Master",     desc:"500+ total daily score",                cat:"core",    scope:"lifetime" },
-  { id:"daily_1000",   icon:"💰", label:"Treasure Chest",  desc:"1000+ total daily score",               cat:"core",    scope:"lifetime" },
-  { id:"perfect_q",    icon:"👑", label:"Q Master",        desc:"Use the letter Q",                      cat:"core",    scope:"daily" },
-  { id:"vowel_rich",   icon:"🎵", label:"Vowel Rich",      desc:"Word with 4+ vowels",                   cat:"core",    scope:"lifetime" },
-  { id:"medical_word", icon:"🩺", label:"Doctor's Orders", desc:"Use a medical dictionary word",         cat:"core",    scope:"lifetime" },
-  { id:"long_8",       icon:"📖", label:"8 Letters",       desc:"Spell an 8-letter word",                cat:"core",    scope:"daily" },
-  { id:"long_10",      icon:"📚", label:"10 Letters",      desc:"Spell a 10-letter word",                cat:"core",    scope:"daily" },
-  { id:"long_13",      icon:"🧠", label:"Wordsmith",       desc:"Spell a 13+ letter word!",              cat:"core",    scope:"daily" },
-  { id:"level_2",      icon:"🥈", label:"Level 2",         desc:"Reach Level 2",                         cat:"level",   scope:"lifetime" },
-  { id:"level_3",      icon:"🥇", label:"Level 3",         desc:"Reach Level 3",                         cat:"level",   scope:"lifetime" },
-  { id:"level_4",      icon:"🎖️", label:"Level 4",         desc:"Reach Level 4",                         cat:"level",   scope:"lifetime" },
-  { id:"level_5",      icon:"💎", label:"Diamond",         desc:"Reach Level 5",                         cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_1",  icon:"🌟", label:"Clear L1",        desc:"Use all tiles on Level 1",              cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_2",  icon:"🌟", label:"Clear L2",        desc:"Use all tiles on Level 2",              cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_3",  icon:"🌟", label:"Clear L3",        desc:"Use all tiles on Level 3",              cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_4",  icon:"🌟", label:"Clear L4",        desc:"Use all tiles on Level 4",              cat:"level",   scope:"lifetime" },
-  { id:"all_tiles_5",  icon:"🌟", label:"Clear L5",        desc:"Use all tiles on Level 5",              cat:"level",   scope:"lifetime" },
-  { id:"perfect_day",  icon:"🌈🏆", label:"Perfect Day",     desc:"All 5 levels cleared, no buys!",        cat:"level",   scope:"lifetime" },
-  { id:"speed_demon",  icon:"⏱️", label:"Speed Demon",     desc:"Complete a level in under 3 min",       cat:"word",    scope:"lifetime" },
-  { id:"no_retreat",   icon:"🎗️", label:"No Retreat",      desc:"Complete level without resetting",      cat:"word",    scope:"lifetime" },
-  { id:"longest_day",  icon:"🎯", label:"Daily Best",      desc:"Beat your longest word today",          cat:"word",    scope:"lifetime" },
-  { id:"points_1k",    icon:"💫", label:"1K Points",       desc:"Accumulate 1,000 lifetime points",      cat:"alltime", scope:"lifetime" },
-  { id:"points_5k",    icon:"⭐", label:"5K Points",       desc:"Accumulate 5,000 lifetime points",      cat:"alltime", scope:"lifetime" },
-  { id:"points_10k",   icon:"🌠", label:"10K Points",      desc:"Accumulate 10,000 lifetime points",     cat:"alltime", scope:"lifetime" },
-  { id:"streak_7",     icon:"🔥", label:"Week Streak",     desc:"Play 7 days in a row",                  cat:"alltime", scope:"lifetime" },
-  { id:"streak_30",    icon:"👑", label:"Month Streak",    desc:"Play 30 days in a row",                 cat:"alltime", scope:"lifetime" },
-  { id:"all_time_50",  icon:"🦁", label:"Veteran",         desc:"Submit 50 valid words all-time",        cat:"alltime", scope:"lifetime" },
-  { id:"all_time_100", icon:"🐉", label:"Dragon",          desc:"Submit 100 valid words all-time",       cat:"alltime", scope:"lifetime" },
-  // ── Bonus Level Badges (hidden until ENABLE_BONUS_LEVELS = true) ──
-  { id:"vault_clear",    icon:"🏛️", label:"The Vault",       desc:"Clear Level 6 — The Vault",             cat:"bonus",   scope:"lifetime" },
-  { id:"sanctum_clear",  icon:"💫", label:"The Sanctum",     desc:"Clear Level 7 — The Sanctum",           cat:"bonus",   scope:"lifetime" },
-  { id:"summit_clear",   icon:"🏔️", label:"The Summit",      desc:"Clear Level 8 — The Summit",            cat:"bonus",   scope:"lifetime" },
-  { id:"cosmos_clear",   icon:"🌌", label:"The Cosmos",      desc:"Clear Level 9 — The Cosmos",            cat:"bonus",   scope:"lifetime" },
-  { id:"infinity_clear", icon:"∞",  label:"Infinity",        desc:"Clear Level 10 — Infinity",             cat:"bonus",   scope:"lifetime" },
-  { id:"vault_streak",   icon:"🔱", label:"Streak Master",   desc:"3 consecutive Perfect Days",            cat:"bonus",   scope:"lifetime" },
+  // ── Single Word Score Badges ──
+  { id:"rocket",       icon:"🚀",   label:"Rocket",          desc:"Score 100+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"shuttle",      icon:"🛸",   label:"Space Shuttle",   desc:"Score 125+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"moon",         icon:"🌙",   label:"Moon",            desc:"Score 150+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"mars",         icon:"🔴",   label:"Mars",            desc:"Score 175+ in one word",                cat:"core",    scope:"lifetime" },
+  { id:"infinity",     icon:"∞",    label:"Infinity",        desc:"Score 200+ in one word — your best!",   cat:"core",    scope:"lifetime" },
+  // ── Game Completion Badges ──
+  { id:"first_word",   icon:"✨",   label:"First Loot",      desc:"Complete your first game",              cat:"level",   scope:"lifetime" },
+  { id:"level_5",      icon:"💎",   label:"Diamond Looter",  desc:"Complete Level 5",                      cat:"level",   scope:"lifetime" },
+  { id:"daily_500",    icon:"🏆",   label:"Loot Master",     desc:"5 levels complete with 2,000+ pts",     cat:"level",   scope:"lifetime" },
+  { id:"daily_1000",   icon:"💰",   label:"Treasure Chest",  desc:"5 levels complete with 3,000+ pts",     cat:"level",   scope:"lifetime" },
+  { id:"perfect_day",  icon:"🌈🏆", label:"Perfect Day",     desc:"No buys, resets, or re-dos",            cat:"level",   scope:"lifetime" },
+  // ── Speed Badges ──
+  { id:"slow_lane",    icon:"🚶",   label:"Slow Lane Looter", desc:"Complete a level in under 5 min",      cat:"word",    scope:"lifetime" },
+  { id:"left_lane",    icon:"🚗",   label:"Left Lane Looter", desc:"Complete a level in under 3 min",      cat:"word",    scope:"lifetime" },
+  { id:"speed_demon",  icon:"🚓",   label:"Speed Demon",     desc:"Complete a level in under 2 min",       cat:"word",    scope:"lifetime" },
+  { id:"ferrari",      icon:"🏎️",   label:"Ferrari Looter",  desc:"Complete a level in under 1:30",        cat:"word",    scope:"lifetime" },
+  // ── Word Length Badges ──
+  { id:"long_8",       icon:"📜",   label:"OctoLooter",      desc:"Spell an 8-letter word",                cat:"core",    scope:"lifetime" },
+  { id:"long_10",      icon:"🦅",   label:"Long Looter",     desc:"Spell a 10-letter word",                cat:"core",    scope:"lifetime" },
+  { id:"long_13",      icon:"📚",   label:"Wordsmith",       desc:"Spell a 13+ letter word",               cat:"core",    scope:"lifetime" },
+  // ── Lifetime Points Badges ──
+  { id:"points_1k",    icon:"💫",   label:"1K Points",       desc:"Accumulate 1,000 lifetime points",      cat:"alltime", scope:"lifetime" },
+  { id:"points_5k",    icon:"⭐",   label:"5K Points",       desc:"Accumulate 5,000 lifetime points",      cat:"alltime", scope:"lifetime" },
+  { id:"points_10k",   icon:"🌠",   label:"Meteor",          desc:"Accumulate 10,000 lifetime points",     cat:"alltime", scope:"lifetime" },
+  { id:"points_100k",  icon:"☄️",   label:"Comet",           desc:"Accumulate 100,000 lifetime points",    cat:"alltime", scope:"lifetime" },
+  { id:"points_1m",    icon:"🌌",   label:"Galaxy",          desc:"Accumulate 1,000,000 lifetime points",  cat:"alltime", scope:"lifetime" },
+  // ── Streak & Special Badges ──
+  { id:"streak_7",     icon:"🔥",   label:"Week Streak",     desc:"Play 7 days in a row",                  cat:"alltime", scope:"lifetime" },
+  { id:"streak_30",    icon:"👑",   label:"Month Streak",    desc:"Play 30 days in a row",                 cat:"alltime", scope:"lifetime" },
+  { id:"no_retreat",   icon:"🎖️",   label:"No Retreat",      desc:"Complete level without resetting",      cat:"word",    scope:"lifetime" },
+  { id:"medical_word", icon:"⚕️",   label:"Doctor's Orders", desc:"Use a medical dictionary word",         cat:"core",    scope:"lifetime" },
+  { id:"all_time_100", icon:"🐉",   label:"Dragon",          desc:"100 words in a row, no misspellings",   cat:"alltime", scope:"lifetime" },
+  { id:"perfect_q",    icon:"Q",    label:"Q Master",        desc:"Use Q in an 8+ letter word",            cat:"core",    scope:"lifetime" },
 ];
 
 // ── Doubloon SVG ──────────────────────────────────────────────
@@ -985,6 +972,7 @@ function getLocalStats() {
   const def = {
     daysPlayed:0, lastPlayedDate:null, currentStreak:0, longestStreak:0, lastStreakDate:null,
     perfectDaysAllTime:0, perfectDaysWeek:{}, weekKey:"", consecutivePerfectDays:0, lastPerfectDate:null,
+    consecutiveValidWords:0, // Dragon badge tracking — resets on misspelling
     highScoreAllTime:0, highScoreWeek:{}, highScoreToday:0,
     highWordAllTime:0, highWordWeek:{}, highWordToday:0, highWordTodayWord:"", highWordAllTimeWord:"",
     fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},
@@ -1801,6 +1789,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [paused, setPaused] = useState(false);
+  const pausedRef = useRef(false);
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
   const [musicOn, setMusicOn] = useState(false);
   const [statsData, setStatsData] = useState(() => getLocalStats());
   const [timeLeaderboard, setTimeLeaderboard] = useState(() => getLocalTimeLeaderboard());
@@ -2085,7 +2075,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       if (showPopup) {
         setShowBadge(id);
         setShowBadgeExtra(extraLabel || "");
-        setTimeout(() => { setShowBadge(null); setShowBadgeExtra(""); }, 2800);
+        // Pause game timer during badge celebration
+        stopTimer();
+        // Fire confetti for the celebration
+        setConfetti(true);
+        setTimeout(() => setConfetti(false), 5000);
+        // Hold the badge popup for 5 seconds, then resume timer (if not paused)
+        setTimeout(() => {
+          setShowBadge(null); setShowBadgeExtra("");
+          if (!pausedRef.current && !levelComplete) startTimer();
+        }, 5000);
       }
       const updated = awardBadgeToStore(prev, id, def.scope);
       saveBadgeStore(updated);
@@ -2253,6 +2252,21 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const valid = result.valid;
     const isMedical = result.source === "medical";
     const isCollegiate = result.source === "collegiate";
+    // ── Dragon badge tracking: 100 valid words in a row, resets on misspelling ──
+    if (currentWord.length >= 3) {
+      if (valid) {
+        const dStats = getLocalStats();
+        const newCount = (dStats.consecutiveValidWords || 0) + 1;
+        dStats.consecutiveValidWords = newCount;
+        saveLocalStats(dStats);
+        if (newCount >= 100) awardBadge("all_time_100");
+      } else {
+        // Misspelling resets the streak
+        const dStats = getLocalStats();
+        dStats.consecutiveValidWords = 0;
+        saveLocalStats(dStats);
+      }
+    }
     const baseScore = valid ? currentScore : 0;
     const longBonus = valid ? getLongWordBonus(currentWord.length) : 0;
     const score = baseScore + longBonus;
@@ -2300,41 +2314,29 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         ...(score > 200 ? { infinityScore: score } : {}),
       });
       setStatsData(updated);
-      if (currentWord.length > (longestWordToday.length||0)) { setLongestWordToday(currentWord); awardBadge("longest_day"); }
+      if (currentWord.length > (longestWordToday.length||0)) { setLongestWordToday(currentWord); }
       if (currentWord.length > (longestWordAllTime.length||0)) { setLongestWordAllTime(currentWord); localStorage.setItem("ll_longest", currentWord); }
       if (isMedical) awardBadge("medical_word");
       const validCount = newSubmitted.filter(s => s.valid).length;
-      if (validCount === 1) awardBadge("first_word");
       // Space badge ladder — update date on each earn
       if (score >= 100) { awardBadge("rocket"); updateLocalStats({ spaceBadge: "rocket" }); }
       if (score >= 125) { awardBadge("shuttle"); updateLocalStats({ spaceBadge: "shuttle" }); }
       if (score >= 150) { awardBadge("moon"); updateLocalStats({ spaceBadge: "moon" }); }
       if (score >= 175) { awardBadge("mars"); updateLocalStats({ spaceBadge: "mars" }); }
-      if (score >= 200) { awardBadge("jupiter"); updateLocalStats({ spaceBadge: "jupiter" }); }
       if (score > 200) { awardBadge("infinity", `${score} pts!`); updateLocalStats({ spaceBadge: "infinity", infinityScore: score }); }
-      if (score >= 100) awardBadge("century");
-      if (currentWord.length >= 7) awardBadge("long_word");
       if (currentWord.length >= 8) awardBadge("long_8");
       if (currentWord.length >= 10) awardBadge("long_10");
       if (currentWord.length >= 13) awardBadge("long_13");
-      if (newStreak >= 3) awardBadge("streak_3");
-      if (newStreak >= 5) awardBadge("streak_5");
-      if (newTotal >= 500) awardBadge("daily_500");
-      if (newTotal >= 1000) awardBadge("daily_1000");
-      if (currentWord.toUpperCase().includes("Q")) awardBadge("perfect_q");
-      if (currentWord.toUpperCase().split("").filter(l => VOWELS.has(l)).length >= 4) awardBadge("vowel_rich");
-      if (ats.words >= 50) awardBadge("all_time_50");
-      if (ats.words >= 100) awardBadge("all_time_100");
+      if (currentWord.toUpperCase().includes("Q") && currentWord.length >= 8) awardBadge("perfect_q");
       if (newLifetime >= 1000) awardBadge("points_1k");
       if (newLifetime >= 5000) awardBadge("points_5k");
       if (newLifetime >= 10000) awardBadge("points_10k");
+      if (newLifetime >= 100000) awardBadge("points_100k");
+      if (newLifetime >= 1000000) awardBadge("points_1m");
       if (updated.currentStreak >= 7) awardBadge("streak_7");
       if (updated.currentStreak >= 30) awardBadge("streak_30");
-      if (levelTimeRef.current < 180) awardBadge("speed_demon");
-      if (levelResetCount.current === 0) awardBadge("no_retreat");
       const allUsed = newTiles.every(t => t.used);
       if (allUsed) {
-        awardBadge(`all_tiles_${level}`);
         const bonus = 100 * level;
         totalRef.current += bonus; setTotalScore(totalRef.current);
         levelScoreRef.current += bonus; setLevelScore(levelScoreRef.current);
@@ -2346,6 +2348,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const clearedTime = levelTimeRef.current;
         const clearedLevelScore = levelScoreRef.current;
         clearedLevelsRef.current[level] = clearedTime;
+        // ── Speed badges (lifetime, first qualifying level) ──
+        if (clearedTime < 90) awardBadge("ferrari");
+        else if (clearedTime < 120) awardBadge("speed_demon");
+        else if (clearedTime < 180) awardBadge("left_lane");
+        else if (clearedTime < 300) awardBadge("slow_lane");
+        // ── No Retreat — clear without resets, replays, or bought levels (UNDO is OK) ──
+        if (perfectDayRef.current) awardBadge("no_retreat");
         const existingTime = statsData.fastestLevels?.[String(level)];
         const existingSecs = existingTime ? existingTime.seconds : null;
         const isNewTimeRecord = existingSecs === null || clearedTime < existingSecs;
@@ -2359,6 +2368,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           setTimeout(() => setLevelComplete(true), 1200);
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
+          // ── Game completion badges ──
+          awardBadge("first_word"); // First Loot — first complete game
+          awardBadge("level_5"); // Diamond Looter — completed Level 5
+          if (totalRef.current >= 2000) awardBadge("daily_500"); // Loot Master
+          if (totalRef.current >= 3000) awardBadge("daily_1000"); // Treasure Chest
           if (perfectDayRef.current) {
             // Force-clear any stuck validation/scanning overlays
             setValidating(false); setCheckingStuck(false);
@@ -2452,9 +2466,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
     levelResetCount.current = 0; resetLevelTimer(); startTimer(); setNewBestTime(false);
-    if (newLevel === 2) awardBadge("level_2");
-    if (newLevel === 3) awardBadge("level_3");
-    if (newLevel === 4) awardBadge("level_4");
     if (newLevel === 5) awardBadge("level_5");
   };
 
@@ -2679,7 +2690,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
         @keyframes pop{0%{transform:translate(-50%,-50%) scale(0.6);opacity:0}60%{transform:translate(-50%,-50%) scale(1.08)}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
         @keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
-        @keyframes badgePop{0%{transform:translateX(-50%) translateY(40px) scale(0.8);opacity:0}20%{transform:translateX(-50%) translateY(0) scale(1.05);opacity:1}80%{transform:translateX(-50%) translateY(0) scale(1);opacity:1}100%{transform:translateX(-50%) translateY(-20px) scale(0.9);opacity:0}}
+        @keyframes badgePop{0%{transform:translateX(-50%) translateY(40px) scale(0.8);opacity:0}8%{transform:translateX(-50%) translateY(0) scale(1.05);opacity:1}90%{transform:translateX(-50%) translateY(0) scale(1);opacity:1}100%{transform:translateX(-50%) translateY(-20px) scale(0.9);opacity:0}}
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes ll-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
         @keyframes rainbow{0%{color:#ff0000}16%{color:#ff8800}33%{color:#ffff00}50%{color:#00ff00}66%{color:#0088ff}83%{color:#8800ff}100%{color:#ff0000}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
@@ -2748,7 +2759,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </button>
       )}
 
-      {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 2.8s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
+      {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 5s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
         <div style={{display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
         <div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div>
         <div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}{showBadgeExtra?` — ${showBadgeExtra}`:""}</div>
@@ -2774,12 +2785,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:14,lineHeight:1.6}}>The Merriam-Webster dictionary doesn't include this word. If you think it should count, let us know and we'll review it!</div>
               <button onClick={async()=>{
                 try {
-                  await supabase.from("word_reports").insert({
+                  const { error } = await supabase.from("word_reports").insert({
                     word: rejectedWord.toLowerCase(),
-                    player_name: playerName||"Guest",
-                    reported_at: new Date().toISOString()
+                    player_name: playerName||"Guest"
                   });
-                } catch(e) {}
+                  if (error) console.error("Word report insert error:", error);
+                } catch(e) { console.error("Word report exception:", e); }
                 setReportSent(true);
               }} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontFamily:"Georgia,serif",fontSize:13,fontWeight:"bold",cursor:"pointer",marginBottom:8}}>
                 📝 Report this word
@@ -3114,21 +3125,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             ✏️ Return to Game
           </button>
 
-          <div style={{marginBottom:14}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>☀️ DAILY BADGES</div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginBottom:7,paddingLeft:4}}>Reset each day — earn them fresh every session</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7}}>
-              {BADGE_DEFS.filter(b=>b.scope==="daily"||b.scope==="all").map(b=>{
-                const earned = dailyBadgeIds.includes(b.id);
-                return(<div key={b.id+"_d"} style={{background:earned?"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))":"rgba(255,255,255,0.05)",border:earned?"1px solid rgba(246,211,101,0.45)":"1px solid rgba(255,255,255,0.14)",borderRadius:12,padding:"10px 8px",textAlign:"center"}}>
-                  <div style={{filter:earned?"none":"grayscale(1)",opacity:earned?1:0.22,display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
-                  <div style={{fontSize:11,fontWeight:"bold",marginTop:4,color:earned?"#f6d365":"rgba(255,255,255,0.4)"}}>{b.label}</div>
-                  <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:2,lineHeight:1.4}}>{b.desc}</div>
-                  {earned&&<div style={{marginTop:3,fontSize:8,color:"#fda085",letterSpacing:2}}>✓ TODAY</div>}
-                </div>);
-              })}
-            </div>
-          </div>
           {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
             <div key={cat} style={{marginBottom:14}}>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:4,paddingLeft:4}}>🏆 LIFETIME — {title}</div>

@@ -251,6 +251,68 @@ const CUSTOM_WHITELIST = new Set([
   "phoned","phoning",
   "videoed","videoing",
 ]);
+
+// ── Word of the Day candidate pool (8+ letters, common words) ──
+const WOTD_CANDIDATES = [
+  // 8 letters
+  "absolute","academic","accuracy","activity","adequate","adoption","advanced","aircraft","airplane","alliance","analysis","ancestor","ancient","apparent","approach","approval","argument","artistic","attached","audience","balanced","baseball","beautiful","birthday","building","business","calendar","campaign","capacity","category","ceremony","children","civilian","classify","clinical","clothing","colossal","commerce","complete","computer","concrete","conflict","consider","constant","contains","contract","contrast","convince","creative","critical","cylinder","daughter","delicate","delivery","describe","designer","detailed","dialogue","diameter","director","disaster","discount","discover","distance","distinct","district","division","domestic","dominate","downtown","downward","dramatic","duration","economic","educated","electric","elephant","employee","engineer","enormous","entirely","envelope","equation","estimate","evaluate","everyday","everyone","evidence","exchange","exciting","exercise","existing","exposure","external","facility","familiar","fantastic","favorite","feedback","festival","football","forecast","fragment","frequent","friendly","function","graduate","graphics","grocery","handsome","hardware","heritage","hesitate","historic","holiday","homemade","honestly","hospital","humanity","humorous","hundred","identify","identity","increase","indicate","industry","infinite","informed","initiate","innocent","insomnia","inspired","intended","interest","internal","interval","intimate","involved","isolated","jewelry","journey","judgment","keyboard","kindness","kingdom","language","learning","lifetime","lighting","listener","location","loyalty","luminous","luxury","magnetic","majestic","marathon","material","maximum","measured","medieval","medicine","memorial","memorize","metaphor","midnight","military","mindful","minimum","minister","mistaken","monitor","mortgage","mountain","movement","multiple","mushroom","mystery","national","negative","neighbor","numerous","observer","obstacle","occasion","official","operator","opposite","optimist","organize","original","ornament","outdoors","overcome","overhead","overlook","overseas","painted","painting","parallel","particle","passport","patience","pavement","peaceful","peculiar","penalty","permanent","persuade","petition","physical","pioneer","platform","pleasant","portrait","positive","possible","practice","preserve","pressure","previous","priority","prisoner","probably","produced","property","proposal","provider","purchase","question","rainbow","rational","reaction","received","recovery","regional","register","regulate","relative","reliable","remember","reminder","reporter","resource","response","romantic","sandwich","scenario","schedule","seafood","security","separate","sequence","servant","shoulder","showcase","sideways","skeleton","software","solution","somebody","speaker","specific","spectrum","sponsor","standard","strategy","straight","stranger","strength","struggle","stunning","subjects","summary","superior","supplier","surgery","survival","sustain","syllable","sympathy","symphony","tangible","teacher","textile","thinking","thirteen","thousand","timeline","together","tolerate","tomorrow","tonight","tradition","training","transfer","traveler","tropical","tutorial","ultimate","umbrella","universe","upgraded","valuable","vehicle","velocity","vertical","vigorous","vineyard","virtuous","volcano","watching","wireless","wonderful","yourself",
+  // 10 letters
+  "abundance","accomplish","accordion","accurately","activity","adaptation","additional","adolescent","adventure","advertise","affection","affordable","afternoon","aggressive","alligator","altogether","ambassador","amazement","ambulance","analytical","apologize","appearance","appliance","architect","arithmetic","artificial","aspiration","assembled","astronomy","atmosphere","attendance","attractive","auditorium","authentic","automobile","background","basketball","beginning","beneficial","binoculars","blackberry","brilliant","calculator","candlestick","caterpillar","celebrate","chandelier","chemistry","chimpanzee","chocolate","cinematic","commitment","compassion","competent","completion","compliment","compromise","conference","consistent","contagious","convertible","corporation","correspond","creativity","crocodile","democratic","department","determine","devastate","dictionary","difference","disappear","discovery","downstairs","earthquake","ecosystem","editorial","educational","electrical","electronic","elementary","elevator","embarrass","emergency","employer","engineering","enjoyment","enthusiasm","entertain","environment","especially","everywhere","exaggerate","exceptional","experience","experiment","expression","fascinated","fingerprint","fortunately","foundation","framework","friendship","fundamental","generously","glamorous","greenhouse","headphones","helicopter","hilarious","historical","homestead","honeymoon","horoscope","horseshoe","hourglass","hurricane","illustrate","impressive","impromptu","improvement","incredible","industrial","ineffective","ingenious","innovative","inspection","instructor","instrument","interaction","invitation","journalism","kindness","laboratory","landscape","leadership","lighthouse","linguistic","literature","loneliness","loudspeaker","manuscript","masterpiece","mechanical","memorable","metaphor","microscope","miraculous","modernize","multimedia","mysterious","mythology","navigation","nightingale","noteworthy","obedience","objective","obligation","observation","occasional","occupation","officially","offspring","operation","oppressive","orchestra","outrageous","overshadow","overwhelm","palatable","parachute","particular","passenger","pedestrian","peninsula","perception","perfection","performer","persistent","photograph","picturesque","playground","political","powerhouse","practical","preference","preliminary","prevention","priority","procession","proficient","programming","prominent","propeller","prosperity","quarterly","raspberry","rebellion","recreation","reflection","registration","regulation","remarkable","reminisce","renowned","reputable","resistance","resolution","resourceful","restaurant","retirement","revelation","revitalize","revolution","ridiculous","sanctuary","satisfying","scholarly","scientific","screenplay","sensitivity","settlement","sightseeing","silhouette","sincerely","skillfully","skyscraper","smartphone","somersault","sophomore","sourdough","spaceship","spectacle","speculate","spiritual","spontaneous","stationary","stationery","stimulant","stockpile","strawberry","strenuous","stronghold","substantial","successful","sufficient","sunglasses","supernova","surprised","surrender","sweetheart","symbolize","tablespoon","tenacious","tenderness","themselves","thereafter","thoroughly","thunderbolt","thunderous","timekeeper","tomorrow","traditional","tranquility","translation","transmitter","transport","tremendous","triangular","triumphant","ultimately","unbelievable","unbreakable","underground","understand","underwater","unforgettable","university","unmistakable","unparalleled","unprecedented","upholstery","vegetation","ventilation","villainous","volunteer","voracious","wallflower","washboard","watercolor","watermelon","waterproof","whirlpool","wholesale","wilderness","windowsill","witnessed","workplace","yesterday",
+  // 12+ letters (rarer, more impressive)
+  "accommodate","achievement","acknowledge","alphabetical","appreciation","architecture","arrangement","astonishment","biographical","breathtaking","celebration","championship","cheerfulness","circumstance","civilization","collaborative","combination","commemorate","commercially","commonwealth","communicate","compensation","comprehensive","concentration","consciousness","consequently","conservation","considerable","construction","contemplation","contradiction","conversation","corresponding","craftsmanship","determination","disappointed","disagreement","disconnection","distinguished","documentary","dramatically","economically","effectiveness","efficiently","embarrassment","encyclopedia","entertainment","environment","established","evolutionary","exaggeration","extraordinary","fundamentally","generously","historically","horticulture","identification","illumination","imagination","immediately","impossibility","incredibly","independence","independently","indispensable","inflammation","infrastructure","intelligence","intentionally","interesting","international","interpretation","introduction","investigation","irreplaceable","irresistible","kaleidoscope","liberation","longitudinal","maintenance","manipulation","manufacturer","marvelously","mathematical","measurement","metropolitan","microscopic","misunderstand","negotiation","neighborhood","nonchalantly","observation","occasionally","operational","opportunity","organization","overshadowed","overwhelming","participation","particularly","perpendicular","philosophical","photographer","practically","precipitation","predicament","predictable","predominantly","preservation","procrastinate","professional","profoundly","proportional","psychological","questionnaire","recommendation","reconciliation","redistribute","regrettably","relationship","remembrance","reproduction","resourcefulness","respectfully","retrospective","revolutionize","satisfactory","significance","sophisticated","spectacular","spontaneously","standardize","statistical","sufficiently","superintendent","supernatural","surveillance","systematically","temperament","temptation","theoretical","thunderstorm","traditionally","transferable","transformation","transparency","transportation","tremendously","triumphantly","unbelievable","unbreakable","uncomfortable","unconscious","understanding","unforgettable","unfortunate","unmistakably","unpredictable","unrecognizable","wholeheartedly"
+];
+
+function canSpellWordFromTiles(word, tileLetters) {
+  const available = [...tileLetters];
+  const w = word.toUpperCase().split("");
+  for (const letter of w) {
+    const idx = available.indexOf(letter);
+    if (idx === -1) return false;
+    available.splice(idx, 1);
+  }
+  return true;
+}
+
+function selectWordOfTheDay(allLevelTiles) {
+  const seed = getDailySeed();
+  const rng = seededRandom(seed + 7777);
+  const tiers = [
+    WOTD_CANDIDATES.filter(w => w.length >= 12),
+    WOTD_CANDIDATES.filter(w => w.length >= 10 && w.length < 12),
+    WOTD_CANDIDATES.filter(w => w.length >= 8 && w.length < 10),
+  ];
+  for (const tier of tiers) {
+    const shuffled = [...tier].sort(() => rng() - 0.5);
+    for (const word of shuffled) {
+      for (const tiles of allLevelTiles) {
+        if (canSpellWordFromTiles(word, tiles)) return word.toUpperCase();
+      }
+    }
+  }
+  return null;
+}
+
+function getCachedWordOfTheDay() {
+  try {
+    const today = getTodayKey();
+    const raw = localStorage.getItem("ll_wotd");
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.date === today && data.word) return data;
+    }
+  } catch {}
+  return null;
+}
+function saveCachedWordOfTheDay(word) {
+  try { localStorage.setItem("ll_wotd", JSON.stringify({ date: getTodayKey(), word, found: false })); } catch {}
+}
+function markWordOfTheDayFound() {
+  try {
+    const cached = getCachedWordOfTheDay();
+    if (cached) { cached.found = true; localStorage.setItem("ll_wotd", JSON.stringify(cached)); }
+  } catch {}
+}
+
 async function validateWord(word) {
   const key = word.toLowerCase();
   // Check custom whitelist FIRST — overrides any cached "invalid" result
@@ -1754,6 +1816,33 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const decayInfo = lifetimeData.current;
 
   const ss = useRef(loadLocalSession()).current;
+  // ── Word of the Day: precompute from all 5 levels' potential tiles ──
+  const wotdData = useRef(null);
+  if (wotdData.current === null) {
+    const cached = getCachedWordOfTheDay();
+    if (cached) {
+      wotdData.current = cached;
+    } else {
+      // Generate tiles for all 5 levels using same daily seed approach
+      const allLevelTiles = [];
+      for (let lv = 1; lv <= 5; lv++) {
+        const rng = lv === 1 ? seededRandom(getDailySeed()) : seededRandom(getDailySeed() + lv * 999);
+        const tcount = 42 + (lv - 1) * 6;
+        const bp = getBonusPositions(tcount, getBonusCount(lv), rng);
+        const tiles = generateLevelTiles(lv, 0, rng, bp);
+        allLevelTiles.push(tiles.map(t => t.letter));
+      }
+      const word = selectWordOfTheDay(allLevelTiles);
+      if (word) {
+        saveCachedWordOfTheDay(word);
+        wotdData.current = { date: getTodayKey(), word, found: false };
+      }
+    }
+  }
+  const [wotd, setWotd] = useState(wotdData.current?.word || null);
+  const [wotdFound, setWotdFound] = useState(wotdData.current?.found || false);
+  const [showWotdReminder, setShowWotdReminder] = useState(false);
+  const [wotdCelebration, setWotdCelebration] = useState(false);
   const [level, setLevel] = useState(() => {
     const lv = ss?.level || 1;
     // Hard cap: never load beyond level 5 unless bonus levels enabled
@@ -2301,6 +2390,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       const newLifetime = lifetimeRef.current + score;
       lifetimeRef.current = newLifetime; setLifetimePoints(newLifetime);
       if (isGuest) saveLifetimeData(newLifetime);
+      // ── Word of the Day check — award 1,000 bonus once per day ──
+      if (wotd && !wotdFound && currentWord.toUpperCase() === wotd.toUpperCase()) {
+        setWotdFound(true);
+        markWordOfTheDayFound();
+        const bonus = 1000;
+        totalRef.current += bonus; setTotalScore(totalRef.current);
+        lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
+        if (isGuest) saveLifetimeData(lifetimeRef.current);
+        // Trigger celebration
+        stopTimer();
+        setConfetti(true); setTimeout(() => setConfetti(false), 5000);
+        setWotdCelebration(true);
+        setTimeout(() => {
+          setWotdCelebration(false);
+          if (!pausedRef.current && !levelComplete) startTimer();
+        }, 5000);
+      }
       const newTiles = tiles.map(t => selected.includes(t.id) ? { ...t, used: true } : t);
       setTiles(newTiles);
       setLastValidEntry({ word: currentWord, score, tileIds: [...selected], levelScoreDelta: score });
@@ -2466,6 +2572,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
     levelResetCount.current = 0; resetLevelTimer(); startTimer(); setNewBestTime(false);
+    // Show Word of the Day reminder toast if not yet found
+    if (wotd && !wotdFound) setShowWotdReminder(true);
     if (newLevel === 5) awardBadge("level_5");
   };
 
@@ -2652,6 +2760,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
         </button>
+        {/* Word of the Day card */}
+        {wotd && (
+          <div style={{marginTop:18,width:"100%",background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:14,padding:"14px 16px",textAlign:"center"}}>
+            <div style={{fontSize:10,color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
+            <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:6,fontFamily:"Georgia,serif"}}>{wotd}</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>
+              {wotdFound ? "✓ You found it! +1,000 pts" : "Find & spell it during today's game for a 1,000 pt bonus!"}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -2757,6 +2875,28 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         <button onClick={()=>setShowInstallPrompt(true)} style={{position:"fixed",bottom:14,right:14,zIndex:99,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"none",borderRadius:24,padding:"8px 14px",color:"#fff",fontFamily:"Georgia,serif",fontSize:11,fontWeight:"bold",cursor:"pointer",display:"flex",alignItems:"center",gap:5,boxShadow:"0 4px 16px rgba(167,139,250,0.5)"}}>
           📱 Install Help
         </button>
+      )}
+
+      {/* Word of the Day reminder toast — shows at level start until found */}
+      {showWotdReminder && wotd && !wotdFound && (
+        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9500,background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:"18px 22px",boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:300,textAlign:"center",animation:"badgePop 0.4s forwards"}}>
+          <div style={{fontSize:10,color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
+          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:8}}>{wotd}</div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",marginBottom:12,lineHeight:1.5}}>Spell it for a <strong style={{color:"#fda085"}}>+1,000 pt bonus!</strong></div>
+          <button onClick={()=>setShowWotdReminder(false)} style={{padding:"8px 22px",borderRadius:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",fontFamily:"Georgia,serif",fontSize:12,fontWeight:"bold",cursor:"pointer"}}>Got it ✓</button>
+        </div>
+      )}
+
+      {/* Word of the Day celebration — fires when player spells the WoD */}
+      {wotdCelebration && (
+        <div style={{position:"fixed",inset:0,zIndex:9650,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
+          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:"24px 32px",boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"badgePop 5s forwards"}}>
+            <div style={{fontSize:42,marginBottom:6}}>🎯✨</div>
+            <div style={{fontSize:14,color:"#f6d365",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>WORD OF THE DAY!</div>
+            <div style={{fontSize:26,fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:8}}>{wotd}</div>
+            <div style={{fontSize:18,fontWeight:"bold",color:"#6ee7b7"}}>+1,000 pts!</div>
+          </div>
+        </div>
       )}
 
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 5s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
@@ -3746,7 +3886,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>
             Level 1 · Fresh tiles · Good luck! 🍀
           </div>
-          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); startTimer(); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:16,fontWeight:"bold",border:"none"}}>
+          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); startTimer(); if (wotd && !wotdFound) setShowWotdReminder(true); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:16,fontWeight:"bold",border:"none"}}>
             Let's Go! 🎯
           </button>
         </div>

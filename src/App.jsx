@@ -306,10 +306,15 @@ function getCachedWordOfTheDay() {
 function saveCachedWordOfTheDay(word) {
   try { localStorage.setItem("ll_wotd", JSON.stringify({ date: getTodayKey(), word, found: false })); } catch {}
 }
-function markWordOfTheDayFound() {
+function markWordOfTheDayFound(level, score) {
   try {
     const cached = getCachedWordOfTheDay();
-    if (cached) { cached.found = true; localStorage.setItem("ll_wotd", JSON.stringify(cached)); }
+    if (cached) {
+      cached.found = true;
+      cached.foundLevel = level;
+      cached.foundScore = score;
+      localStorage.setItem("ll_wotd", JSON.stringify(cached));
+    }
   } catch {}
 }
 
@@ -1823,6 +1828,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [wotdFound, setWotdFound] = useState(wotdData.current?.found || false);
   const [showWotdReminder, setShowWotdReminder] = useState(false);
   const [wotdCelebration, setWotdCelebration] = useState(false);
+  const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
+    try {
+      const cached = getCachedWordOfTheDay();
+      return cached?.foundLevel ? { level: cached.foundLevel, score: cached.foundScore } : null;
+    } catch { return null; }
+  });
   // If no cached WoD, compute it in background after mount so it doesn't block the UI
   useEffect(() => {
     if (wotdData.current) return; // already cached
@@ -2081,7 +2092,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         tiles, submitted: submittedRef.current, perfectDay: perfectDayRef.current,
         tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
         totalTime: totalTimeRef.current, longestWordToday, levelComplete, newBestTime, undoUsed,
-        gameIndex: gameIndexRef.current,
+        gameIndex: gameIndexRef.current, wotdFound: wotdFound,
       }),
       saveGameState(user.id, {
         playerName: playerNameRef.current || playerName || '',
@@ -2274,8 +2285,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const longestW = allValid.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
     const sharer = playerName ? `${playerName} had a 🌈🏆 Perfect Day on LetterLoot!` : "🌈🏆 PERFECT DAY on LetterLoot!";
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️${bonusLine}\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
-  }, [playerName, perfectDayStreakBonus]);
+    const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — L${wotdFoundDetails.level}, ${wotdFoundDetails.score} pts` : "";
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️${bonusLine}${wotdLine}\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
+  }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
 
   const fetchLeaderboard = async () => {
     try {
@@ -2286,15 +2298,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const timer = setTimeout(() => ctrl.abort(), 8000);
         return fetch(url, { headers:hdrs, signal:ctrl.signal }).finally(() => clearTimeout(timer));
       };
-      const [gsRes, todayRes, weekRes] = await Promise.all([
+      const [gsRes, todayRes, weekRes, wotdAllRes] = await Promise.all([
         fetchWithAbort(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`),
-        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
-        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today,wotd_found&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,wotd_found&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,wotd_found&wotd_found=eq.true&limit=2000`),
       ]);
       const gs = gsRes.ok ? await gsRes.json() : [];
       const todaySessions = todayRes.ok ? await todayRes.json() : [];
       const weekSessions = weekRes.ok ? await weekRes.json() : [];
-      return { gs, todaySessions, weekSessions };
+      const wotdAllSessions = wotdAllRes.ok ? await wotdAllRes.json() : [];
+      return { gs, todaySessions, weekSessions, wotdAllSessions };
     } catch { return null; }
   };
 
@@ -2396,7 +2410,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       // ── Word of the Day check — award 1,000 bonus once per day ──
       if (wotd && !wotdFound && currentWord.toUpperCase() === wotd.toUpperCase()) {
         setWotdFound(true);
-        markWordOfTheDayFound();
+        setWotdFoundDetails({ level, score });
+        markWordOfTheDayFound(level, score);
         const bonus = 1000;
         totalRef.current += bonus; setTotalScore(totalRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
@@ -3056,6 +3071,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
           <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
           <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+          {wotdFoundDetails && (
+            <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:12,color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
+              <span style={{fontSize:11,color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
+              <strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
+            </div>
+          )}
           <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
             🏆 Check Leaderboard
           </button>
@@ -3101,6 +3122,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             Score: {totalRef.current} pts · Time: {formatTime(totalTimeRef.current)}<br/>
             💰 Lifetime: {lifetimePoints.toLocaleString()} pts
           </div>
+          {wotdFoundDetails && (
+            <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:12,color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
+              <span style={{fontSize:11,color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
+              <strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
+            </div>
+          )}
           <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
             Perfect Days are tracked daily toward your total — but every one is worth celebrating!
           </div>
@@ -3522,7 +3549,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
-            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"wotd",label:"🎯 WoD"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
               <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:8,background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
@@ -3544,7 +3571,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           {!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:"30px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
 
           {!leaderboardLoading&&leaderboardData&&(()=>{
-            const { gs=[], todaySessions=[], weekSessions=[] } = leaderboardData;
+            const { gs=[], todaySessions=[], weekSessions=[], wotdAllSessions=[] } = leaderboardData;
             const medal = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
             const isMe = (name) => name === playerName;
             const rowStyle = (name, i) => ({
@@ -3559,16 +3586,44 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             const todayBestById = {};
             const todayPerfectById = {};
             const todayLongestById = {};
+            const todayWotdById = {};
             todaySessions.forEach(s=>{
               if(!todayBestById[s.player_id]||s.total_score>todayBestById[s.player_id]) todayBestById[s.player_id]=s.total_score;
               if(s.perfect_day) todayPerfectById[s.player_id]=true;
               if(s.longest_word_today&&(!todayLongestById[s.player_id]||s.longest_word_today.length>todayLongestById[s.player_id].length)) todayLongestById[s.player_id]={word:s.longest_word_today,length:s.longest_word_today.length};
+              if(s.wotd_found) todayWotdById[s.player_id]=true;
             });
             const weekBestById = {};
             const weekPerfectById = {};
+            const weekWotdById = {};
             weekSessions.forEach(s=>{
               if(!weekBestById[s.player_id]||s.total_score>weekBestById[s.player_id]) weekBestById[s.player_id]=s.total_score;
               if(s.perfect_day) weekPerfectById[s.player_id]=(weekPerfectById[s.player_id]||0)+1;
+              if(s.wotd_found) weekWotdById[s.player_id]=(weekWotdById[s.player_id]||0)+1;
+            });
+            // ── All-time WoD aggregation ──
+            const wotdAllById = {};
+            const wotdDatesById = {};
+            wotdAllSessions.forEach(s=>{
+              if(s.wotd_found) {
+                wotdAllById[s.player_id]=(wotdAllById[s.player_id]||0)+1;
+                if(!wotdDatesById[s.player_id]) wotdDatesById[s.player_id]=[];
+                wotdDatesById[s.player_id].push(s.date_key);
+              }
+            });
+            // Compute current WoD streaks (consecutive days finding WoD up to today)
+            const wotdStreakById = {};
+            Object.keys(wotdDatesById).forEach(pid => {
+              const dates = wotdDatesById[pid].sort();
+              let streak = 0;
+              const today = new Date(); today.setHours(0,0,0,0);
+              for (let i = 0; i < 365; i++) {
+                const d = new Date(today); d.setDate(d.getDate() - i);
+                const key = d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
+                if (dates.includes(key)) streak++;
+                else if (i > 0) break;
+              }
+              wotdStreakById[pid] = streak;
             });
 
             const empty = <div style={{textAlign:"center",padding:"20px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>No data yet for this period</div>;
@@ -3684,6 +3739,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               if (leaderboardPeriod==="alltime") rows = [...gs].filter(g=>g.stats?.perfectDaysAllTime>0).sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,10).map(g=>({name:g.player_name,val:g.stats.perfectDaysAllTime,suffix:"days",valColor:"#6ee7b7"}));
               if (leaderboardPeriod==="daily") rows = [...gs].filter(g=>todayPerfectById[g.player_id]).map(g=>({name:g.player_name,val:"🌈🏆",valColor:"#6ee7b7"})).slice(0,10);
               if (leaderboardPeriod==="weekly") rows = [...gs].filter(g=>weekPerfectById[g.player_id]>0).sort((a,b)=>(weekPerfectById[b.player_id]||0)-(weekPerfectById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekPerfectById[g.player_id],suffix:"days",valColor:"#6ee7b7"}));
+              if (!rows.length) return <div>{empty}{yourBest}</div>;
+              return <div>{renderRows(rows)}{yourBest}</div>;
+            }
+
+            // ── WORD OF THE DAY ──
+            if (leaderboardTab==="wotd") {
+              let rows = [];
+              if (leaderboardPeriod==="alltime") {
+                rows = [...gs].filter(g=>(wotdAllById[g.player_id]||0)>0).sort((a,b)=>(wotdAllById[b.player_id]||0)-(wotdAllById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:wotdAllById[g.player_id],suffix:"days",valColor:"#a78bfa",sub:wotdStreakById[g.player_id]>1?"🎯 On "+wotdStreakById[g.player_id]+"d streak":null}));
+              }
+              if (leaderboardPeriod==="daily") {
+                rows = [...gs].filter(g=>todayWotdById[g.player_id]).map(g=>({name:g.player_name,val:"🎯",valColor:"#a78bfa"})).slice(0,10);
+              }
+              if (leaderboardPeriod==="weekly") {
+                rows = [...gs].filter(g=>(weekWotdById[g.player_id]||0)>0).sort((a,b)=>(weekWotdById[b.player_id]||0)-(weekWotdById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekWotdById[g.player_id],suffix:"days",valColor:"#a78bfa"}));
+              }
               if (!rows.length) return <div>{empty}{yourBest}</div>;
               return <div>{renderRows(rows)}{yourBest}</div>;
             }

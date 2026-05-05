@@ -2220,6 +2220,21 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
     setPerfectDayStreakBonus(0); setShowStreakBonus(false); setStreakBonusCount(1);
     levelResetCount.current = 0; clearedLevelsRef.current = {};
+    // ── Multi-game WoD: re-sync from localStorage on reset ──
+    // Player can attempt WoD across multiple games per day until they find it.
+    // Once found, it stays found (sticky). Each new game: if not yet found,
+    // the reminder fires again and they have a new chance.
+    try {
+      const cachedWotd = getCachedWordOfTheDay();
+      if (cachedWotd) {
+        setWotdFound(cachedWotd.found || false);
+        if (cachedWotd.found && cachedWotd.foundLevel) {
+          setWotdFoundDetails({ level: cachedWotd.foundLevel, score: cachedWotd.foundScore });
+        } else {
+          setWotdFoundDetails(null);
+        }
+      }
+    } catch {}
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0); startTimer();
     gameIndexRef.current += 1;
@@ -2286,7 +2301,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const sharer = playerName ? `${playerName} had a 🌈🏆 Perfect Day on LetterLoot!` : "🌈🏆 PERFECT DAY on LetterLoot!";
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
     const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — L${wotdFoundDetails.level}, ${wotdFoundDetails.score} pts` : "";
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts · Time: ${formatTime(totalTimeRef.current)} ⏱️${bonusLine}${wotdLine}\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${wotdLine}\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
   }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
 
   const fetchLeaderboard = async () => {
@@ -2607,6 +2622,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const dismissWotdReminder = () => {
     setShowWotdReminder(false);
     if (!pausedRef.current && !levelComplete) startTimer();
+  };
+
+  // Smart return-to-game routing — if game is complete (Level 5 done),
+  // bring back the appropriate "Play Again?" screen. Otherwise just go to play tab.
+  const returnToGame = () => {
+    setTab("play");
+    // If they had a Perfect Day this session and aren't seeing the modal, restore it
+    if (perfectDayRef.current && !perfectDayAchieved) {
+      setPerfectDayAchieved(true);
+      return;
+    }
+    // If game is complete (Level 5 finished today), show the Repeat-Perfect/Farewell screen
+    try {
+      if (localStorage.getItem("ll_completed_today") === getTodayKey()) {
+        setShowRepeatPerfect(true);
+      }
+    } catch {}
   };
 
   const handleBuyLevel = () => {
@@ -3070,7 +3102,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={130}/></div>
           <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
           <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
-          <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts · Time: {formatTime(totalTimeRef.current)}<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+          <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
           {wotdFoundDetails && (
             <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:12,color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
               <span style={{fontSize:11,color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
@@ -3119,7 +3151,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           )}
           <div style={{marginTop:10,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
             🏆 {playerName||"You"}<br/>{getShortDate()}<br/>
-            Score: {totalRef.current} pts · Time: {formatTime(totalTimeRef.current)}<br/>
+            Score: {totalRef.current} pts<br/>
             💰 Lifetime: {lifetimePoints.toLocaleString()} pts
           </div>
           {wotdFoundDetails && (
@@ -3207,7 +3239,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{padding:"4px 10px",borderRadius:12,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</div>
         </div>
 
-        {/* ROW 3: TIME · Level 00:00 · Total 00:00 · Pause */}
+        {/* ROW 3: TIME · Level 00:00 · Total 00:00 · Pause — only on play tab */}
+        {tab==="play" && (
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.07)",borderRadius:7,padding:"3px 8px",marginBottom:3,border:"1px solid rgba(255,255,255,0.18)",gap:4}}>
           <span style={{fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
           <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Level</span>
@@ -3218,8 +3251,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
         </div>
+        )}
 
-        {/* ROW 4: Remaining · Vowels · Consonants */}
+        {/* ROW 4: Remaining · Vowels · Consonants — only on play tab */}
+        {tab==="play" && (
         <div style={{display:"flex",gap:4,marginBottom:3}}>
           <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
             <div style={{fontSize:12,fontWeight:"bold",color:"#60a5fa"}}>{availableTiles.length}</div>
@@ -3234,6 +3269,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>CONSON.</div>
           </div>
         </div>
+        )}
 
       </div>
 
@@ -3308,7 +3344,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── BADGES TAB ── */}
       {tab==="badges"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             ✏️ Return to Game
           </button>
 
@@ -3336,7 +3372,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {/* ── HISTORY TAB ── */}
       {tab==="history"&&(()=>{
         const history = getDailyHistory();
-        const returnButton = (<button className="ll-btn" onClick={()=>{ setTab("play"); if(perfectDayRef.current && !perfectDayAchieved) setPerfectDayAchieved(true); }} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>✏️ Return to Game</button>);
+        const returnButton = (<button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>✏️ Return to Game</button>);
         const allGames = history.games || [];
         const hasAny = allGames.some(g => g && g.length > 0);
         const grandTotal = allGames.flat().filter(s=>s&&s.valid).reduce((a,s)=>a+s.score,0);
@@ -3378,7 +3414,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       {tab==="stats"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           <button className="ll-btn" onClick={()=>setTab("badges")} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(240,147,251,0.25),rgba(167,139,250,0.2))",border:"2px solid rgba(240,147,251,0.6)",color:"#f093fb",fontSize:14,fontWeight:"bold",marginBottom:8,letterSpacing:1}}>🏅 View My Badges — {lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length} Earned</button>
-          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             ✏️ Return to Game
           </button>
 
@@ -3785,7 +3821,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           )}
           <div style={{marginTop:10,display:"flex",gap:8}}>
             <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:"7px",borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:10,fontWeight:"bold"}}>↺ Refresh</button>
-            <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); } setTab("play"); }} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"✏️ Return to Your Game"}</button>
+            <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); setTab("play"); } else { returnToGame(); } }} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"✏️ Return to Your Game"}</button>
           </div>
         </div>
       )}
@@ -3799,7 +3835,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>HINTS & TIPS</div>
             <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>Play smarter · Loot harder</div>
           </div>
-          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             ✏️ Return to Game
           </button>
 
@@ -3828,7 +3864,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           ))}
 
           <div style={{textAlign:"center",marginBottom:16,marginTop:4}}>
-            <button className="ll-btn" onClick={()=>setTab("play")} style={{padding:"11px 28px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",letterSpacing:1}}>
+            <button className="ll-btn" onClick={returnToGame} style={{padding:"11px 28px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",letterSpacing:1}}>
               ✏️ Back to Playing!
             </button>
           </div>

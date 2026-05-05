@@ -1481,8 +1481,6 @@ function AdminScreen({ onExit }) {
       const td = new Date(); const today = td.getFullYear()+'-'+(td.getMonth()+1)+'-'+td.getDate();
       const tdAgo7 = new Date(Date.now()-7*86400000); const weekAgo = tdAgo7.getFullYear()+'-'+(tdAgo7.getMonth()+1)+'-'+tdAgo7.getDate();
       const tdAgo14 = new Date(Date.now()-14*86400000); const twoWeeksAgo = tdAgo14.getFullYear()+'-'+(tdAgo14.getMonth()+1)+'-'+tdAgo14.getDate();
-      const twoWeeksAgo = new Date(Date.now()-14*86400000).toISOString().split('T')[0];
-      const weekAgo = new Date(Date.now()-7*86400000).toISOString().split('T')[0];
       const todaySessions = await adminQuery('daily_sessions', 'player_id,date_key,total_score,perfect_day', `&date_key=eq.${today}`);
       const recentSessions = await adminQuery('daily_sessions', 'date_key', `&date_key=gte.${twoWeeksAgo}`);
       const weekSessions = await adminQuery('daily_sessions', 'player_id,date_key', `&date_key=gte.${weekAgo}`);

@@ -1796,13 +1796,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   };
   const handleInstallClose = () => {
     setShowInstallPrompt(false);
-    // If we came from the welcome flow (Ready screen not yet shown), advance to it
-    if (!showReadyToPlay && !showIntro) setShowReadyToPlay(true);
   };
   const handleInstallPermanentDismiss = () => {
     try { localStorage.setItem("ll_install_dismissed", "permanent"); } catch {}
     setShowInstallPrompt(false);
-    if (!showReadyToPlay && !showIntro) setShowReadyToPlay(true);
   };
   // Show floating help button only if not installed and not on desktop
   const showInstallHelpFab = !isInstalled() && detectPlatform() !== "desktop" && localStorage.getItem("ll_install_dismissed") !== "permanent";
@@ -2814,13 +2811,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           // Show ready prompt — timer starts only when player taps Ready
           stopTimer();
           setShowIntro(false);
-          // If install prompt should be shown, show it first; otherwise go straight to ready
+          // Show the "Ready, Daryl?" screen (with green Let's Go) for non-reset entries too
+          setShowReadyScreen(true);
+          // If install prompt should be shown, show it first
           if (shouldShowInstallPrompt) {
             trackInstallShown();
             setShowInstallPrompt(true);
-          } else {
-            setShowReadyToPlay(true);
           }
+          // No setShowReadyToPlay — the showReadyScreen ("Ready, Daryl?")
+          // already handles the pre-game prompt with timer-on-tap behavior.
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           ✏️ PLAY NOW
         </button>

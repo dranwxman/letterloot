@@ -1817,32 +1817,35 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const ss = useRef(loadLocalSession()).current;
   // ── Word of the Day: precompute from all 5 levels' potential tiles ──
-  const wotdData = useRef(null);
-  if (wotdData.current === null) {
-    const cached = getCachedWordOfTheDay();
-    if (cached) {
-      wotdData.current = cached;
-    } else {
-      // Generate tiles for all 5 levels using same daily seed approach
-      const allLevelTiles = [];
-      for (let lv = 1; lv <= 5; lv++) {
-        const rng = lv === 1 ? seededRandom(getDailySeed()) : seededRandom(getDailySeed() + lv * 999);
-        const tcount = 42 + (lv - 1) * 6;
-        const bp = getBonusPositions(tcount, getBonusCount(lv), rng);
-        const tiles = generateLevelTiles(lv, 0, rng, bp);
-        allLevelTiles.push(tiles.map(t => t.letter));
-      }
-      const word = selectWordOfTheDay(allLevelTiles);
-      if (word) {
-        saveCachedWordOfTheDay(word);
-        wotdData.current = { date: getTodayKey(), word, found: false };
-      }
-    }
-  }
+  // ── Word of the Day: load from cache synchronously, compute lazily in background ──
+  const wotdData = useRef(getCachedWordOfTheDay() || null);
   const [wotd, setWotd] = useState(wotdData.current?.word || null);
   const [wotdFound, setWotdFound] = useState(wotdData.current?.found || false);
   const [showWotdReminder, setShowWotdReminder] = useState(false);
   const [wotdCelebration, setWotdCelebration] = useState(false);
+  // If no cached WoD, compute it in background after mount so it doesn't block the UI
+  useEffect(() => {
+    if (wotdData.current) return; // already cached
+    const t = setTimeout(() => {
+      try {
+        const allLevelTiles = [];
+        for (let lv = 1; lv <= 5; lv++) {
+          const rng = lv === 1 ? seededRandom(getDailySeed()) : seededRandom(getDailySeed() + lv * 999);
+          const tcount = 42 + (lv - 1) * 6;
+          const bp = getBonusPositions(tcount, getBonusCount(lv), rng);
+          const tiles = generateLevelTiles(lv, 0, rng, bp);
+          allLevelTiles.push(tiles.map(t => t.letter));
+        }
+        const word = selectWordOfTheDay(allLevelTiles);
+        if (word) {
+          saveCachedWordOfTheDay(word);
+          wotdData.current = { date: getTodayKey(), word, found: false };
+          setWotd(word);
+        }
+      } catch(e) { console.warn("WoD computation failed:", e); }
+    }, 100); // delay 100ms so initial render completes first
+    return () => clearTimeout(t);
+  }, []);
   const [level, setLevel] = useState(() => {
     const lv = ss?.level || 1;
     // Hard cap: never load beyond level 5 unless bonus levels enabled
@@ -2572,9 +2575,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
     levelResetCount.current = 0; resetLevelTimer(); startTimer(); setNewBestTime(false);
-    // Show Word of the Day reminder toast if not yet found
-    if (wotd && !wotdFound) setShowWotdReminder(true);
+    if (wotd && !wotdFound) showWotdReminderWithPause();
     if (newLevel === 5) awardBadge("level_5");
+  };
+
+  // WoD reminder helpers — pause timer, show 5s, then resume
+  const showWotdReminderWithPause = () => {
+    if (!wotd || wotdFound) return;
+    stopTimer();
+    setShowWotdReminder(true);
+    setTimeout(() => {
+      setShowWotdReminder(false);
+      if (!pausedRef.current && !levelComplete) startTimer();
+    }, 5000);
+  };
+  const dismissWotdReminder = () => {
+    setShowWotdReminder(false);
+    if (!pausedRef.current && !levelComplete) startTimer();
   };
 
   const handleBuyLevel = () => {
@@ -2809,6 +2826,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         @keyframes pop{0%{transform:translate(-50%,-50%) scale(0.6);opacity:0}60%{transform:translate(-50%,-50%) scale(1.08)}100%{transform:translate(-50%,-50%) scale(1);opacity:1}}
         @keyframes slideUp{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
         @keyframes badgePop{0%{transform:translateX(-50%) translateY(40px) scale(0.8);opacity:0}8%{transform:translateX(-50%) translateY(0) scale(1.05);opacity:1}90%{transform:translateX(-50%) translateY(0) scale(1);opacity:1}100%{transform:translateX(-50%) translateY(-20px) scale(0.9);opacity:0}}
+        @keyframes wotdPop{0%{transform:scale(0.8) translateY(40px);opacity:0}8%{transform:scale(1.05) translateY(0);opacity:1}90%{transform:scale(1) translateY(0);opacity:1}100%{transform:scale(0.9) translateY(-20px);opacity:0}}
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes ll-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
         @keyframes rainbow{0%{color:#ff0000}16%{color:#ff8800}33%{color:#ffff00}50%{color:#00ff00}66%{color:#0088ff}83%{color:#8800ff}100%{color:#ff0000}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
@@ -2879,18 +2897,20 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
       {/* Word of the Day reminder toast — shows at level start until found */}
       {showWotdReminder && wotd && !wotdFound && (
-        <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",zIndex:9500,background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:"18px 22px",boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:300,textAlign:"center",animation:"badgePop 0.4s forwards"}}>
-          <div style={{fontSize:10,color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
-          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:8}}>{wotd}</div>
-          <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",marginBottom:12,lineHeight:1.5}}>Spell it for a <strong style={{color:"#fda085"}}>+1,000 pt bonus!</strong></div>
-          <button onClick={()=>setShowWotdReminder(false)} style={{padding:"8px 22px",borderRadius:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",fontFamily:"Georgia,serif",fontSize:12,fontWeight:"bold",cursor:"pointer"}}>Got it ✓</button>
+        <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",pointerEvents:"none"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:"18px 22px",boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:300,width:"100%",textAlign:"center",pointerEvents:"auto"}}>
+            <div style={{fontSize:10,color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
+            <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:8}}>{wotd}</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",marginBottom:12,lineHeight:1.5}}>Spell it for a <strong style={{color:"#fda085"}}>+1,000 pt bonus!</strong></div>
+            <button onClick={dismissWotdReminder} style={{padding:"8px 22px",borderRadius:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",fontFamily:"Georgia,serif",fontSize:12,fontWeight:"bold",cursor:"pointer"}}>Got it ✓</button>
+          </div>
         </div>
       )}
 
       {/* Word of the Day celebration — fires when player spells the WoD */}
       {wotdCelebration && (
-        <div style={{position:"fixed",inset:0,zIndex:9650,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none"}}>
-          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:"24px 32px",boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"badgePop 5s forwards"}}>
+        <div style={{position:"fixed",inset:0,zIndex:9650,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:"24px 32px",boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:340,width:"100%"}}>
             <div style={{fontSize:42,marginBottom:6}}>🎯✨</div>
             <div style={{fontSize:14,color:"#f6d365",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>WORD OF THE DAY!</div>
             <div style={{fontSize:26,fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:8}}>{wotd}</div>
@@ -3886,7 +3906,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>
             Level 1 · Fresh tiles · Good luck! 🍀
           </div>
-          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); startTimer(); if (wotd && !wotdFound) setShowWotdReminder(true); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:16,fontWeight:"bold",border:"none"}}>
+          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); startTimer(); if (wotd && !wotdFound) showWotdReminderWithPause(); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:16,fontWeight:"bold",border:"none"}}>
             Let's Go! 🎯
           </button>
         </div>

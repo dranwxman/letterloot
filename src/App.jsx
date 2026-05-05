@@ -2396,12 +2396,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setTimeout(() => setFlash(null), 2000);
     if (!valid) {
       setShake(true); setTimeout(() => setShake(false), 500);
-      // Show report option for rejected words 3+ letters
-      if (currentWord.length >= 3) {
-        if (result.likelyValid) { setTimeout(() => { setRejectedWord(currentWord); setReportSent(false); }, 2000); }
-      }
+      // Word reporting moved to History page — no in-game popup
     }
-    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate };
+    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false };
     const newSubmitted = [...submittedRef.current, newEntry];
     submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
     appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current);
@@ -2728,9 +2725,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   </button>
                 )}
                 {!isGuest && (
-                  <div style={{marginTop:4,fontSize:9,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>
-                    🏆 Leaderboard — Registered players only
-                  </div>
+                  <button onClick={()=>{ setShowIntro(false); setShowReadyScreen(false); setTab("leaderboard"); }} style={{marginTop:8,padding:"7px 14px",borderRadius:11,background:"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.18))",border:"1.5px solid rgba(246,211,101,0.6)",color:"#f6d365",fontSize:11,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",letterSpacing:0.5,boxShadow:"0 0 12px rgba(246,211,101,0.2)"}}>
+                    🏆 View Leaderboard →
+                  </button>
                 )}
                 {isGuest && (
                   <div style={{marginTop:4,fontSize:9,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>
@@ -3385,18 +3382,40 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                     {allGames.filter(g=>g&&g.length>0).length > 1 && (
                       <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.35)",letterSpacing:2,padding:"6px 0",marginBottom:2}}>— Game {gi+1} —</div>
                     )}
-                    {[...game].sort((a,b)=>(b.score||0)-(a.score||0)).map((s,i)=>(
+                    {[...game].sort((a,b)=>(b.score||0)-(a.score||0)).map((s,i)=>{
+                      // Track which words have been reported (so button can show "Reported")
+                      const reportedKey = "ll_reported_words";
+                      const getReported = () => { try { return JSON.parse(localStorage.getItem(reportedKey)||"[]"); } catch { return []; } };
+                      const isReported = getReported().includes(s.word.toLowerCase());
+                      // Only show report button for invalid words that the secondary dictionary thought were valid
+                      const canReport = !s.valid && s.likelyValid && !isReported;
+                      return (
                       <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:10,padding:"8px 12px",marginBottom:4}}>
-                        <div>
+                        <div style={{flex:1}}>
                           <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}</div>
                           <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:1}}>{s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
+                          {!s.valid && (canReport ? (
+                            <button onClick={async (e)=>{
+                              e.stopPropagation();
+                              try {
+                                await supabase.from("word_reports").insert({ word: s.word.toLowerCase(), player_name: playerName||"Guest" });
+                                const reported = getReported();
+                                if (!reported.includes(s.word.toLowerCase())) reported.push(s.word.toLowerCase());
+                                localStorage.setItem(reportedKey, JSON.stringify(reported));
+                                setDailyHistory({...getDailyHistory()}); // force re-render
+                              } catch(err) { console.error("Word report error:", err); }
+                            }} style={{marginTop:6,padding:"4px 10px",borderRadius:8,background:"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.18))",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:10,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>📝 Report for review</button>
+                          ) : isReported ? (
+                            <div style={{marginTop:6,fontSize:10,color:"#6ee7b7"}}>✓ Reported — thanks!</div>
+                          ) : null)}
                         </div>
-                        <div style={{textAlign:"right"}}>
+                        <div style={{textAlign:"right",marginLeft:8}}>
                           <div style={{fontSize:17,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
                           {s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>pts</div>}
                         </div>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : null)}
                 <div style={{textAlign:"center",padding:"10px",background:"rgba(255,255,255,0.07)",borderRadius:10,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>

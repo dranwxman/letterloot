@@ -3387,8 +3387,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                       const reportedKey = "ll_reported_words";
                       const getReported = () => { try { return JSON.parse(localStorage.getItem(reportedKey)||"[]"); } catch { return []; } };
                       const isReported = getReported().includes(s.word.toLowerCase());
-                      // Only show report button for invalid words that the secondary dictionary thought were valid
-                      const canReport = !s.valid && s.likelyValid && !isReported;
+                      // Allow reporting of ANY invalid word (3+ letters) — admin reviews
+                      const canReport = !s.valid && s.word.length >= 3 && !isReported;
                       return (
                       <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:10,padding:"8px 12px",marginBottom:4}}>
                         <div style={{flex:1}}>

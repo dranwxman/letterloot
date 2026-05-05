@@ -1478,12 +1478,14 @@ function AdminScreen({ onExit }) {
     setLoading(true);
     try {
       const gameStates = await adminQuery('game_state', 'player_name,lifetime_points,last_played_date,current_streak,longest_streak,stats,badges', '&order=lifetime_points.desc');
-      const today = new Date().toISOString().split('T')[0];
+      const td = new Date(); const today = td.getFullYear()+'-'+(td.getMonth()+1)+'-'+td.getDate();
+      const tdAgo7 = new Date(Date.now()-7*86400000); const weekAgo = tdAgo7.getFullYear()+'-'+(tdAgo7.getMonth()+1)+'-'+tdAgo7.getDate();
+      const tdAgo14 = new Date(Date.now()-14*86400000); const twoWeeksAgo = tdAgo14.getFullYear()+'-'+(tdAgo14.getMonth()+1)+'-'+tdAgo14.getDate();
       const twoWeeksAgo = new Date(Date.now()-14*86400000).toISOString().split('T')[0];
       const weekAgo = new Date(Date.now()-7*86400000).toISOString().split('T')[0];
-      const todaySessions = await adminQuery('daily_sessions', 'user_id,session_date,total_score,perfect_day', `&session_date=eq.${today}`);
-      const recentSessions = await adminQuery('daily_sessions', 'session_date', `&session_date=gte.${twoWeeksAgo}`);
-      const weekSessions = await adminQuery('daily_sessions', 'user_id,session_date', `&session_date=gte.${weekAgo}`);
+      const todaySessions = await adminQuery('daily_sessions', 'player_id,date_key,total_score,perfect_day', `&date_key=eq.${today}`);
+      const recentSessions = await adminQuery('daily_sessions', 'date_key', `&date_key=gte.${twoWeeksAgo}`);
+      const weekSessions = await adminQuery('daily_sessions', 'player_id,date_key', `&date_key=gte.${weekAgo}`);
       const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
       const wordReports = await adminQuery('word_reports', '*', '&order=reported_at.desc&limit=50').catch(()=>[]);
       // Build top 25 longest words and top word scores from stats
@@ -1536,7 +1538,7 @@ function AdminScreen({ onExit }) {
   const gs = data?.gameStates || [];
   const total = gs.length;
   const playedToday = data?.todaySessions?.length || 0;
-  const newThisWeek = new Set((data?.weekSessions||[]).map(s=>s.user_id)).size;
+  const newThisWeek = new Set((data?.weekSessions||[]).map(s=>s.player_id)).size;
   const perfectTotal = gs.reduce((a,g)=>a+(g.stats?.perfectDaysAllTime||0),0);
   const guestPlays = data?.guestPlays || 0;
   const longestStreak = gs.reduce((a,g)=>Math.max(a,g.longest_streak||0),0);
@@ -1546,11 +1548,11 @@ function AdminScreen({ onExit }) {
   const chartLabels = [];
   for(let i=13;i>=0;i--){
     const d=new Date(Date.now()-i*86400000);
-    const key=d.toISOString().split('T')[0];
+    const key=d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();
     chartCounts[key]=0;
     chartLabels.push({key,label:d.toLocaleDateString('en-US',{weekday:'short'})});
   }
-  (data?.recentSessions||[]).forEach(s=>{ if(chartCounts[s.session_date]!==undefined) chartCounts[s.session_date]++; });
+  (data?.recentSessions||[]).forEach(s=>{ if(chartCounts[s.date_key]!==undefined) chartCounts[s.date_key]++; });
   const chartMax = Math.max(...Object.values(chartCounts),1);
 
   return (
@@ -3398,12 +3400,29 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                             <button onClick={async (e)=>{
                               e.stopPropagation();
                               try {
-                                await supabase.from("word_reports").insert({ word: s.word.toLowerCase(), player_name: playerName||"Guest" });
+                                const { data, error } = await supabase
+                                  .from("word_reports")
+                                  .insert({ word: s.word.toLowerCase(), player_name: playerName||"Guest" })
+                                  .select();
+                                if (error) {
+                                  console.error("Word report failed:", error);
+                                  alert("Report failed: " + (error.message || JSON.stringify(error)));
+                                  return;
+                                }
+                                if (!data || data.length === 0) {
+                                  console.error("Word report: no row returned", data);
+                                  alert("Report submitted but no confirmation received. Please try again.");
+                                  return;
+                                }
+                                console.log("Word report success:", data);
                                 const reported = getReported();
                                 if (!reported.includes(s.word.toLowerCase())) reported.push(s.word.toLowerCase());
                                 localStorage.setItem(reportedKey, JSON.stringify(reported));
-                                setDailyHistory({...getDailyHistory()}); // force re-render
-                              } catch(err) { console.error("Word report error:", err); }
+                                setDailyHistory({...getDailyHistory()});
+                              } catch(err) { 
+                                console.error("Word report exception:", err);
+                                alert("Report failed: " + (err.message || "network error"));
+                              }
                             }} style={{marginTop:6,padding:"4px 10px",borderRadius:8,background:"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.18))",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:10,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>📝 Report for review</button>
                           ) : isReported ? (
                             <div style={{marginTop:6,fontSize:10,color:"#6ee7b7"}}>✓ Reported — thanks!</div>

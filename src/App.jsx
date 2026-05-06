@@ -1709,7 +1709,7 @@ function AdminScreen({ onExit }) {
                             headers:{apikey:ADMIN_ANON_KEY,Authorization:`Bearer ${ADMIN_ANON_KEY}`,'Content-Type':'application/json',Prefer:'return=minimal'},
                             body:JSON.stringify({status:'approved'})
                           });
-                          if(!res.ok){alert('Approve failed: '+res.status);return;}
+                          if(!res.ok){const errText=await res.text().catch(()=>'');alert('Approve failed: '+res.status+'\n'+errText);return;}
                           loadData();
                         }catch(e){alert('Approve error: '+e.message);}
                       }} style={{padding:'3px 8px',borderRadius:6,border:'1px solid rgba(110,231,183,0.5)',background:'rgba(110,231,183,0.15)',color:'#6ee7b7',fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✓ Approve</button>
@@ -1720,7 +1720,7 @@ function AdminScreen({ onExit }) {
                             headers:{apikey:ADMIN_ANON_KEY,Authorization:`Bearer ${ADMIN_ANON_KEY}`,'Content-Type':'application/json',Prefer:'return=minimal'},
                             body:JSON.stringify({status:'rejected'})
                           });
-                          if(!res.ok){alert('Reject failed: '+res.status);return;}
+                          if(!res.ok){const errText=await res.text().catch(()=>'');alert('Reject failed: '+res.status+'\n'+errText);return;}
                           loadData();
                         }catch(e){alert('Reject error: '+e.message);}
                       }} style={{padding:'3px 8px',borderRadius:6,border:'1px solid rgba(251,113,133,0.5)',background:'rgba(251,113,133,0.15)',color:'#fda4af',fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✗ Reject</button>

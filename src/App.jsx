@@ -318,10 +318,31 @@ function markWordOfTheDayFound(level, score) {
   } catch {}
 }
 
+// ── Dynamic approved words whitelist (loaded from Supabase) ──
+let APPROVED_WORDS = new Set();
+let approvedWordsLoaded = false;
+async function loadApprovedWords() {
+  if (approvedWordsLoaded) return;
+  try {
+    const url = "https://zcevszxmoggmcmvyxjtn.supabase.co/rest/v1/word_reports?select=word&status=eq.approved&limit=1000";
+    const r = await fetch(url, { headers: {
+      apikey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM",
+      Authorization: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM"
+    }});
+    if (r.ok) {
+      const rows = await r.json();
+      APPROVED_WORDS = new Set(rows.map(x => (x.word||"").toLowerCase()));
+      approvedWordsLoaded = true;
+    }
+  } catch(e) { console.warn("Failed to load approved words:", e); }
+}
+// Kick off load on module init
+loadApprovedWords();
+
 async function validateWord(word) {
   const key = word.toLowerCase();
-  // Check custom whitelist FIRST — overrides any cached "invalid" result
-  if (CUSTOM_WHITELIST.has(key)) {
+  // Check both static and dynamic whitelists FIRST
+  if (CUSTOM_WHITELIST.has(key) || APPROVED_WORDS.has(key)) {
     wordCache[key] = { valid: true, source: "whitelist" };
     return wordCache[key];
   }
@@ -810,7 +831,7 @@ function VisualTour({ onDone }) {
           {[
             { label:'TOP ROW', btns:[
               {k:'date',t:'📅 Date'},{k:'music',t:'♫ Music'},
-              {k:'reset',t:'↺ Reset Full Game'},{k:'tour',t:'↺ Tour'}
+              {k:'reset',t:'🆕 Start New Game'},{k:'tour',t:'↺ Tour'}
             ]},
             { label:'NAV TABS', btns:[
               {k:'history',t:'📜 History'},{k:'stats',t:'📊 Stats'},
@@ -1671,16 +1692,45 @@ function AdminScreen({ onExit }) {
         <div style={{background:'rgba(251,113,133,0.04)',borderRadius:14,padding:14,marginBottom:10,border:'1px solid rgba(251,113,133,0.2)'}}>
           <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📝 REPORTED WORDS ({(data?.wordReports||[]).length})</div>
           {!(data?.wordReports?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No words reported yet</div>:
-          <table style={tbl}><thead><tr><th style={th}>Word</th><th style={th}>Reported by</th><th style={th}>When</th></tr></thead><tbody>
+          <table style={tbl}><thead><tr><th style={th}>Word</th><th style={th}>Reported by</th><th style={th}>When</th><th style={th}>Status</th><th style={th}>Action</th></tr></thead><tbody>
             {(data.wordReports||[]).map((r,i)=>(
               <tr key={i}>
-                <td style={{...td,color:'#fda4af',fontWeight:'bold',letterSpacing:2}}>{r.word}</td>
+                <td style={{...td,color: r.status==='rejected'?'rgba(255,255,255,0.3)':'#fda4af',fontWeight:'bold',letterSpacing:2,textDecoration:r.status==='rejected'?'line-through':'none'}}>{r.word}</td>
                 <td style={td}>{r.player_name||'Guest'}</td>
                 <td style={{...td,color:'rgba(255,255,255,0.4)',fontSize:10}}>{new Date(r.reported_at).toLocaleString()}</td>
+                <td style={{...td,fontSize:10,color: r.status==='approved'?'#6ee7b7':r.status==='rejected'?'rgba(255,255,255,0.3)':'#f6d365'}}>{r.status==='approved'?'✓ Approved':r.status==='rejected'?'✗ Rejected':'⏳ Pending'}</td>
+                <td style={td}>
+                  {(!r.status||r.status==='pending')&&(
+                    <div style={{display:'flex',gap:4}}>
+                      <button onClick={async()=>{
+                        try{
+                          const res = await fetch(`${ADMIN_SUPABASE_URL}/rest/v1/word_reports?id=eq.${r.id}`,{
+                            method:'PATCH',
+                            headers:{apikey:ADMIN_ANON_KEY,Authorization:`Bearer ${ADMIN_ANON_KEY}`,'Content-Type':'application/json',Prefer:'return=minimal'},
+                            body:JSON.stringify({status:'approved'})
+                          });
+                          if(!res.ok){alert('Approve failed: '+res.status);return;}
+                          loadData();
+                        }catch(e){alert('Approve error: '+e.message);}
+                      }} style={{padding:'3px 8px',borderRadius:6,border:'1px solid rgba(110,231,183,0.5)',background:'rgba(110,231,183,0.15)',color:'#6ee7b7',fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✓ Approve</button>
+                      <button onClick={async()=>{
+                        try{
+                          const res = await fetch(`${ADMIN_SUPABASE_URL}/rest/v1/word_reports?id=eq.${r.id}`,{
+                            method:'PATCH',
+                            headers:{apikey:ADMIN_ANON_KEY,Authorization:`Bearer ${ADMIN_ANON_KEY}`,'Content-Type':'application/json',Prefer:'return=minimal'},
+                            body:JSON.stringify({status:'rejected'})
+                          });
+                          if(!res.ok){alert('Reject failed: '+res.status);return;}
+                          loadData();
+                        }catch(e){alert('Reject error: '+e.message);}
+                      }} style={{padding:'3px 8px',borderRadius:6,border:'1px solid rgba(251,113,133,0.5)',background:'rgba(251,113,133,0.15)',color:'#fda4af',fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✗ Reject</button>
+                    </div>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody></table>}
-          <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',marginTop:8,fontStyle:'italic'}}>Add valid ones to CUSTOM_WHITELIST in App.jsx</div>
+          <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',marginTop:8,fontStyle:'italic'}}>Approved words automatically added to live game whitelist</div>
         </div>
 
         {/* All players table */}
@@ -2622,17 +2672,38 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   // bring back the appropriate "Play Again?" screen. Otherwise just go to play tab.
   const returnToGame = () => {
     setTab("play");
-    // If they had a Perfect Day this session and aren't seeing the modal, restore it
+    // Priority 1: If they had a Perfect Day this session and aren't seeing the modal, restore it
     if (perfectDayRef.current && !perfectDayAchieved) {
       setPerfectDayAchieved(true);
       return;
     }
-    // If game is complete (Level 5 finished today), show the Repeat-Perfect/Farewell screen
+    // Priority 2: If game is fully complete today (Level 5 finished), show Play Again screen
     try {
       if (localStorage.getItem("ll_completed_today") === getTodayKey()) {
-        setShowRepeatPerfect(true);
+        if (perfectDayRef.current) {
+          setShowRepeatPerfect(true);
+        } else {
+          // Non-Perfect-Day completion → show the Play Again screen too (was triggerFarewell, but that exits the game)
+          setShowRepeatPerfect(true);
+        }
+        return;
       }
     } catch {}
+    // Priority 3: Edge case — Level 5 reached and all tiles used but ll_completed_today not set
+    // (e.g. the level completion modal was dismissed before flag was written)
+    const remaining = tiles.filter(t => !t.used).length;
+    if (level >= 5 && remaining === 0) {
+      try { localStorage.setItem("ll_completed_today", getTodayKey()); } catch {}
+      setShowRepeatPerfect(true);
+      return;
+    }
+    // Priority 4: If a level is mid-completion (modal was dismissed but level still done)
+    // re-show levelComplete modal so they can advance
+    if (level < 5 && remaining === 0 && !levelComplete) {
+      setLevelComplete(true);
+      return;
+    }
+    // Otherwise: mid-game, just go to play tab (no extra action needed)
   };
 
   const handleBuyLevel = () => {
@@ -3221,7 +3292,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:"1px 7px",background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
           <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
           <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>♫</button>
-          <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Reset Full Game</button>
+          <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>🆕 Start New Game</button>
           <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>
         </div>
 

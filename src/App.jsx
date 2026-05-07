@@ -3283,10 +3283,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           </button>
           {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
           <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
-          <div style={{display:"flex",flexDirection:"column",gap:8}}>
-            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
-            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); handleFullReset(); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:14,fontWeight:"bold"}}>🌅 Later Today</button>
-            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); triggerFarewell(); }} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:14,fontWeight:"bold"}}>🌙 Tomorrow</button>
+          <div style={{display:"flex",flexDirection:"row",gap:6}}>
+            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Now</button>
+            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); handleFullReset(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:12,fontWeight:"bold"}}>🌅 Later</button>
+            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); triggerFarewell(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold"}}>🌙 Tomorrow</button>
           </div>
         </div>
       </div>}

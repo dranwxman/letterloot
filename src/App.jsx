@@ -1949,6 +1949,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [levelComplete, setLevelComplete] = useState(ss?.levelComplete || false);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showNewGameConfirm, setShowNewGameConfirm] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
@@ -2299,7 +2300,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setLevelScore(0); levelScoreRef.current = 0;
     setStreak(0); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
-    setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
+    setShowResetConfirm(false); setShowNewGameConfirm(false); setShowStuckModal(false); setPaused(false);
     setPerfectDaySync(true); setPerfectDayAchieved(false); setLongestWordToday("");
     setShowRepeatPerfect(false); setNewBestTime(false);
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
@@ -3133,6 +3134,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       </div>}
 
+      {showNewGameConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
+          <div style={{fontSize:40}}>⚠️</div>
+          <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Start a New Game?</div>
+          <div style={{fontSize:13,color:"#fb7185",marginTop:10,lineHeight:1.5,fontWeight:"bold"}}>This will end your current game in progress.</div>
+          <div style={{fontSize:12,color:"#bbb",marginTop:6,lineHeight:1.5}}>Current Level: {level} · Score: {totalScore.toLocaleString()} pts<br/>Words played: {(submittedRef.current||[]).filter(s=>s.valid).length}<br/><br/>All progress on this game will be lost.</div>
+          <button className="ll-btn" onClick={()=>{ setShowNewGameConfirm(false); handleFullReset(); }} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:14,fontWeight:"bold"}}>
+            🆕 Yes, Start New Game
+          </button>
+          <button className="ll-btn" onClick={()=>setShowNewGameConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:"bold"}}>Keep Playing</button>
+        </div>
+      </div>}
+
       {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
           <div style={{fontSize:40}}>🔄</div>
@@ -3334,7 +3348,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:"1px 7px",background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
           <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
           <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>♫</button>
-          <button onClick={handleFullReset} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>🆕 Start New Game</button>
+          <button onClick={()=>{
+            // If there's no meaningful progress, skip the confirm
+            const hasProgress = (submittedRef.current||[]).some(s=>s.valid) || level>1 || totalRef.current>0;
+            if (hasProgress) setShowNewGameConfirm(true);
+            else handleFullReset();
+          }} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>🆕 Start New Game</button>
           <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>
         </div>
 

@@ -1645,7 +1645,7 @@ function AdminScreen({ onExit }) {
         </div>
 
         {/* Two col */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr',gap:10,marginBottom:10}}>
           {/* Top scores */}
           <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
             <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>🏆 TOP LIFETIME SCORES</div>

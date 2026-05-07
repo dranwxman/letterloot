@@ -70,7 +70,7 @@ export async function saveDailySession(playerId, dateKey, session) {
   // First, fetch existing record to preserve highest score of the day
   const { data: existing } = await supabase
     .from("daily_sessions")
-    .select("total_score, perfect_day, longest_word_today, wotd_found")
+    .select("total_score, perfect_day, longest_word_today, wotd_found, top_word, top_word_score")
     .eq("player_id", playerId)
     .eq("date_key", dateKey)
     .maybeSingle();
@@ -87,6 +87,11 @@ export async function saveDailySession(playerId, dateKey, session) {
   const bestLongest = newLongest.length > existingLongest.length ? newLongest : existingLongest;
   // wotd_found sticky once true
   const wotdFound = (existing?.wotd_found === true) || (session.wotdFound === true);
+  // Top scoring word of the day (preserved across multi-game days)
+  const existingTopScore = existing?.top_word_score || 0;
+  const newTopScore = session.topWordScore || 0;
+  const bestTopScore = Math.max(existingTopScore, newTopScore);
+  const bestTopWord = newTopScore > existingTopScore ? (session.topWord || "") : (existing?.top_word || session.topWord || "");
 
   const { error } = await supabase.from("daily_sessions").upsert({
     player_id: playerId,
@@ -102,6 +107,8 @@ export async function saveDailySession(playerId, dateKey, session) {
     total_time: session.totalTime || 0,
     longest_word_today: bestLongest,  // longest of the day
     wotd_found: wotdFound,            // did player find the Word of the Day
+    top_word: bestTopWord,            // highest-scoring word of the day
+    top_word_score: bestTopScore,     // its score
     completed: session.completed || false,
     updated_at: new Date().toISOString(),
   }, { onConflict: "player_id, date_key" });

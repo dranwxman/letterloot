@@ -1507,14 +1507,26 @@ function AdminScreen({ onExit }) {
       const weekSessions = await adminQuery('daily_sessions', 'player_id,date_key', `&date_key=gte.${weekAgo}`);
       const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
       const wordReports = await adminQuery('word_reports', '*', '&order=reported_at.desc&limit=50').catch(()=>[]);
-      // Build top 25 longest words and top word scores from stats
-      const allWords = [];
-      gameStates.forEach(g => {
-        if (g.stats?.longestWordAllTime) allWords.push({ player: g.player_name||'Guest', word: g.stats.longestWordAllTime, letters: g.stats.longestWordAllTime.length, type:'longest' });
-        if (g.stats?.highWordAllTimeWord) allWords.push({ player: g.player_name||'Guest', word: g.stats.highWordAllTimeWord, score: g.stats.highWordAllTime||0, type:'score' });
-      });
-      const top25Longest = [...allWords].filter(w=>w.type==='longest').sort((a,b)=>b.letters-a.letters).slice(0,25);
-      const top25Score = [...allWords].filter(w=>w.type==='score').sort((a,b)=>b.score-a.score).slice(0,25);
+      // Build top 25 longest words and top word scores from ALL daily sessions
+      // (one entry per player per day they had a record-worthy word — multi-entry per player allowed)
+      const allSessions = await adminQuery('daily_sessions', 'player_id,date_key,longest_word_today,top_word,top_word_score', '&limit=2000').catch(()=>[]);
+      // Build a player_id → name lookup from gameStates
+      const nameMap = {};
+      gameStates.forEach(g => { if (g.player_id) nameMap[g.player_id] = g.player_name || 'Guest'; });
+      // Top 25 longest — each session contributes one entry; sort by length, take 25
+      const longestEntries = allSessions
+        .filter(s => s.longest_word_today && s.longest_word_today.length > 0)
+        .map(s => ({ player: nameMap[s.player_id] || 'Guest', word: s.longest_word_today, letters: s.longest_word_today.length, date: s.date_key }))
+        .sort((a,b) => b.letters - a.letters || a.word.localeCompare(b.word))
+        .slice(0, 25);
+      // Top 25 word scores — each session contributes one entry; sort by score, take 25
+      const scoreEntries = allSessions
+        .filter(s => s.top_word && s.top_word_score > 0)
+        .map(s => ({ player: nameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
+        .sort((a,b) => b.score - a.score)
+        .slice(0, 25);
+      const top25Longest = longestEntries;
+      const top25Score = scoreEntries;
       setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0, wordReports: wordReports || [] });
       setLastUpdated(new Date().toLocaleTimeString());
     } catch(e) { console.error(e); }
@@ -2156,6 +2168,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const syncToCloud = useCallback(async () => {
     if (isGuest || !user) return;
     const todayKey = getTodayKey();
+    // Compute top scoring word of all submitted words this game
+    const validWords = submittedRef.current.filter(s => s.valid);
+    const topEntry = validWords.reduce((best, s) => !best || s.score > best.score ? s : best, null);
     await Promise.all([
       saveDailySession(user.id, todayKey, {
         level, totalScore: totalRef.current, levelScore: levelScoreRef.current,
@@ -2163,6 +2178,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
         totalTime: totalTimeRef.current, longestWordToday, levelComplete, newBestTime, undoUsed,
         gameIndex: gameIndexRef.current, wotdFound: wotdFound,
+        topWord: topEntry?.word || "", topWordScore: topEntry?.score || 0,
       }),
       saveGameState(user.id, {
         playerName: playerNameRef.current || playerName || '',

@@ -1498,7 +1498,7 @@ function AdminScreen({ onExit }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const gameStates = await adminQuery('game_state', 'player_name,lifetime_points,last_played_date,current_streak,longest_streak,stats,badges', '&order=lifetime_points.desc');
+      const gameStates = await adminQuery('game_state', 'player_id,player_name,lifetime_points,last_played_date,current_streak,longest_streak,stats,badges', '&order=lifetime_points.desc');
       const td = new Date(); const today = td.getFullYear()+'-'+(td.getMonth()+1)+'-'+td.getDate();
       const tdAgo7 = new Date(Date.now()-7*86400000); const weekAgo = tdAgo7.getFullYear()+'-'+(tdAgo7.getMonth()+1)+'-'+tdAgo7.getDate();
       const tdAgo14 = new Date(Date.now()-14*86400000); const twoWeeksAgo = tdAgo14.getFullYear()+'-'+(tdAgo14.getMonth()+1)+'-'+tdAgo14.getDate();
@@ -1669,7 +1669,7 @@ function AdminScreen({ onExit }) {
         </div>
 
         {/* Top 25 longest words + top word scores */}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr',gap:10,marginBottom:10}}>
           <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
             <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📏 TOP 25 LONGEST WORDS</div>
             {!(data?.top25Longest?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
@@ -2400,17 +2400,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const timer = setTimeout(() => ctrl.abort(), 8000);
         return fetch(url, { headers:hdrs, signal:ctrl.signal }).finally(() => clearTimeout(timer));
       };
-      const [gsRes, todayRes, weekRes, wotdAllRes] = await Promise.all([
+      const [gsRes, todayRes, weekRes, wotdAllRes, allWordSessionsRes] = await Promise.all([
         fetchWithAbort(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`),
-        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today,wotd_found&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
-        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,wotd_found&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today,wotd_found,top_word,top_word_score&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,wotd_found,longest_word_today,top_word,top_word_score&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,wotd_found&wotd_found=eq.true&limit=2000`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,longest_word_today,top_word,top_word_score&limit=2000`),
       ]);
       const gs = gsRes.ok ? await gsRes.json() : [];
       const todaySessions = todayRes.ok ? await todayRes.json() : [];
       const weekSessions = weekRes.ok ? await weekRes.json() : [];
       const wotdAllSessions = wotdAllRes.ok ? await wotdAllRes.json() : [];
-      return { gs, todaySessions, weekSessions, wotdAllSessions };
+      const allWordSessions = allWordSessionsRes.ok ? await allWordSessionsRes.json() : [];
+      return { gs, todaySessions, weekSessions, wotdAllSessions, allWordSessions };
     } catch { return null; }
   };
 
@@ -3753,7 +3755,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           {!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:"30px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
 
           {!leaderboardLoading&&leaderboardData&&(()=>{
-            const { gs=[], todaySessions=[], weekSessions=[], wotdAllSessions=[] } = leaderboardData;
+            const { gs=[], todaySessions=[], weekSessions=[], wotdAllSessions=[], allWordSessions=[] } = leaderboardData;
             const medal = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
             const isMe = (name) => name === playerName;
             const rowStyle = (name, i) => ({
@@ -3895,22 +3897,74 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
+            // Build a player_id → name map (used for words/longest multi-entry leaderboards)
+            const playerNameMap = {};
+            gs.forEach(g => { if (g.player_id) playerNameMap[g.player_id] = g.player_name || 'Guest'; });
+
             // ── BEST WORD SCORES ──
+            // Multi-entry: each daily session contributes one entry; same player can appear multiple times
             if (leaderboardTab==="words") {
               let rows = [];
-              if (leaderboardPeriod==="alltime") rows = [...gs].filter(g=>g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,wordColor:"#f093fb",val:g.stats.highWordAllTime+" pts",valColor:"#f6d365"}));
-              if (leaderboardPeriod==="daily") rows = [...gs].filter(g=>todayBestById[g.player_id]&&g.stats?.highWordTodayWord).sort((a,b)=>(b.stats?.highWordToday||0)-(a.stats?.highWordToday||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordTodayWord,wordColor:"#f093fb",val:g.stats.highWordToday+" pts",valColor:"#f6d365"}));
-              if (leaderboardPeriod==="weekly") rows = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.highWordAllTimeWord).sort((a,b)=>(b.stats?.highWordAllTime||0)-(a.stats?.highWordAllTime||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.highWordAllTimeWord,wordColor:"#f093fb",val:g.stats.highWordAllTime+" pts",valColor:"#f6d365"}));
+              const todayKey = (()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})();
+              const weekAgoKey = (()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})();
+              if (leaderboardPeriod==="alltime") {
+                rows = allWordSessions
+                  .filter(s=>s.top_word && s.top_word_score>0)
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
+                  .sort((a,b)=>b.score-a.score)
+                  .slice(0,10)
+                  .map(s=>({name:s.name, word:s.word, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
+              }
+              if (leaderboardPeriod==="daily") {
+                rows = allWordSessions
+                  .filter(s=>s.top_word && s.top_word_score>0 && s.date_key===todayKey)
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score }))
+                  .sort((a,b)=>b.score-a.score)
+                  .slice(0,10)
+                  .map(s=>({name:s.name, word:s.word, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
+              }
+              if (leaderboardPeriod==="weekly") {
+                rows = allWordSessions
+                  .filter(s=>s.top_word && s.top_word_score>0 && s.date_key>=weekAgoKey)
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score }))
+                  .sort((a,b)=>b.score-a.score)
+                  .slice(0,10)
+                  .map(s=>({name:s.name, word:s.word, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
+              }
               if (!rows.length) return <div>{empty}{yourBest}</div>;
               return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
             // ── LONGEST WORDS ──
+            // Multi-entry: each daily session contributes one entry; same player can appear multiple times
             if (leaderboardTab==="longest") {
               let rows = [];
-              if (leaderboardPeriod==="alltime") rows = [...gs].filter(g=>g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,wordColor:"#a78bfa",val:g.stats.longestWordAllTime?.length||0,suffix:"ltrs",valColor:"#22d3ee"}));
-              if (leaderboardPeriod==="daily") rows = [...gs].filter(g=>todayLongestById[g.player_id]).sort((a,b)=>(todayLongestById[b.player_id]?.length||0)-(todayLongestById[a.player_id]?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:todayLongestById[g.player_id]?.word||"—",wordColor:"#a78bfa",val:todayLongestById[g.player_id]?.length||0,suffix:"ltrs",valColor:"#22d3ee"}));
-              if (leaderboardPeriod==="weekly") rows = [...gs].filter(g=>weekBestById[g.player_id]&&g.stats?.longestWordAllTime).sort((a,b)=>(b.stats?.longestWordAllTime?.length||0)-(a.stats?.longestWordAllTime?.length||0)).slice(0,10).map(g=>({name:g.player_name,word:g.stats.longestWordAllTime,wordColor:"#a78bfa",val:g.stats.longestWordAllTime?.length||0,suffix:"ltrs",valColor:"#22d3ee"}));
+              const todayKey = (()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})();
+              const weekAgoKey = (()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})();
+              if (leaderboardPeriod==="alltime") {
+                rows = allWordSessions
+                  .filter(s=>s.longest_word_today && s.longest_word_today.length>0)
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length }))
+                  .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
+                  .slice(0,10)
+                  .map(s=>({name:s.name, word:s.word, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
+              }
+              if (leaderboardPeriod==="daily") {
+                rows = allWordSessions
+                  .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && s.date_key===todayKey)
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length }))
+                  .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
+                  .slice(0,10)
+                  .map(s=>({name:s.name, word:s.word, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
+              }
+              if (leaderboardPeriod==="weekly") {
+                rows = allWordSessions
+                  .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && s.date_key>=weekAgoKey)
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length }))
+                  .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
+                  .slice(0,10)
+                  .map(s=>({name:s.name, word:s.word, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
+              }
               if (!rows.length) return <div>{empty}{yourBest}</div>;
               return <div>{renderRows(rows)}{yourBest}</div>;
             }

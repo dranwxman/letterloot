@@ -892,6 +892,44 @@ function VisualTour({ onDone }) {
     },
 
         {
+      title: "💥 The Loot Letter",
+      desc:  "",
+      content: () => (
+        <div style={{textAlign:'center'}}>
+          <div style={{display:'flex',justifyContent:'center',gap:6,marginBottom:14}}>
+            {/* Three normal tiles + one loot tile (gold/sparkle) */}
+            <div style={{width:42,height:48,background:'linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))',borderRadius:8,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'1px solid rgba(255,255,255,0.22)'}}>
+              <div style={{fontSize:18,fontWeight:'bold',color:'#fff'}}>A</div>
+              <div style={{fontSize:8,color:'#fda085',fontWeight:'bold'}}>1</div>
+            </div>
+            <div style={{width:42,height:48,background:'linear-gradient(135deg,#f6d365,#fda085)',borderRadius:8,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'2px solid #00e676',boxShadow:'0 0 14px rgba(246,211,101,0.7),0 0 4px rgba(0,230,118,0.6)',position:'relative'}}>
+              <div style={{fontSize:18,fontWeight:'bold',color:'#1a1a2e'}}>Q</div>
+              <div style={{fontSize:8,color:'#1a1a2e',fontWeight:'bold'}}>5×</div>
+              <div style={{position:'absolute',top:-4,right:-4,fontSize:11}}>✨</div>
+            </div>
+            <div style={{width:42,height:48,background:'linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))',borderRadius:8,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'1px solid rgba(255,255,255,0.22)'}}>
+              <div style={{fontSize:18,fontWeight:'bold',color:'#fff'}}>R</div>
+              <div style={{fontSize:8,color:'#fda085',fontWeight:'bold'}}>1</div>
+            </div>
+            <div style={{width:42,height:48,background:'linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))',borderRadius:8,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',border:'1px solid rgba(255,255,255,0.22)'}}>
+              <div style={{fontSize:18,fontWeight:'bold',color:'#fff'}}>T</div>
+              <div style={{fontSize:8,color:'#fda085',fontWeight:'bold'}}>1</div>
+            </div>
+          </div>
+          <div style={{background:'rgba(255,255,255,0.07)',border:'1.5px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:13,color:'#f5f0e8',lineHeight:1.7,textAlign:'left',marginBottom:8}}>
+            🎰 <strong style={{color:'#f6d365'}}>One hidden Loot Letter</strong> is placed on the board each day.<br/><br/>
+            🤫 It looks like every other tile — <strong style={{color:'#fda085'}}>you won't know which one</strong> until you use it in a word!<br/><br/>
+            💥 When you do — <strong style={{color:'#6ee7b7'}}>5× the letter's value</strong>, plus an explosion of points!<br/><br/>
+            🎯 Same Loot Letter all day. Replay games to hunt it again!
+          </div>
+          <div style={{fontSize:10,color:'rgba(255,255,255,0.45)',fontStyle:'italic'}}>
+            Pssst — don't share which letter is loot. Let everyone hunt for themselves!
+          </div>
+        </div>
+      )
+    },
+
+        {
       title: "The Perfect Day",
       desc:  "",
       last:  true,
@@ -2859,6 +2897,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     { emoji:"⚠️", title:"Beware of Q's", body:"Only one U is guaranteed when a Q is present. Use it wisely before it's gone — a stranded Q can cost you the level." },
     { emoji:"💡", title:"Think Big First", body:"Start with big, high-value words. Long words with rare letters earn serious points — and long-word bonuses stack up fast." },
     { emoji:"✨", title:"Stack Bonus Tiles", body:"Gold (2×) and purple (3×) bonus tiles multiply your letter score. Save them for your longer words to maximize your loot." },
+    { emoji:"💥", title:"Hunt the Loot Letter", body:"One hidden Loot Letter is placed on the board each day — it looks like every other tile. Use it in a valid word for a 5× letter bonus and a big celebration! Same Loot Letter all day. Replay games to keep hunting." },
     { emoji:"⏸️", title:"Use Pause", body:"The Pause button stops your timer completely. Use it whenever you need a moment to plan your next move without the clock running." },
     { emoji:"📜", title:"History Tracks Everything", body:"The History button shows all words played — and tried but not accepted — for the entire current day across all your games." },
     { emoji:"🎯", title:"Save Your UNDO", body:"You get one UNDO per game for 1,000 pts. Save it for a strategic moment in a later level when you really need to reverse a costly mistake." },

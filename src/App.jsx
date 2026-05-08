@@ -226,6 +226,11 @@ const BADGE_DEFS = [
   { id:"daily_500",    icon:"🏆",   label:"Loot Master",     desc:"5 levels complete with 2,000+ pts",     cat:"level",   scope:"lifetime" },
   { id:"daily_1000",   icon:"💰",   label:"Treasure Chest",  desc:"5 levels complete with 3,000+ pts",     cat:"level",   scope:"lifetime" },
   { id:"perfect_day",  icon:"🌈🏆", label:"Perfect Day",     desc:"No buys, resets, or re-dos",            cat:"level",   scope:"lifetime" },
+  // ── Perfect Day Speed Badges ──
+  { id:"pd_dawdler",   icon:"🐢",   label:"The Dawdler",     desc:"Perfect Day in under 30 minutes",       cat:"level",   scope:"lifetime" },
+  { id:"pd_scooter",   icon:"🛴",   label:"Scooter",         desc:"Perfect Day in under 15 minutes",       cat:"level",   scope:"lifetime" },
+  { id:"pd_velocirap", icon:"🦖",   label:"Velociraptor",    desc:"Perfect Day in under 12 minutes",       cat:"level",   scope:"lifetime" },
+  { id:"pd_flux",      icon:"⚡",    label:"Flux Capacitor",  desc:"Perfect Day in under 10 minutes — BTTF!",cat:"level",  scope:"lifetime" },
   // ── Speed Badges ──
   { id:"slow_lane",    icon:"🚶",   label:"Slow Lane Looter", desc:"Complete a level in under 5 min",      cat:"word",    scope:"lifetime" },
   { id:"left_lane",    icon:"🚗",   label:"Left Lane Looter", desc:"Complete a level in under 3 min",      cat:"word",    scope:"lifetime" },
@@ -1263,9 +1268,24 @@ function updateLocalStats(updates) {
 function getBadgeStore() {
   try {
     const data = JSON.parse(localStorage.getItem("ll_badges_v2") || "null");
-    if (data) return data;
+    if (data) {
+      // Self-healing: prune any badge IDs that no longer exist in BADGE_DEFS
+      // (handles cases where old badges were renamed/removed in past versions)
+      const validIds = new Set(BADGE_DEFS.map(b => b.id));
+      const cleaned = {
+        lifetime: (data.lifetime || []).filter(id => validIds.has(id)),
+        weekly: data.weekly || {},
+        daily: data.daily || {},
+      };
+      // Persist the cleaned version if anything was stripped
+      if (cleaned.lifetime.length !== (data.lifetime || []).length) {
+        try { localStorage.setItem("ll_badges_v2", JSON.stringify(cleaned)); } catch {}
+      }
+      return cleaned;
+    }
     const oldBadges = JSON.parse(localStorage.getItem("ll_stats") || "{}").badges || [];
-    return { lifetime: oldBadges, weekly: {}, daily: {} };
+    const validIds = new Set(BADGE_DEFS.map(b => b.id));
+    return { lifetime: oldBadges.filter(id => validIds.has(id)), weekly: {}, daily: {} };
   } catch { return { lifetime: [], weekly: {}, daily: {} }; }
 }
 function saveBadgeStore(store) { try { localStorage.setItem("ll_badges_v2", JSON.stringify(store)); } catch {} }
@@ -2211,7 +2231,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           const bestPts = Math.max(cloudPts, localPts);
           lifetimeRef.current = bestPts;
           setLifetimePoints(bestPts);
-          setBadgeStore(prev => ({ ...prev, lifetime: gameState.badges || prev.lifetime }));
+          // Filter stale badge IDs from cloud (handles legacy badge names)
+          const validBadgeIds = new Set(BADGE_DEFS.map(b => b.id));
+          const cloudBadges = (gameState.badges || []).filter(id => validBadgeIds.has(id));
+          setBadgeStore(prev => ({ ...prev, lifetime: cloudBadges.length ? cloudBadges : prev.lifetime }));
           // Merge stats — preserve local perfect days if cloud has fewer (data loss protection)
           const cloudStats = gameState.stats || {};
           const localStats = getLocalStats();
@@ -2748,6 +2771,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             // Force-clear any stuck validation/scanning overlays
             setValidating(false); setCheckingStuck(false);
             awardBadge("perfect_day");
+            // ── Perfect Day Speed Badges (totalTimeRef in seconds) ──
+            const pdSec = totalTimeRef.current || 0;
+            if (pdSec > 0 && pdSec < 1800) awardBadge("pd_dawdler");      // < 30 min
+            if (pdSec > 0 && pdSec < 900)  awardBadge("pd_scooter");      // < 15 min
+            if (pdSec > 0 && pdSec < 720)  awardBadge("pd_velocirap");    // < 12 min
+            if (pdSec > 0 && pdSec < 600)  awardBadge("pd_flux");         // < 10 min
               // ── Streak bonus: First PD = 2,000 pts, each consecutive PD adds 1,000 ──
               // Read FRESH stats from localStorage (statsData state may be stale)
               const freshStats = getLocalStats();

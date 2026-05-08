@@ -110,14 +110,26 @@ function getBonusPositions(count, bonusCount, rng) {
 // All players see the same letter at the same level/position.
 // When used in a valid word, awards 5x its base letter value.
 // One-time per game; resets on Start New Game.
+// Loot Letter must land on a meaningful letter — minimum value 6
+// Skips E(3), T(3), A(4), I(4), O(4), N(4), S(5), R(5)
+// Keeps H,L,D,C,U,M,F,P,G,W,Y,B,V,K,X,J,Q,Z as candidates
+// NOTE: This higher-value selection only applies from May 9, 2026 onward.
+// Today (May 8) keeps its original loot letter to avoid mid-day shifts.
+const LOOT_MIN_VALUE = 6;
+function shouldUseHighValueLoot() {
+  const seed = getDailySeed(); // YYYYMMDD as integer
+  return seed >= 20260509; // May 9, 2026 and later
+}
 function getLootLetterToday() {
   const seed = getDailySeed();
   const rng = seededRandom(seed + 31337);
   const level = 1 + Math.floor(rng() * 5); // Level 1-5
-  // tile index within that level (count = 42 + (level-1)*6)
+  // tile count for this level
   const tileCount = 42 + (level - 1) * 6;
-  const tileIndex = Math.floor(rng() * tileCount);
-  return { level, tileIndex };
+  // We pick a target index; the actual final index will be resolved during tile
+  // generation by finding the nearest qualifying letter (value >= LOOT_MIN_VALUE).
+  const targetIndex = Math.floor(rng() * tileCount);
+  return { level, targetIndex };
 }
 
 function generateLevelTiles(level, startId, rng, bonusPositions) {
@@ -130,10 +142,39 @@ function generateLevelTiles(level, startId, rng, bonusPositions) {
   }
   const lootInfo = getLootLetterToday();
   const isLootLevel = level === lootInfo.level;
+  // Resolve actual loot tile index. Today (May 8) keeps original behavior:
+  // use targetIndex as-is. From May 9 onward: find the nearest tile whose
+  // letter value meets LOOT_MIN_VALUE, searching outward in both directions.
+  let lootTileIndex = -1;
+  if (isLootLevel) {
+    const target = Math.min(lootInfo.targetIndex, count - 1);
+    if (!shouldUseHighValueLoot()) {
+      // Pre-May-9 behavior: use target index as-is
+      lootTileIndex = target;
+    } else if ((LETTER_VALUES[letters[target]] || 0) >= LOOT_MIN_VALUE) {
+      lootTileIndex = target;
+    } else {
+      // Search outward by distance
+      for (let d = 1; d < count; d++) {
+        const r = target + d, l = target - d;
+        if (r < count && (LETTER_VALUES[letters[r]] || 0) >= LOOT_MIN_VALUE) { lootTileIndex = r; break; }
+        if (l >= 0 && (LETTER_VALUES[letters[l]] || 0) >= LOOT_MIN_VALUE) { lootTileIndex = l; break; }
+      }
+      // Fallback: if literally no qualifying letter exists in this level
+      // (extremely unlikely), use the highest-valued tile available.
+      if (lootTileIndex === -1) {
+        let best = 0;
+        for (let i = 0; i < count; i++) {
+          if ((LETTER_VALUES[letters[i]] || 0) > (LETTER_VALUES[letters[best]] || 0)) best = i;
+        }
+        lootTileIndex = best;
+      }
+    }
+  }
   return letters.map((l, i) => ({
     id: startId + i, letter: l, value: LETTER_VALUES[l], used: false,
     bonus: bonusPositions.includes(i) ? (Math.random() < 0.5 ? "double" : "triple") : null,
-    isLoot: isLootLevel && i === lootInfo.tileIndex,
+    isLoot: isLootLevel && i === lootTileIndex,
   }));
 }
 function calcWordScore(tileIds, tiles) {
@@ -2464,7 +2505,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         return fetch(url, { headers:hdrs, signal:ctrl.signal }).finally(() => clearTimeout(timer));
       };
       const [gsRes, todayRes, weekRes, wotdAllRes, allWordSessionsRes] = await Promise.all([
-        fetchWithAbort(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats&order=lifetime_points.desc&limit=100`),
+        fetchWithAbort(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats,badges&order=lifetime_points.desc&limit=100`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today,wotd_found,top_word,top_word_score&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,wotd_found,longest_word_today,top_word,top_word_score&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,wotd_found&wotd_found=eq.true&limit=2000`),
@@ -3871,15 +3912,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
-            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"wotd",label:"🎯 WoD"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"badges",label:"🏅 Badges"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
               <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:8,background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* Period tabs — only show for non-streaks */}
-          {leaderboardTab!=="streaks"&&(
+          {/* Period tabs — only show for non-streaks and non-badges (those are lifetime-only) */}
+          {leaderboardTab!=="streaks"&&leaderboardTab!=="badges"&&(
             <div style={{display:"flex",gap:3,marginBottom:8}}>
               {[{id:"daily",label:"☀️ Today"},{id:"weekly",label:"📅 This Week"},{id:"alltime",label:"🏆 All-Time"}].map(p=>(
                 <button key={p.id} className="ll-tab" onClick={()=>setLeaderboardPeriod(p.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:9,background:leaderboardPeriod===p.id?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.06)",color:leaderboardPeriod===p.id?"#fff":"rgba(255,255,255,0.55)",fontWeight:leaderboardPeriod===p.id?"bold":"normal",border:leaderboardPeriod===p.id?"none":"1px solid rgba(255,255,255,0.15)",textAlign:"center"}}>
@@ -4155,20 +4196,30 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
-            // ── WORD OF THE DAY ──
-            if (leaderboardTab==="wotd") {
-              let rows = [];
-              if (leaderboardPeriod==="alltime") {
-                rows = [...gs].filter(g=>(wotdAllById[g.player_id]||0)>0).sort((a,b)=>(wotdAllById[b.player_id]||0)-(wotdAllById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:wotdAllById[g.player_id],suffix:"days",valColor:"#a78bfa",sub:wotdStreakById[g.player_id]>1?"🎯 On "+wotdStreakById[g.player_id]+"d streak":null}));
-              }
-              if (leaderboardPeriod==="daily") {
-                rows = [...gs].filter(g=>todayWotdById[g.player_id]).map(g=>({name:g.player_name,val:"🎯",valColor:"#a78bfa"})).slice(0,10);
-              }
-              if (leaderboardPeriod==="weekly") {
-                rows = [...gs].filter(g=>(weekWotdById[g.player_id]||0)>0).sort((a,b)=>(weekWotdById[b.player_id]||0)-(weekWotdById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekWotdById[g.player_id],suffix:"days",valColor:"#a78bfa"}));
-              }
+            // ── BADGES — total lifetime badges earned per player ──
+            // Period is locked to all-time (badges are inherently lifetime)
+            if (leaderboardTab==="badges") {
+              const totalLifetimeBadges = BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length;
+              const rows = [...gs].map(g => {
+                const lifetime = (g.badges?.lifetime || []);
+                return { ...g, badgeCount: lifetime.length };
+              }).filter(g => g.badgeCount > 0)
+                .sort((a,b) => b.badgeCount - a.badgeCount)
+                .slice(0,10)
+                .map(g => ({
+                  name: g.player_name,
+                  val: "🏅 " + g.badgeCount,
+                  suffix: "/ " + totalLifetimeBadges,
+                  valColor: "#f093fb",
+                }));
               if (!rows.length) return <div>{empty}{yourBest}</div>;
-              return <div>{renderRows(rows)}{yourBest}</div>;
+              return (
+                <div>
+                  <div style={{textAlign:"center",fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:1}}>ALL-TIME BADGES EARNED</div>
+                  {renderRows(rows)}
+                  {yourBest}
+                </div>
+              );
             }
 
             // ── STREAKS — ALL-TIME ONLY ──

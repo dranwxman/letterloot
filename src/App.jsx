@@ -3477,8 +3477,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
         {/* ROW 2: History · Stats · Tips · Level pill */}
         <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:3}}>
-          {[{id:"history",label:"📜 History"},{id:"stats",label:"📊 Stats"},{id:"info",label:"ℹ️ Tips"},{id:"leaderboard",label:"🏆 Leaders"}].map(t=>(
-            <button key={t.id} className="ll-tab" onClick={()=>setTab(t.id)} style={{flex:1,padding:"4px 3px",borderRadius:12,fontSize:9,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap",textAlign:"center"}}>
+          {[{id:"history",label:"📜 History"},{id:"stats",label:"📊 Stats"},{id:"badges",label:"🏅 Badges"},{id:"info",label:"ℹ️ Tips"},{id:"leaderboard",label:"🏆 Leaders"}].map(t=>(
+            <button key={t.id} className="ll-tab" onClick={()=>setTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:12,fontSize:8,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap",textAlign:"center"}}>
               {t.label}
             </button>
           ))}
@@ -3974,31 +3974,69 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               </div>
             );
 
-            // ── Your Best panel ──
+            // ── Your Best panel (period-aware: shows YOUR best for the active period) ──
             const myData = gs.find(g=>g.player_name===playerName);
+            const myId = myData?.player_id;
+            const todayKey = (()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})();
+            const weekAgoKey = (()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})();
+            // Compute period-scoped values for the YOU panel
+            let periodLabel = "All-Time";
+            let myBestScore = 0;
+            let myLongestWord = "";
+            let myBestWord = "";
+            let myBestWordScore = 0;
+            let myPerfectDays = 0;
+            if (leaderboardPeriod === "alltime") {
+              periodLabel = "All-Time";
+              myBestScore = myData?.lifetime_points || 0;
+              myLongestWord = myData?.stats?.longestWordAllTime || "";
+              myBestWord = myData?.stats?.highWordAllTimeWord || "";
+              myBestWordScore = myData?.stats?.highWordAllTime || 0;
+              myPerfectDays = myData?.stats?.perfectDaysAllTime || 0;
+            } else if (leaderboardPeriod === "daily") {
+              periodLabel = "Today";
+              const myToday = todaySessions.find(s => s.player_id === myId);
+              myBestScore = myToday?.total_score || 0;
+              const myTodayWord = allWordSessions.find(s => s.player_id === myId && s.date_key === todayKey);
+              myLongestWord = myTodayWord?.longest_word_today || "";
+              myBestWord = myTodayWord?.top_word || "";
+              myBestWordScore = myTodayWord?.top_word_score || 0;
+              myPerfectDays = (myToday?.perfect_day) ? 1 : 0;
+            } else if (leaderboardPeriod === "weekly") {
+              periodLabel = "This Week";
+              // best scoring session this week
+              const myWeekSessions = weekSessions.filter(s => s.player_id === myId);
+              myBestScore = myWeekSessions.reduce((m,s)=>Math.max(m, s.total_score||0), 0);
+              const myWeekWordSessions = allWordSessions.filter(s => s.player_id === myId && s.date_key >= weekAgoKey);
+              myLongestWord = myWeekWordSessions.reduce((b,s)=>!b||(s.longest_word_today?.length||0)>(b.length||0)?s.longest_word_today:b, "");
+              const myBestWordEntry = myWeekWordSessions.reduce((b,s)=>!b||(s.top_word_score||0)>(b.top_word_score||0)?s:b, null);
+              myBestWord = myBestWordEntry?.top_word || "";
+              myBestWordScore = myBestWordEntry?.top_word_score || 0;
+              myPerfectDays = myWeekSessions.filter(s => s.perfect_day === true).length;
+            }
             const yourBest = !isGuest && myData ? (
-              <div style={{marginTop:12,background:"rgba(167,139,250,0.1)",border:"1.5px solid rgba(167,139,250,0.4)",borderRadius:12,padding:"12px 14px"}}>
-                <div style={{fontSize:10,color:"#a78bfa",fontWeight:"bold",letterSpacing:2,textAlign:"center",marginBottom:10}}>── YOUR BEST ──</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
+              <div style={{marginTop:12,background:"rgba(167,139,250,0.1)",border:"1.5px solid rgba(167,139,250,0.4)",borderRadius:12,padding:"10px 10px"}}>
+                <div style={{fontSize:10,color:"#a78bfa",fontWeight:"bold",letterSpacing:2,textAlign:"center",marginBottom:8}}>── YOUR BEST · {periodLabel.toUpperCase()} ──</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
                     <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>🏆 Top Score</div>
-                    <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365"}}>{(myData.lifetime_points||0).toLocaleString()}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>lifetime pts</div>
+                    <div style={{fontSize:13,fontWeight:"bold",color:"#f6d365",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myBestScore.toLocaleString()}</div>
+                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{leaderboardPeriod==="alltime"?"lifetime pts":"pts"}</div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>📏 Longest Word</div>
-                    <div style={{fontSize:14,fontWeight:"bold",color:"#a78bfa"}}>{myData.stats?.longestWordAllTime||"—"}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{myData.stats?.longestWordAllTime?(myData.stats.longestWordAllTime.length+" letters"):"none yet"}</div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>📏 Longest</div>
+                    <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myLongestWord||"—"}</div>
+                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{myLongestWord?(myLongestWord.length+" letters"):"none yet"}</div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
                     <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>💎 Best Word</div>
-                    <div style={{fontSize:14,fontWeight:"bold",color:"#f093fb"}}>{myData.stats?.highWordAllTimeWord||"—"}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{myData.stats?.highWordAllTime?(myData.stats.highWordAllTime+" pts"):"none yet"}</div>
+                    <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myBestWord||"—"}</div>
+                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{myBestWordScore?(myBestWordScore+" pts"):"none yet"}</div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"8px 10px"}}>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>🌈🏆 Perfect Days</div>
-                    <div style={{fontSize:14,fontWeight:"bold",color:"#6ee7b7"}}>{myData.stats?.perfectDaysAllTime||0}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>all-time</div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>🌈🏆 Perfect</div>
+                    <div style={{fontSize:13,fontWeight:"bold",color:"#6ee7b7"}}>{myPerfectDays}</div>
+                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{leaderboardPeriod==="alltime"?"all-time":leaderboardPeriod==="weekly"?"this week":"today"}</div>
                   </div>
                 </div>
               </div>

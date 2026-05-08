@@ -105,6 +105,21 @@ function getBonusPositions(count, bonusCount, rng) {
   }
   return positions;
 }
+// ── LOOT LETTER ─────────────────────────────────────────────
+// One hidden bonus tile per day, deterministic from date seed.
+// All players see the same letter at the same level/position.
+// When used in a valid word, awards 5x its base letter value.
+// One-time per game; resets on Start New Game.
+function getLootLetterToday() {
+  const seed = getDailySeed();
+  const rng = seededRandom(seed + 31337);
+  const level = 1 + Math.floor(rng() * 5); // Level 1-5
+  // tile index within that level (count = 42 + (level-1)*6)
+  const tileCount = 42 + (level - 1) * 6;
+  const tileIndex = Math.floor(rng() * tileCount);
+  return { level, tileIndex };
+}
+
 function generateLevelTiles(level, startId, rng, bonusPositions) {
   const pool = buildPool(rng);
   const count = 42 + (level - 1) * 6;
@@ -113,9 +128,12 @@ function generateLevelTiles(level, startId, rng, bonusPositions) {
     const replaceIdx = letters.findIndex(l => !["Q","A","E","I","O","U"].includes(l));
     if (replaceIdx !== -1) letters[replaceIdx] = "U";
   }
+  const lootInfo = getLootLetterToday();
+  const isLootLevel = level === lootInfo.level;
   return letters.map((l, i) => ({
     id: startId + i, letter: l, value: LETTER_VALUES[l], used: false,
     bonus: bonusPositions.includes(i) ? (Math.random() < 0.5 ? "double" : "triple") : null,
+    isLoot: isLootLevel && i === lootInfo.tileIndex,
   }));
 }
 function calcWordScore(tileIds, tiles) {
@@ -123,9 +141,11 @@ function calcWordScore(tileIds, tiles) {
   tileIds.forEach(id => {
     const tile = tiles.find(t => t.id === id);
     if (!tile) return;
-    if (tile.bonus === "double") score += tile.value * 2;
-    else if (tile.bonus === "triple") score += tile.value * 3;
-    else score += tile.value;
+    let val = tile.value;
+    if (tile.isLoot) val = tile.value * 5; // Loot Letter: 5x base value
+    if (tile.bonus === "double") score += val * 2;
+    else if (tile.bonus === "triple") score += val * 3;
+    else score += val;
   });
   return score;
 }
@@ -1188,10 +1208,10 @@ function getDailyHistory() {
   } catch { return { date: getTodayKey(), games: [] }; }
 }
 function saveDailyHistory(history) { try { localStorage.setItem("ll_daily_history", JSON.stringify(history)); } catch {} }
-function appendToDailyHistory(word, score, valid, medical, collegiate, gameIndex) {
+function appendToDailyHistory(word, score, valid, medical, collegiate, gameIndex, loot=false) {
   const history = getDailyHistory();
   if (!history.games[gameIndex]) history.games[gameIndex] = [];
-  history.games[gameIndex].push({ word, score, valid, medical, collegiate });
+  history.games[gameIndex].push({ word, score, valid, medical, collegiate, loot });
   saveDailyHistory(history);
 }
 
@@ -1887,6 +1907,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [wotdFound, setWotdFound] = useState(wotdData.current?.found || false);
   const [showWotdReminder, setShowWotdReminder] = useState(false);
   const [wotdCelebration, setWotdCelebration] = useState(false);
+  const [lootCelebration, setLootCelebration] = useState(null); // {word, score, letter}
   const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
     try {
       const cached = getCachedWordOfTheDay();
@@ -2383,11 +2404,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
   const getPerfectDayShareText = useCallback(() => {
     const allValid = submittedRef.current.filter(s => s.valid);
-    const bestWord = allValid.reduce((b, s) => !b || s.score > b.score ? s : b, null);
-    const longestW = allValid.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
+    // CRITICAL: exclude loot words from share — score/length would expose the loot letter
+    // to other players today. Loot Letter must remain a daily mystery.
+    const shareableWords = allValid.filter(s => !s.loot);
+    const bestWord = shareableWords.reduce((b, s) => !b || s.score > b.score ? s : b, null);
+    const longestW = shareableWords.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
     const sharer = playerName ? `${playerName} had a 🌈🏆 Perfect Day on LetterLoot!` : "🌈🏆 PERFECT DAY on LetterLoot!";
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
-    const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — L${wotdFoundDetails.level}, ${wotdFoundDetails.score} pts` : "";
+    const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts` : "";
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
     return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
   }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
@@ -2491,10 +2515,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       setShake(true); setTimeout(() => setShake(false), 500);
       // Word reporting moved to History page — no in-game popup
     }
-    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false };
+    // Detect Loot Letter use early (before history append) so we can flag it
+    const usedLootTile = valid ? tiles.find(t => selected.includes(t.id) && t.isLoot && !t.used) : null;
+    const isLootWord = !!usedLootTile;
+    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false, loot: isLootWord };
     const newSubmitted = [...submittedRef.current, newEntry];
     submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
-    appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current);
+    appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current, isLootWord);
     setDailyHistory(getDailyHistory());
     // Track guest games — fire once per session (when first word is submitted)
     if (isGuest && submittedRef.current.length === 1) {
@@ -2527,7 +2554,46 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           if (!pausedRef.current && !levelComplete) startTimer();
         }, 5000);
       }
-      const newTiles = tiles.map(t => selected.includes(t.id) ? { ...t, used: true } : t);
+      const newTiles = tiles.map(t => {
+        if (!selected.includes(t.id)) return t;
+        // Mark used; if this was the loot letter, also flag lootUsed for persistent styling
+        return t.isLoot ? { ...t, used: true, lootUsed: true } : { ...t, used: true };
+      });
+      // ── Loot Letter detection (already determined above as usedLootTile) ──
+      if (usedLootTile) {
+        // Fire celebration: popup, haptic, sound (no confetti per spec)
+        stopTimer();
+        setLootCelebration({ word: currentWord, score, letter: usedLootTile.letter });
+        // Haptic feedback (1-2 sharp pulses, slot-machine win style)
+        try { if (navigator.vibrate) navigator.vibrate([60, 40, 120]); } catch {}
+        // Sound effect if not muted
+        try {
+          if (musicOn) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const playTone = (freq, time, dur=0.15) => {
+              const osc = audioCtx.createOscillator();
+              const gain = audioCtx.createGain();
+              osc.connect(gain); gain.connect(audioCtx.destination);
+              osc.frequency.value = freq;
+              osc.type = "triangle";
+              gain.gain.setValueAtTime(0, audioCtx.currentTime + time);
+              gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + time + 0.02);
+              gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + time + dur);
+              osc.start(audioCtx.currentTime + time); osc.stop(audioCtx.currentTime + time + dur);
+            };
+            // Slot-machine ascending chime
+            playTone(523.25, 0);     // C5
+            playTone(659.25, 0.08);  // E5
+            playTone(783.99, 0.16);  // G5
+            playTone(1046.50, 0.24, 0.3); // C6 (held)
+          }
+        } catch {}
+        // Auto-dismiss after 5s and resume timer
+        setTimeout(() => {
+          setLootCelebration(null);
+          if (!pausedRef.current && !levelComplete) startTimer();
+        }, 5000);
+      }
       setTiles(newTiles);
       setLastValidEntry({ word: currentWord, score, tileIds: [...selected], levelScoreDelta: score });
       const ats = getAllTimeStats(); ats.words += 1; ats.score += score; saveAllTimeStats(ats);
@@ -3076,6 +3142,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       )}
 
+      {/* Loot Letter celebration — fires when player uses the daily Loot Letter in a valid word */}
+      {lootCelebration && (
+        <div style={{position:"fixed",inset:0,zIndex:9700,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+          <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:"24px 32px",boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:340,width:"100%"}}>
+            <div style={{fontSize:42,marginBottom:6}}>💥✨</div>
+            <div style={{fontSize:18,color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:8}}>💥 LOOT LETTER! 💥</div>
+            <div style={{fontSize:13,color:"#2d1b00",fontWeight:"bold",marginBottom:6}}>You found the hidden Loot Letter!</div>
+            <div style={{fontSize:16,fontWeight:"bold",color:"#003300"}}>5× Letter Bonus Applied!</div>
+            <div style={{fontSize:14,fontWeight:"bold",color:"#003300",marginTop:4}}>+{lootCelebration.score} pts on this word</div>
+          </div>
+        </div>
+      )}
+
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 5s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
         <div style={{display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
         <div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div>
@@ -3455,10 +3534,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </div>}
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:3,marginBottom:3}}>
-                {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; return(
-                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:38,height:44,background:tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)"}}>
-                    <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
-                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isTriple?"3×":isDouble?"2×":tile.value}</div>
+                {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; const isLootUsed=tile.lootUsed; return(
+                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${isLootUsed?" loot-used":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:38,height:44,background:isLootUsed?"linear-gradient(135deg,#f6d365,#fda085)":tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isLootUsed?"2px solid #00e676":isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)",boxShadow:isLootUsed?"0 0 12px rgba(246,211,101,0.6),0 0 4px rgba(0,230,118,0.5)":"none",position:"relative"}}>
+                    <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
+                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isLootUsed?"5×":isTriple?"3×":isDouble?"2×":tile.value}</div>
+                    {isLootUsed&&<div style={{position:"absolute",top:-4,right:-4,fontSize:10}}>✨</div>}
                   </div>
                 );})}
               </div>
@@ -3522,10 +3602,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                       // Allow reporting of ANY invalid word (3+ letters) — admin reviews
                       const canReport = !s.valid && s.word.length >= 3 && !isReported;
                       return (
-                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1px solid ${s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)"}`,borderRadius:10,padding:"8px 12px",marginBottom:4}}>
+                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.loot?"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))":s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1.5px solid ${s.loot?"rgba(0,230,118,0.7)":(s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)")}`,borderRadius:10,padding:"8px 12px",marginBottom:4,boxShadow:s.loot?"0 0 12px rgba(246,211,101,0.4)":"none"}}>
                         <div style={{flex:1}}>
-                          <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:"#f5f0e8"}}>{s.word}</div>
-                          <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:1}}>{s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
+                          <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:s.loot?"#f6d365":"#f5f0e8"}}>{s.loot?"💥 ":""}{s.word}{s.loot?" ✨":""}</div>
+                          <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:1}}>{s.loot?<span style={{color:"#f6d365",fontWeight:"bold"}}>💥 LOOT LETTER! 5× bonus</span>:s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
                           {!s.valid && (canReport ? (
                             <button onClick={async (e)=>{
                               e.stopPropagation();

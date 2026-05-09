@@ -3948,15 +3948,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
-            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"badges",label:"🏅 Badges"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
               <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:8,background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* Period tabs — only show for non-streaks and non-badges (those are lifetime-only) */}
-          {leaderboardTab!=="streaks"&&leaderboardTab!=="badges"&&(
+          {/* Period tabs — only show for non-streaks (streaks is lifetime-only) */}
+          {leaderboardTab!=="streaks"&&(
             <div style={{display:"flex",gap:3,marginBottom:8}}>
               {[{id:"daily",label:"☀️ Today"},{id:"weekly",label:"📅 This Week"},{id:"alltime",label:"🏆 All-Time"}].map(p=>(
                 <button key={p.id} className="ll-tab" onClick={()=>setLeaderboardPeriod(p.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:9,background:leaderboardPeriod===p.id?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.06)",color:leaderboardPeriod===p.id?"#fff":"rgba(255,255,255,0.55)",fontWeight:leaderboardPeriod===p.id?"bold":"normal",border:leaderboardPeriod===p.id?"none":"1px solid rgba(255,255,255,0.15)",textAlign:"center"}}>
@@ -4230,32 +4230,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               if (leaderboardPeriod==="weekly") rows = [...gs].filter(g=>weekPerfectById[g.player_id]>0).sort((a,b)=>(weekPerfectById[b.player_id]||0)-(weekPerfectById[a.player_id]||0)).slice(0,10).map(g=>({name:g.player_name,val:weekPerfectById[g.player_id],suffix:"days",valColor:"#6ee7b7"}));
               if (!rows.length) return <div>{empty}{yourBest}</div>;
               return <div>{renderRows(rows)}{yourBest}</div>;
-            }
-
-            // ── BADGES — total lifetime badges earned per player ──
-            // Period is locked to all-time (badges are inherently lifetime)
-            if (leaderboardTab==="badges") {
-              const totalLifetimeBadges = BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length;
-              const rows = [...gs].map(g => {
-                const lifetime = (g.badges?.lifetime || []);
-                return { ...g, badgeCount: lifetime.length };
-              }).filter(g => g.badgeCount > 0)
-                .sort((a,b) => b.badgeCount - a.badgeCount)
-                .slice(0,10)
-                .map(g => ({
-                  name: g.player_name,
-                  val: "🏅 " + g.badgeCount,
-                  suffix: "/ " + totalLifetimeBadges,
-                  valColor: "#f093fb",
-                }));
-              if (!rows.length) return <div>{empty}{yourBest}</div>;
-              return (
-                <div>
-                  <div style={{textAlign:"center",fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:1}}>ALL-TIME BADGES EARNED</div>
-                  {renderRows(rows)}
-                  {yourBest}
-                </div>
-              );
             }
 
             // ── STREAKS — ALL-TIME ONLY ──

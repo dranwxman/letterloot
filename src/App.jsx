@@ -2413,7 +2413,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setTimeout(() => setNewRecord(null), 2500);
   }, []);
 
-  const handleFullReset = useCallback(() => {
+  const handleFullReset = useCallback((opts = {}) => {
+    const skipWelcome = opts.skipWelcome === true;
     const rng = seededRandom(getDailySeed());
     const bp = getBonusPositions(42, getBonusCount(1), rng);
     setTiles(generateLevelTiles(1, 0, rng, bp));
@@ -2450,9 +2451,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     gameIndexRef.current += 1;
     clearLocalSession();
     justResetRef.current = true;
-    setShowReadyScreen(true);
-    // Don't wipe cloud session — justResetRef flag prevents stale reload
-    setShowIntro(true);
+    // After reset, drop to Welcome OR directly to Ready, never both.
+    // Setting both causes a double-prompt: Welcome → Let's Go → Ready → Let's Go again.
+    if (skipWelcome) {
+      setShowReadyScreen(true);
+      setShowIntro(false);
+    } else {
+      setShowReadyScreen(false);
+      setShowIntro(true);
+    }
   }, [startTimer, stopTimer, setPerfectDaySync]);
 
   const doLevelReset = useCallback(() => {
@@ -3434,7 +3441,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <div style={{marginTop:14}}>
               <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginBottom:8}}>Want to play again?</div>
               <div style={{display:"flex",gap:6}}>
-                <button className="ll-btn replay-btn" onClick={()=>{ setPlayAgainChoice("now"); setTimeout(()=>{ setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset(); },2000); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:11,fontWeight:"bold",border:"none"}}>✏️ Now</button>
+                <button className="ll-btn replay-btn" onClick={()=>{ setPlayAgainChoice("now"); setTimeout(()=>{ setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset({skipWelcome:true}); },2000); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:11,fontWeight:"bold",border:"none"}}>✏️ Now</button>
                 <button className="ll-btn" onClick={()=>setPlayAgainChoice("later")} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:11,fontWeight:"bold"}}>🌅 Later</button>
                 <button className="ll-btn" onClick={()=>setPlayAgainChoice("tomorrow")} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:11,fontWeight:"bold"}}>🌙 Tomorrow</button>
               </div>
@@ -3486,7 +3493,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
           <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
           <div style={{display:"flex",flexDirection:"row",gap:6}}>
-            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset();}} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Now</button>
+            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset({skipWelcome:true});}} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Now</button>
             <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); handleFullReset(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:12,fontWeight:"bold"}}>🌅 Later</button>
             <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); triggerFarewell(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold"}}>🌙 Tomorrow</button>
           </div>
@@ -3536,13 +3543,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           <span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:"1px 7px",background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
           <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
           <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>♫</button>
-          <button onClick={()=>{
+          {tab==="play" && <button onClick={()=>{
             // If there's no meaningful progress, skip the confirm
             const hasProgress = (submittedRef.current||[]).some(s=>s.valid) || level>1 || totalRef.current>0;
             if (hasProgress) setShowNewGameConfirm(true);
             else handleFullReset();
-          }} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>🆕 Start New Game</button>
-          <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>
+          }} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>🆕 Start New Game</button>}
+          {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
         </div>
 
         {/* ROW 2: History · Stats · Tips · Level pill */}
@@ -3603,8 +3610,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </button>
             <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
               disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
-              style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.1)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.25)",textAlign:"center",fontWeight:"bold"}}>
-              {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO last word — 1,000 pts`:`↩️ UNDO at 1,000 pts (you have ${totalRef.current.toLocaleString()})`)}
+              style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold"}}>
+              {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO last word — 1,000 pts`:<span>↩️ UNDO at <span style={{color:"#fda085"}}>1,000 pts</span> (you have <span style={{color:"#f6d365"}}>{totalRef.current.toLocaleString()}</span>)</span>)}
             </button>
           </div>
           {shareLLCopied&&<div style={{textAlign:"center",fontSize:9,color:"#6ee7b7",marginBottom:2}}>Copied! Share with your friends.</div>}

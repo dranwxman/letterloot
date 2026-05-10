@@ -183,7 +183,7 @@ function calcWordScore(tileIds, tiles) {
     const tile = tiles.find(t => t.id === id);
     if (!tile) return;
     let val = tile.value;
-    if (tile.isLoot) val = tile.value * 5; // Loot Letter: 5x base value
+    if (tile.isLoot && !tile.lootUsed) val = tile.value * 5; // Loot Letter: 5x base value (one-time per game)
     if (tile.bonus === "double") score += val * 2;
     else if (tile.bonus === "triple") score += val * 3;
     else score += val;
@@ -2063,6 +2063,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [flash, setFlash] = useState(null);
   const [showBadge, setShowBadge] = useState(null);
   const [showBadgeExtra, setShowBadgeExtra] = useState("");
+  const badgeQueueRef = useRef([]);
+  const badgePopupActiveRef = useRef(false);
   const [tab, setTab] = useState(initialTab || "play");
   const [confetti, setConfetti] = useState(false);
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
@@ -2368,42 +2370,61 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   useEffect(() => { if (musicOn && !paused) startMusic(); else stopMusic(); return () => stopMusic(); }, [musicOn, paused]);
 
   // BUG FIX 4: Independent scope checking for "all" badges
+  const processBadgeQueue = useCallback(() => {
+    if (badgePopupActiveRef.current) return; // already showing one
+    const next = badgeQueueRef.current.shift();
+    if (!next) return;
+    badgePopupActiveRef.current = true;
+    setShowBadge(next.id);
+    setShowBadgeExtra(next.extraLabel || "");
+    stopTimer();
+    setConfetti(true);
+    setTimeout(() => setConfetti(false), 5000);
+    setTimeout(() => {
+      setShowBadge(null); setShowBadgeExtra("");
+      badgePopupActiveRef.current = false;
+      // Process next badge in queue (if any)
+      if (badgeQueueRef.current.length > 0) {
+        // Brief pause between badges so player can register each one
+        setTimeout(() => processBadgeQueue(), 400);
+      } else {
+        // Queue empty — restart timer if still in active gameplay
+        if (!pausedRef.current && !levelComplete) startTimer();
+      }
+    }, 5000);
+  }, [stopTimer, startTimer, levelComplete]);
+
   const awardBadge = useCallback((id, extraLabel) => {
     const def = BADGE_DEFS.find(b => b.id === id);
     if (!def) return;
-    setBadgeStore(prev => {
-      const todayKey = getTodayKey(); const weekKey = getWeekKey();
-      const lifetimeHas = prev.lifetime.includes(id);
-      const weeklyHas = (prev.weekly[weekKey] || []).includes(id);
-      const dailyHas = (prev.daily[todayKey] || []).includes(id);
-      let needsAward = false;
-      if (def.scope === "lifetime" && !lifetimeHas) needsAward = true;
-      if (def.scope === "daily" && !dailyHas) needsAward = true;
-      if (def.scope === "weekly" && !weeklyHas) needsAward = true;
-      if (def.scope === "all") {
-        if (!lifetimeHas || !weeklyHas || !dailyHas) needsAward = true;
-      }
-      if (!needsAward) return prev;
-      const showPopup = !lifetimeHas || (def.scope === "daily" && !dailyHas) || (def.scope === "all" && !dailyHas);
-      if (showPopup) {
-        setShowBadge(id);
-        setShowBadgeExtra(extraLabel || "");
-        // Pause game timer during badge celebration
-        stopTimer();
-        // Fire confetti for the celebration
-        setConfetti(true);
-        setTimeout(() => setConfetti(false), 5000);
-        // Hold the badge popup for 5 seconds, then resume timer (if not paused)
-        setTimeout(() => {
-          setShowBadge(null); setShowBadgeExtra("");
-          if (!pausedRef.current && !levelComplete) startTimer();
-        }, 5000);
-      }
-      const updated = awardBadgeToStore(prev, id, def.scope);
-      saveBadgeStore(updated);
-      return updated;
-    });
-  }, []);
+    // Synchronous store check + write — avoid React batching issues by using
+    // localStorage as the source of truth for the deduplication check
+    const currentStore = (() => {
+      try { return JSON.parse(localStorage.getItem("ll_badges_v2") || "null") || { lifetime: [], weekly: {}, daily: {} }; }
+      catch { return { lifetime: [], weekly: {}, daily: {} }; }
+    })();
+    const todayKey = getTodayKey(); const weekKey = getWeekKey();
+    const lifetimeHas = (currentStore.lifetime || []).includes(id);
+    const weeklyHas = (currentStore.weekly?.[weekKey] || []).includes(id);
+    const dailyHas = (currentStore.daily?.[todayKey] || []).includes(id);
+    let needsAward = false;
+    if (def.scope === "lifetime" && !lifetimeHas) needsAward = true;
+    if (def.scope === "daily" && !dailyHas) needsAward = true;
+    if (def.scope === "weekly" && !weeklyHas) needsAward = true;
+    if (def.scope === "all" && (!lifetimeHas || !weeklyHas || !dailyHas)) needsAward = true;
+    if (!needsAward) return;
+    // Apply update to localStorage and React state
+    const updated = awardBadgeToStore(currentStore, id, def.scope);
+    saveBadgeStore(updated);
+    setBadgeStore(updated);
+    // Determine if this should pop a celebration
+    const showPopup = !lifetimeHas || (def.scope === "daily" && !dailyHas) || (def.scope === "all" && !dailyHas);
+    if (showPopup) {
+      // Queue for serial display
+      badgeQueueRef.current.push({ id, extraLabel });
+      processBadgeQueue();
+    }
+  }, [processBadgeQueue]);
 
   const flashNewRecord = useCallback((type, value, lvl) => {
     const label = type === "score" ? `🏆 New Level ${lvl} High Score: ${value.toLocaleString()} pts!` : `⚡ New Level ${lvl} Best Time: ${formatTime(value)}!`;
@@ -2625,7 +2646,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       // Word reporting moved to History page — no in-game popup
     }
     // Detect Loot Letter use early (before history append) so we can flag it
-    const usedLootTile = valid ? tiles.find(t => selected.includes(t.id) && t.isLoot && !t.used) : null;
+    // Loot detection: must be selected, must be the loot tile, must be unused,
+    // AND must not have been used previously in this game (lootUsed flag persists across replays)
+    const usedLootTile = valid ? tiles.find(t => selected.includes(t.id) && t.isLoot && !t.used && !t.lootUsed) : null;
     const isLootWord = !!usedLootTile;
     const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false, loot: isLootWord };
     const newSubmitted = [...submittedRef.current, newEntry];

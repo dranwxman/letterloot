@@ -50,6 +50,18 @@ function getShortDate() {
 function getShortDateCompact() {
   return new Date().toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
 }
+// Format a date_key string like "2026-5-7" → "May 7" (current year) or "May 7, 2025" (different year)
+function formatDateKey(key) {
+  if (!key) return "";
+  const parts = key.split("-").map(p => parseInt(p, 10));
+  if (parts.length !== 3 || parts.some(isNaN)) return "";
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  if (isNaN(d.getTime())) return "";
+  const thisYear = new Date().getFullYear();
+  return d.getFullYear() === thisYear
+    ? d.toLocaleDateString("en-US", { month:"short", day:"numeric" })
+    : d.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" });
+}
 function formatTime(seconds) {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
   const s = (seconds % 60).toString().padStart(2, "0");
@@ -3998,7 +4010,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
-            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Word Scores"},{id:"longest",label:"📏 Longest Words"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
               <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:8,background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
@@ -4086,7 +4098,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                     <div style={{flex:1}}>
                       {r.word
                         ? <><div style={{fontSize:13,fontWeight:"bold",color:r.wordColor||"#f093fb",letterSpacing:2}}>{r.word}</div>
-                            <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}</div></>
+                            <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}{r.date&&<span style={{color:"rgba(255,255,255,0.35)",marginLeft:6}}>· {formatDateKey(r.date)}</span>}</div></>
                         : <><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>
                             {isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}
                             {r.sub&&<div style={{fontSize:9,color:"#fda085",marginTop:1}}>{r.sub}</div>}</>
@@ -4216,24 +4228,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
                   .sort((a,b)=>b.score-a.score)
                   .slice(0,10)
-                  .map(s=>({name:s.name, word:s.word, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
+                  .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
               }
               if (leaderboardPeriod==="daily") {
                 rows = allWordSessions
                   .filter(s=>s.top_word && s.top_word_score>0 && s.date_key===todayKey)
-                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score }))
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
                   .sort((a,b)=>b.score-a.score)
                   .slice(0,10)
-                  .map(s=>({name:s.name, word:s.word, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
+                  .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
               }
               if (leaderboardPeriod==="weekly") {
                 const weekAgoNum = dateKeyToNum(weekAgoKey);
                 rows = allWordSessions
                   .filter(s=>s.top_word && s.top_word_score>0 && dateKeyToNum(s.date_key)>=weekAgoNum)
-                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score }))
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
                   .sort((a,b)=>b.score-a.score)
                   .slice(0,10)
-                  .map(s=>({name:s.name, word:s.word, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
+                  .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
               }
               if (!rows.length) return <div>{empty}{yourBest}</div>;
               return <div>{renderRows(rows)}{yourBest}</div>;
@@ -4248,27 +4260,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               if (leaderboardPeriod==="alltime") {
                 rows = allWordSessions
                   .filter(s=>s.longest_word_today && s.longest_word_today.length>0)
-                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length }))
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length, date: s.date_key }))
                   .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
                   .slice(0,10)
-                  .map(s=>({name:s.name, word:s.word, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
+                  .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
               }
               if (leaderboardPeriod==="daily") {
                 rows = allWordSessions
                   .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && s.date_key===todayKey)
-                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length }))
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length, date: s.date_key }))
                   .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
                   .slice(0,10)
-                  .map(s=>({name:s.name, word:s.word, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
+                  .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
               }
               if (leaderboardPeriod==="weekly") {
                 const weekAgoNum = dateKeyToNum(weekAgoKey);
                 rows = allWordSessions
                   .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && dateKeyToNum(s.date_key)>=weekAgoNum)
-                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length }))
+                  .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length, date: s.date_key }))
                   .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
                   .slice(0,10)
-                  .map(s=>({name:s.name, word:s.word, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
+                  .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
               }
               if (!rows.length) return <div>{empty}{yourBest}</div>;
               return <div>{renderRows(rows)}{yourBest}</div>;

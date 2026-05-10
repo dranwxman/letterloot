@@ -21,6 +21,15 @@ function getTodayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
+// Convert a date_key string like "2026-5-10" to a sortable integer 20260510.
+// This avoids lexicographic comparison bugs where "2026-5-10" is treated as
+// less than "2026-5-3" because '1' < '3' character-wise.
+function dateKeyToNum(key) {
+  if (!key || typeof key !== "string") return 0;
+  const parts = key.split("-").map(p => parseInt(p, 10));
+  if (parts.length !== 3 || parts.some(isNaN)) return 0;
+  return parts[0] * 10000 + parts[1] * 100 + parts[2];
+}
 function getYesterdayKey() {
   const d = new Date();
   d.setDate(d.getDate() - 1);
@@ -1622,8 +1631,13 @@ function AdminScreen({ onExit }) {
       const tdAgo7 = new Date(Date.now()-7*86400000); const weekAgo = tdAgo7.getFullYear()+'-'+(tdAgo7.getMonth()+1)+'-'+tdAgo7.getDate();
       const tdAgo14 = new Date(Date.now()-14*86400000); const twoWeeksAgo = tdAgo14.getFullYear()+'-'+(tdAgo14.getMonth()+1)+'-'+tdAgo14.getDate();
       const todaySessions = await adminQuery('daily_sessions', 'player_id,date_key,total_score,perfect_day', `&date_key=eq.${today}`);
-      const recentSessions = await adminQuery('daily_sessions', 'date_key', `&date_key=gte.${twoWeeksAgo}`);
-      const weekSessions = await adminQuery('daily_sessions', 'player_id,date_key', `&date_key=gte.${weekAgo}`);
+      // Date filtering: server-side gte on text columns has lexicographic bugs
+      // (e.g. "2026-5-10" < "2026-5-3"), so fetch all and filter client-side numerically
+      const weekAgoNum = tdAgo7.getFullYear()*10000 + (tdAgo7.getMonth()+1)*100 + tdAgo7.getDate();
+      const twoWeeksAgoNum = tdAgo14.getFullYear()*10000 + (tdAgo14.getMonth()+1)*100 + tdAgo14.getDate();
+      const allRecentForFilter = await adminQuery('daily_sessions', 'player_id,date_key', `&limit=2000`);
+      const recentSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= twoWeeksAgoNum);
+      const weekSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= weekAgoNum);
       const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
       const wordReports = await adminQuery('word_reports', '*', '&order=reported_at.desc&limit=50').catch(()=>[]);
       // Build top 25 longest words and top word scores from ALL daily sessions
@@ -2555,16 +2569,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         const timer = setTimeout(() => ctrl.abort(), 8000);
         return fetch(url, { headers:hdrs, signal:ctrl.signal }).finally(() => clearTimeout(timer));
       };
+      // weekSessions: fetch all, filter client-side using numeric date comparison
+      // (server-side date_key=gte is unreliable due to lexicographic comparison
+      // bugs e.g. "2026-5-10" < "2026-5-3")
       const [gsRes, todayRes, weekRes, wotdAllRes, allWordSessionsRes] = await Promise.all([
         fetchWithAbort(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats,badges&order=lifetime_points.desc&limit=100`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today,wotd_found,top_word,top_word_score&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
-        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,wotd_found,longest_word_today,top_word,top_word_score&date_key=gte.${(()=>{const d=new Date(Date.now()-7*86400000);return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=500`),
+        fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,wotd_found,longest_word_today,top_word,top_word_score&limit=2000`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,wotd_found&wotd_found=eq.true&limit=2000`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,longest_word_today,top_word,top_word_score&limit=2000`),
       ]);
       const gs = gsRes.ok ? await gsRes.json() : [];
       const todaySessions = todayRes.ok ? await todayRes.json() : [];
-      const weekSessions = weekRes.ok ? await weekRes.json() : [];
+      // Filter weekSessions client-side using numeric date comparison
+      const weekAgoNum = (() => { const d = new Date(Date.now() - 7*86400000); return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate(); })();
+      const allWeekRaw = weekRes.ok ? await weekRes.json() : [];
+      const weekSessions = allWeekRaw.filter(s => dateKeyToNum(s.date_key) >= weekAgoNum);
       const wotdAllSessions = wotdAllRes.ok ? await wotdAllRes.json() : [];
       const allWordSessions = allWordSessionsRes.ok ? await allWordSessionsRes.json() : [];
       return { gs, todaySessions, weekSessions, wotdAllSessions, allWordSessions };
@@ -3969,6 +3989,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             </div>}
           </div>
 
+          {/* Prominent return button at top — only shown when arrived from Perfect Day */}
+          {leaderboardFromPerfectDay&&(
+            <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(false); setTab('play'); setPerfectDayAchieved(true); }} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,165,0,0.2))",border:"2px solid rgba(255,215,0,0.6)",color:"#f6d365",fontSize:13,fontWeight:"bold",marginBottom:8}}>
+              🌈 ← Back to Perfect Day
+            </button>
+          )}
+
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
             {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
@@ -4107,7 +4134,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
               // best scoring session this week
               const myWeekSessions = weekSessions.filter(s => s.player_id === myId);
               myBestScore = myWeekSessions.reduce((m,s)=>Math.max(m, s.total_score||0), 0);
-              const myWeekWordSessions = allWordSessions.filter(s => s.player_id === myId && s.date_key >= weekAgoKey);
+              const myWeekWordSessions = allWordSessions.filter(s => s.player_id === myId && dateKeyToNum(s.date_key) >= dateKeyToNum(weekAgoKey));
               myLongestWord = myWeekWordSessions.reduce((b,s)=>!b||(s.longest_word_today?.length||0)>(b.length||0)?s.longest_word_today:b, "");
               const myBestWordEntry = myWeekWordSessions.reduce((b,s)=>!b||(s.top_word_score||0)>(b.top_word_score||0)?s:b, null);
               myBestWord = myBestWordEntry?.top_word || "";
@@ -4200,8 +4227,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .map(s=>({name:s.name, word:s.word, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
               }
               if (leaderboardPeriod==="weekly") {
+                const weekAgoNum = dateKeyToNum(weekAgoKey);
                 rows = allWordSessions
-                  .filter(s=>s.top_word && s.top_word_score>0 && s.date_key>=weekAgoKey)
+                  .filter(s=>s.top_word && s.top_word_score>0 && dateKeyToNum(s.date_key)>=weekAgoNum)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score }))
                   .sort((a,b)=>b.score-a.score)
                   .slice(0,10)
@@ -4234,8 +4262,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .map(s=>({name:s.name, word:s.word, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
               }
               if (leaderboardPeriod==="weekly") {
+                const weekAgoNum = dateKeyToNum(weekAgoKey);
                 rows = allWordSessions
-                  .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && s.date_key>=weekAgoKey)
+                  .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && dateKeyToNum(s.date_key)>=weekAgoNum)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length }))
                   .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
                   .slice(0,10)
@@ -4274,11 +4303,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             }
           })()}
 
-          {leaderboardFromPerfectDay&&(
-            <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(false); setTab('play'); setPerfectDayAchieved(true); }} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,165,0,0.2))",border:"2px solid rgba(255,215,0,0.6)",color:"#f6d365",fontSize:13,fontWeight:"bold",marginBottom:8}}>
-              🌈 ← Back to Perfect Day
-            </button>
-          )}
           <div style={{marginTop:10,display:"flex",gap:8}}>
             <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:"7px",borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:10,fontWeight:"bold"}}>↺ Refresh</button>
             <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); setTab("play"); } else { returnToGame(); } }} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"✏️ Return to Your Game"}</button>

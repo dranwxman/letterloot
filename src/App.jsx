@@ -770,7 +770,7 @@ function VisualTour({ onDone }) {
     history:"See every word you played today, sorted by score",
     stats:  "Your scores, streaks, Perfect Days and personal records",
     tips:   "Hints and strategies to play smarter",
-    leaders:"Leaderboard — Registered players only! Top Scores, Best Words, Longest Words, Perfect Days and Streaks",
+    leaders:"Leaderboard — Registered players only! Top Scores, Best Scoring Words, Longest Words, Perfect Days and Streaks",
     level:  "Shows your current level",
     pause:  "Stops your timer completely — use it anytime",
     share:  "Copy a link to share the game with friends",
@@ -2569,7 +2569,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
     const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts` : "";
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n🏆 Best Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
   }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
 
   const fetchLeaderboard = async () => {
@@ -4168,7 +4168,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                     <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{myLongestWord?(myLongestWord.length+" letters"):"none yet"}</div>
                   </div>
                   <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>💎 Best Word</div>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>💎 Best Scoring Word</div>
                     <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myBestWord||"—"}</div>
                     <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{myBestWordScore?(myBestWordScore+" pts"):"none yet"}</div>
                   </div>

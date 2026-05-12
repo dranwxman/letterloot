@@ -4227,7 +4227,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .filter(s=>s.top_word && s.top_word_score>0)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
                   .sort((a,b)=>b.score-a.score)
-                  .slice(0,10)
+                  .slice(0,25)
                   .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
               }
               if (leaderboardPeriod==="daily") {
@@ -4235,7 +4235,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .filter(s=>s.top_word && s.top_word_score>0 && s.date_key===todayKey)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
                   .sort((a,b)=>b.score-a.score)
-                  .slice(0,10)
+                  .slice(0,25)
                   .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
               }
               if (leaderboardPeriod==="weekly") {
@@ -4244,7 +4244,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .filter(s=>s.top_word && s.top_word_score>0 && dateKeyToNum(s.date_key)>=weekAgoNum)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.top_word, score: s.top_word_score, date: s.date_key }))
                   .sort((a,b)=>b.score-a.score)
-                  .slice(0,10)
+                  .slice(0,25)
                   .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#f093fb", val:s.score+" pts", valColor:"#f6d365"}));
               }
               if (!rows.length) return <div>{empty}{yourBest}</div>;
@@ -4262,7 +4262,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .filter(s=>s.longest_word_today && s.longest_word_today.length>0)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length, date: s.date_key }))
                   .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
-                  .slice(0,10)
+                  .slice(0,25)
                   .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
               }
               if (leaderboardPeriod==="daily") {
@@ -4270,7 +4270,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && s.date_key===todayKey)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length, date: s.date_key }))
                   .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
-                  .slice(0,10)
+                  .slice(0,25)
                   .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
               }
               if (leaderboardPeriod==="weekly") {
@@ -4279,7 +4279,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
                   .filter(s=>s.longest_word_today && s.longest_word_today.length>0 && dateKeyToNum(s.date_key)>=weekAgoNum)
                   .map(s=>({ name: playerNameMap[s.player_id] || 'Guest', word: s.longest_word_today, len: s.longest_word_today.length, date: s.date_key }))
                   .sort((a,b)=>b.len-a.len || a.word.localeCompare(b.word))
-                  .slice(0,10)
+                  .slice(0,25)
                   .map(s=>({name:s.name, word:s.word, date:s.date, wordColor:"#a78bfa", val:s.len, suffix:"ltrs", valColor:"#22d3ee"}));
               }
               if (!rows.length) return <div>{empty}{yourBest}</div>;

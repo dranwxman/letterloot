@@ -1476,40 +1476,39 @@ function InstallPrompt({ open, onClose, onPermanentDismiss, isSecondVisit }) {
   );
 }
 
-function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats }) {
-  const [opacity, setOpacity] = useState(1);
-  const fadeTimerRef = useRef(null);
-  const startFade = useCallback(() => {
-    fadeTimerRef.current = setTimeout(() => {
-      let op = 1;
-      const fade = setInterval(() => { op -= 0.02; setOpacity(op); if (op <= 0) { clearInterval(fade); onDone(); } }, 30);
-    }, 6000);
-  }, [onDone]);
-  useEffect(() => { startFade(); return () => clearTimeout(fadeTimerRef.current); }, []);
-  const handleViewStats = () => { clearTimeout(fadeTimerRef.current); setOpacity(1); onViewStats(); };
+function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats, onViewLeaderboard, onPlayAgain }) {
   return (
-    <div style={{ position:"fixed", inset:0, zIndex:99999, background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"30px 24px", fontFamily:"Georgia,serif", color:"#f5f0e8", opacity, transition:"opacity 0.5s" }}>
+    <div style={{ position:"fixed", inset:0, zIndex:99999, background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"30px 24px", fontFamily:"Georgia,serif", color:"#f5f0e8", overflowY:"auto" }}>
       <Starfield/>
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360}}>
-        <div style={{textAlign:"center",marginBottom:28}}><LetterLootLogo titleFontSize={32} boxPadding="10px 28px"/></div>
+        <div style={{textAlign:"center",marginBottom:20}}><LetterLootLogo titleFontSize={32} boxPadding="10px 28px"/></div>
         <div style={{textAlign:"center",width:"100%"}}>
-          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:16}}>Great effort today! 🎉</div>
-          <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:14,padding:"16px",marginBottom:20,width:"100%"}}>
-            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:8}}>Highest scoring word:</div>
-            <div style={{fontSize:24,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>{bestWord||"—"}</div>
-            <div style={{fontSize:15,color:"#fda085",fontWeight:"bold",marginBottom:12}}>{bestWordScore||0} points</div>
-            <div style={{height:1,background:"rgba(255,255,255,0.12)",marginBottom:12}}/>
-            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Total Score Today</div>
-            <div style={{fontSize:34,fontWeight:"bold",color:"#f6d365"}}>{totalScore||0}</div>
+          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:14}}>Great effort today! 🎉</div>
+          <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:14,padding:"14px",marginBottom:16,width:"100%"}}>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:6}}>Highest scoring word:</div>
+            <div style={{fontSize:22,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>{bestWord||"—"}</div>
+            <div style={{fontSize:14,color:"#fda085",fontWeight:"bold",marginBottom:10}}>{bestWordScore||0} points</div>
+            <div style={{height:1,background:"rgba(255,255,255,0.12)",marginBottom:10}}/>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Total Score Today</div>
+            <div style={{fontSize:30,fontWeight:"bold",color:"#f6d365"}}>{totalScore||0}</div>
           </div>
-          <div style={{background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.3)",borderRadius:14,padding:"18px",marginBottom:20}}>
-            <div style={{fontSize:16,color:"#ffffff",lineHeight:1.9,fontWeight:"bold"}}>Come back tomorrow for a brand new<br/>LetterLoot challenge —<br/>fresh tiles, fresh start,<br/>same great game!</div>
+          <div style={{fontSize:13,color:"#ffffff",lineHeight:1.6,fontWeight:"bold",marginBottom:14}}>
+            Try again? Replay for a higher score, but no Perfect Day chance today.
           </div>
-          <button onClick={handleViewStats} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer",marginBottom:12}}>📊 View My Stats</button>
-          <div style={{fontSize:28,marginBottom:10}}>🌅</div>
-          <div style={{fontSize:20,fontWeight:"bold",color:"#6ee7b7",marginBottom:8}}>See you tomorrow!</div>
-          <div style={{fontSize:15,color:"#ffffff",fontWeight:"bold",letterSpacing:1}}>{getShortDate()}</div>
-          <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:12}}>Fading to home screen…</div>
+          {/* Play Again row: Now / Later / Tomorrow */}
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginBottom:6,letterSpacing:1}}>PLAY AGAIN</div>
+          <div style={{display:"flex",gap:6,marginBottom:14}}>
+            <button onClick={()=>onPlayAgain && onPlayAgain("now")} style={{flex:1,padding:"10px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif"}}>✏️ Now</button>
+            <button onClick={()=>onPlayAgain && onPlayAgain("later")} style={{flex:1,padding:"10px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:12,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🌅 Later</button>
+            <button onClick={()=>onPlayAgain && onPlayAgain("tomorrow")} style={{flex:1,padding:"10px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🌙 Tomorrow</button>
+          </div>
+          {/* Secondary row: Leaderboard / Stats / Close */}
+          <div style={{display:"flex",gap:6,marginBottom:14}}>
+            <button onClick={onViewLeaderboard} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🏆 Leaders</button>
+            <button onClick={onViewStats} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"linear-gradient(135deg,rgba(167,139,250,0.25),rgba(124,58,237,0.15))",border:"1px solid rgba(167,139,250,0.5)",color:"#c4b5fd",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>📊 Stats</button>
+            <button onClick={onDone} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"rgba(255,255,255,0.75)",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>✕ Close</button>
+          </div>
+          <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",fontStyle:"italic",marginTop:8}}>{getShortDate()}</div>
         </div>
       </div>
     </div>
@@ -1920,6 +1919,8 @@ export default function App() {
   const [showFarewell, setShowFarewell] = useState(false);
   const [farewellData, setFarewellData] = useState({ totalScore:0, bestWord:"", bestWordScore:0 });
   const [postFarewellTab, setPostFarewellTab] = useState(null);
+  const showFarewellRef = useRef(false);
+  useEffect(() => { showFarewellRef.current = showFarewell; }, [showFarewell]);
   useEffect(() => {
     getSession().then(session => {
       if (session) { setUser(session.user); setAuthState("playing"); }
@@ -1927,7 +1928,17 @@ export default function App() {
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) { setUser(session.user); setAuthState("playing"); }
-      if (event === "SIGNED_OUT") { setUser(null); setAuthState("auth"); }
+      if (event === "SIGNED_OUT") {
+        // Don't kick the user to auth if they're viewing a Farewell screen — they're
+        // mid-celebration and shouldn't be interrupted by token refresh failures.
+        // The session can be re-established next time they need it.
+        if (showFarewellRef.current) {
+          // Keep showing Farewell. Don't clear user state — it may still be valid
+          // for local rendering. The next save attempt will trigger re-auth if needed.
+          return;
+        }
+        setUser(null); setAuthState("auth");
+      }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -1937,8 +1948,22 @@ export default function App() {
   const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
-  const handleFarewellDone = () => { setShowFarewell(false); setAuthState("auth"); };
+  // Close just dismisses the screen back to the game's play tab — does NOT sign out.
+  // (Previous buggy behavior kicked logged-in users back to the auth screen.)
+  const handleFarewellDone = () => { setShowFarewell(false); setPostFarewellTab("play"); };
   const handleFarewellStats = () => { setShowFarewell(false); setPostFarewellTab("stats"); };
+  const handleFarewellLeaderboard = () => { setShowFarewell(false); setPostFarewellTab("leaderboard"); };
+  // Play Again from Farewell: "now" → fresh game immediately; "later"/"tomorrow" → close
+  // and return to game (player navigates back themselves whenever they want)
+  const handleFarewellPlayAgain = (choice) => {
+    setShowFarewell(false);
+    if (choice === "now") {
+      // Tell GameScreen to start a fresh game on mount
+      setPostFarewellTab("play_now");
+    } else {
+      setPostFarewellTab("play");
+    }
+  };
   if (showAdmin) return <AdminScreen onExit={()=>setShowAdmin(false)}/>;
   if (showCelebrate) return (
     <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',color:'#f5f0e8',padding:'30px 24px',position:'relative',overflow:'hidden'}} onClick={()=>setShowCelebrate(false)}>
@@ -1961,7 +1986,7 @@ export default function App() {
       </div>
     </div>
   );
-  if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats}/>;
+  if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats} onViewLeaderboard={handleFarewellLeaderboard} onPlayAgain={handleFarewellPlayAgain}/>;
   if (authState === "loading") return (
     <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", position:"relative" }}>
       <Starfield/><div style={{textAlign:"center",zIndex:1}}><LetterLootLogo titleFontSize={28} boxPadding="8px 24px"/><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",letterSpacing:2,marginTop:16}}>LOADING…</div></div>
@@ -2178,7 +2203,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [dailyHistory, setDailyHistory] = useState(() => getDailyHistory());
   const gameIndexRef = useRef(ss?.gameIndex || 0);
 
-  useEffect(() => { if (initialTab) { setTab(initialTab); onTabConsumed?.(); } }, [initialTab]);
+  useEffect(() => {
+    if (!initialTab) return;
+    if (initialTab === "play_now") {
+      // Special sentinel from Farewell screen — trigger a fresh game start
+      handleFullReset({skipWelcome: true});
+    } else {
+      setTab(initialTab);
+    }
+    onTabConsumed?.();
+  }, [initialTab]);
 
   // GLOBAL GUARD: If user lands on the play tab with a completed game (or empty L5+ board),
   // force-show the Play Again screen instead of a dead board. Catches all entry paths
@@ -2262,7 +2296,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           // Filter stale badge IDs from cloud (handles legacy badge names)
           const validBadgeIds = new Set(BADGE_DEFS.map(b => b.id));
           const cloudBadges = (gameState.badges || []).filter(id => validBadgeIds.has(id));
-          setBadgeStore(prev => ({ ...prev, lifetime: cloudBadges.length ? cloudBadges : prev.lifetime }));
+          // Merge as UNION — local badges (earned but maybe not yet synced) PLUS cloud badges.
+          // Without this union, local-only badges get clobbered when cloud loads.
+          setBadgeStore(prev => {
+            const merged = new Set([...(prev.lifetime || []), ...cloudBadges]);
+            const newStore = { ...prev, lifetime: Array.from(merged) };
+            // Persist the merged result to localStorage so subsequent awardBadge
+            // reads (synchronous) see the correct state
+            try { localStorage.setItem("ll_badges_v2", JSON.stringify(newStore)); } catch {}
+            return newStore;
+          });
           // Merge stats — preserve local perfect days if cloud has fewer (data loss protection)
           const cloudStats = gameState.stats || {};
           const localStats = getLocalStats();
@@ -2332,13 +2375,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         gameIndex: gameIndexRef.current, wotdFound: wotdFound,
         topWord: topEntry?.word || "", topWordScore: topEntry?.score || 0,
       }),
-      saveGameState(user.id, {
-        playerName: playerNameRef.current || playerName || '',
-        lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
-        currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
-        lastStreakDate: statsData.lastStreakDate, badges: badgeStore.lifetime,
-        stats: {...statsData, playerName: playerNameRef.current || playerName}, timeRecords: timeLeaderboard,
-      }),
+      saveGameState(user.id, (() => {
+        // Read badges fresh from localStorage at save time to avoid syncing
+        // stale React state (badgeStore could be 1-2 renders behind awardBadge writes)
+        let liveBadges = badgeStore.lifetime;
+        try {
+          const raw = localStorage.getItem("ll_badges_v2");
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed?.lifetime)) liveBadges = parsed.lifetime;
+          }
+        } catch {}
+        return {
+          playerName: playerNameRef.current || playerName || '',
+          lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
+          currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
+          lastStreakDate: statsData.lastStreakDate, badges: liveBadges,
+          stats: {...statsData, playerName: playerNameRef.current || playerName}, timeRecords: timeLeaderboard,
+        };
+      })()),
     ]);
   }, [user, isGuest, level, tiles, longestWordToday, badgeStore, statsData, timeLeaderboard, playerName, levelComplete, newBestTime, undoUsed]);
 

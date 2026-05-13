@@ -276,6 +276,29 @@ const BADGE_DEFS = [
   { id:"perfect_q",    icon:"Q",    label:"Q Master",        desc:"Use Q in an 8+ letter word",            cat:"core",    scope:"lifetime" },
 ];
 
+// ── Session-significant badges ──────────────────────────────────
+// These badges celebrate every game they're earned in (not just the first lifetime earn).
+// Only the TOP tiers of each category — lesser achievements still log silently to lifetime.
+// Categories per Daryl's spec (May 2026):
+//   Top 3 score badges: moon (150+), mars (175+), infinity (200+)
+//   Top 2 length badges: long_10, long_13
+//   Top 2 speed badges: ferrari (<90s), speed_demon (<120s)
+//   Top 2 Perfect Day speed: pd_velocirap (<12min), pd_flux (<10min)
+//   Special: medical_word, perfect_q
+//   Plus base perfect_day (headline achievement always worth celebrating)
+const SESSION_BADGE_IDS = new Set([
+  // Top 3 score-based word badges
+  "moon", "mars", "infinity",
+  // Top 2 word length badges
+  "long_10", "long_13",
+  // Top 2 speed badges (level clear times)
+  "ferrari", "speed_demon",
+  // Perfect Day + top 2 PD speed badges
+  "perfect_day", "pd_velocirap", "pd_flux",
+  // Special word badges (medical word every time, Q-master every time)
+  "medical_word", "perfect_q",
+]);
+
 // ── Doubloon SVG ──────────────────────────────────────────────
 function DoubloonIcon({ size = 40 }) {
   return (
@@ -2116,6 +2139,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const [showBadgeExtra, setShowBadgeExtra] = useState("");
   const badgeQueueRef = useRef([]);
   const badgePopupActiveRef = useRef(false);
+  // BUG FIX (May 2026): Track which badges have popped THIS GAME SESSION.
+  // Allows lifetime-scope achievement badges (rocket, long_10, perfect_day, etc.)
+  // to celebrate every game they're earned in, while still deduping within a
+  // single game (so 3 rocket-tier words in one game = 1 popup, not 3).
+  // Reset on handleFullReset for a fresh celebration next game.
+  const sessionBadgesShownRef = useRef(new Set());
   const [tab, setTab] = useState(initialTab || "play");
   const [confetti, setConfetti] = useState(false);
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
@@ -2227,7 +2256,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
       // Only force the Play Again screen if the BOARD itself is in a dead state.
       // The completedToday flag alone isn't enough — player may have hit "Later Today" / "Play Now"
       // and be mid second game where ll_completed_today is still stuck from game 1.
-      if (boardEmpty) {
+      // BUG FIX (May 2026): Only show the showRepeatPerfect modal if the player actually
+      // achieved a Perfect Day. Otherwise it briefly flashes "PERFECT DAY!" before the
+      // farewell screen takes over — confusing and incorrect.
+      if (boardEmpty && perfectDayRef.current === true) {
         if (!completedToday) {
           try { localStorage.setItem("ll_completed_today", getTodayKey()); } catch {}
         }
@@ -2502,13 +2534,30 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     if (def.scope === "daily" && !dailyHas) needsAward = true;
     if (def.scope === "weekly" && !weeklyHas) needsAward = true;
     if (def.scope === "all" && (!lifetimeHas || !weeklyHas || !dailyHas)) needsAward = true;
-    if (!needsAward) return;
-    // Apply update to localStorage and React state
-    const updated = awardBadgeToStore(currentStore, id, def.scope);
-    saveBadgeStore(updated);
-    setBadgeStore(updated);
-    // Determine if this should pop a celebration
-    const showPopup = !lifetimeHas || (def.scope === "daily" && !dailyHas) || (def.scope === "all" && !dailyHas);
+    // Apply update to localStorage and React state (only if not yet recorded)
+    if (needsAward) {
+      const updated = awardBadgeToStore(currentStore, id, def.scope);
+      saveBadgeStore(updated);
+      setBadgeStore(updated);
+    }
+    // BUG FIX (May 2026): Determine if this should pop a celebration.
+    // Previously: only celebrated FIRST lifetime earn — silenced every replay.
+    // Now: session-significant badges (rocket, long_10, perfect_day, etc.) celebrate
+    // every game they're earned in. One-time milestones (first_word, points_1k, etc.)
+    // keep the old behavior — only celebrate on first lifetime earn.
+    // sessionBadgesShownRef prevents duplicate popups within a single game session
+    // (so 3 rocket-tier words in one game = 1 popup, not 3).
+    let showPopup = false;
+    if (SESSION_BADGE_IDS.has(id)) {
+      // Session-significant: show once per game session, every game
+      if (!sessionBadgesShownRef.current.has(id)) {
+        showPopup = true;
+        sessionBadgesShownRef.current.add(id);
+      }
+    } else {
+      // One-time milestone: original behavior — show only on first lifetime earn
+      showPopup = !lifetimeHas || (def.scope === "daily" && !dailyHas) || (def.scope === "all" && !dailyHas);
+    }
     if (showPopup) {
       // Queue for serial display
       badgeQueueRef.current.push({ id, extraLabel });
@@ -2542,6 +2591,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
     setPerfectDayStreakBonus(0); setShowStreakBonus(false); setStreakBonusCount(1);
     levelResetCount.current = 0; clearedLevelsRef.current = {};
+    // BUG FIX (May 2026): Clear session-significant badge tracking so new game
+    // starts fresh — every qualifying achievement gets a celebration again.
+    sessionBadgesShownRef.current = new Set();
     // ── Multi-game WoD: re-sync from localStorage on reset ──
     // Player can attempt WoD across multiple games per day until they find it.
     // Once found, it stays found (sticky). Each new game: if not yet found,

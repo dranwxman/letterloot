@@ -2366,10 +2366,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     // Compute top scoring word of all submitted words this game
     const validWords = submittedRef.current.filter(s => s.valid);
     const topEntry = validWords.reduce((best, s) => !best || s.score > best.score ? s : best, null);
+    // Only mark perfect_day:true on the cloud if the game is FULLY complete
+    // (Level 5 done, ll_completed_today flag set) AND PD is still intact.
+    // Mid-game saves should never write perfect_day:true — this prevents the
+    // cloud row from getting "stuck" with PD=true if the player later replays
+    // a level (which forfeits PD), since saveDailySession has sticky-true logic.
+    const gameIsComplete = (() => {
+      try { return localStorage.getItem("ll_completed_today") === todayKey; } catch { return false; }
+    })();
+    const cloudPerfectDay = gameIsComplete && perfectDayRef.current === true;
     await Promise.all([
       saveDailySession(user.id, todayKey, {
         level, totalScore: totalRef.current, levelScore: levelScoreRef.current,
-        tiles, submitted: submittedRef.current, perfectDay: perfectDayRef.current,
+        tiles, submitted: submittedRef.current, perfectDay: cloudPerfectDay,
         tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
         totalTime: totalTimeRef.current, longestWordToday, levelComplete, newBestTime, undoUsed,
         gameIndex: gameIndexRef.current, wotdFound: wotdFound,

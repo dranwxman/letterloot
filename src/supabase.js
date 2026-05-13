@@ -40,6 +40,20 @@ export async function loadGameState(playerId) {
   return data;
 }
 export async function saveGameState(playerId, state) {
+  // Union-merge badges with existing cloud record to prevent any stale local sync
+  // from stripping badges that another session/device may have added.
+  let mergedBadges = state.badges || [];
+  try {
+    const { data: existing } = await supabase
+      .from("game_state")
+      .select("badges")
+      .eq("player_id", playerId)
+      .maybeSingle();
+    if (existing && Array.isArray(existing.badges)) {
+      const set = new Set([...mergedBadges, ...existing.badges]);
+      mergedBadges = Array.from(set);
+    }
+  } catch {}
   const { error } = await supabase.from("game_state").upsert({
     player_id: playerId,
     player_name: state.playerName || "",
@@ -48,7 +62,7 @@ export async function saveGameState(playerId, state) {
     current_streak: state.currentStreak || 0,
     longest_streak: state.longestStreak || 0,
     last_streak_date: state.lastStreakDate || null,
-    badges: state.badges || [],
+    badges: mergedBadges,
     stats: state.stats || {},
     time_records: state.timeRecords || {},
     updated_at: new Date().toISOString(),

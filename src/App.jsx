@@ -1957,16 +1957,12 @@ export default function App() {
   }, []);
   const [showCelebrate, setShowCelebrate] = useState(() => window.location.hash === '#celebrate');
   const [showAdmin, setShowAdmin] = useState(() => new URLSearchParams(window.location.search).get('admin') === '1');
-  // Guest upsell modal — shown when a guest taps Leaderboard or Stats (signed-up-only features)
-  const [showGuestUpsell, setShowGuestUpsell] = useState(false);
   const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
   const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
-  // From guest upsell modal: send the guest to AuthScreen so they can sign up.
-  // We clear ll_guest so the routing logic doesn't auto-bounce them back to play.
+  // From guest upsell modal in GameScreen: clear guest flag and route to AuthScreen for signup.
   const handleGuestUpsellSignUp = () => {
     localStorage.removeItem("ll_guest");
-    setShowGuestUpsell(false);
     setAuthState("auth");
   };
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
@@ -2015,10 +2011,11 @@ export default function App() {
     </div>
   );
   if (authState === "auth") return <AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>;
-  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)}/>;
+  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)} onSignUpRequest={handleGuestUpsellSignUp}/>;
 }
 
-function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) {
+function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, onSignUpRequest }) {
+  const [showGuestUpsell, setShowGuestUpsell] = useState(false);
   const isGuest = !user;
   const [playerName, setPlayerName] = useState("");
   const playerNameRef = useRef("");
@@ -3474,7 +3471,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             <div>✓ View the Leaderboard</div>
             <div>✓ Track stats &amp; history</div>
           </div>
-          <button className="ll-btn" onClick={handleGuestUpsellSignUp} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",marginBottom:8}}>
+          <button className="ll-btn" onClick={onSignUpRequest} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",marginBottom:8}}>
             Create Free Account
           </button>
           <button className="ll-btn" onClick={()=>setShowGuestUpsell(false)} style={{width:"100%",padding:"10px",borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.55)",fontSize:12,fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.18)",cursor:"pointer"}}>

@@ -3733,7 +3733,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       </div>}
 
       {/* ── HEADER ── */}
-      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"6px 10px 0"}}>
+      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"max(env(safe-area-inset-top), 6px) 10px 0"}}>
 
         {/* ROW 1: Name · Date (center) · 🎸 · Reset · Tour */}
         <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
@@ -3752,11 +3752,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         {/* ROW 2 (formerly history/stats/badges/tips/leaders pills) — REMOVED.
             All five destinations are now reachable via the 📋 Menu button below the tile board. */}
 
-        {/* ROW 3: TIME · Level pill · Level 00:00 · Total 00:00 · Pause — only on play tab */}
+        {/* ROW 3: TIME · Level 00:00 · Total 00:00 · Pause · L5 — only on play tab */}
         {tab==="play" && (
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.07)",borderRadius:7,padding:"3px 8px",marginBottom:3,border:"1px solid rgba(255,255,255,0.18)",gap:4}}>
           <span style={{fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
-          <span style={{padding:"2px 8px",borderRadius:10,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
           <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Level</span>
           <span className={pulseTime?"pulse-big":""} style={{fontSize:12,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
           <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Total</span>
@@ -3764,6 +3763,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:"2px 8px",fontSize:9,color:paused?"#003300":"#ffffff",fontWeight:"bold",flexShrink:0}}>
             {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
+          <span style={{padding:"2px 8px",borderRadius:10,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
         </div>
         )}
 

@@ -1990,6 +1990,27 @@ export default function App() {
     }
   }, []);
 
+  // ── iOS status bar styling (May 15, 2026) ─────────────────────
+  // LetterLoot has a dark purple/navy game theme, so the iOS status bar
+  // (clock, signal, battery) needs to render in light/white style to stay
+  // visible. We also overlay the status bar so our header sits flush at the
+  // top — the safe-area inset above already reserves space.
+  // The dynamic import means the web build skips this entirely.
+  useEffect(() => {
+    (async () => {
+      try {
+        if (typeof window === "undefined" || !window.Capacitor) return;
+        if (!window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
+        const { StatusBar, Style } = await import("@capacitor/status-bar");
+        await StatusBar.setStyle({ style: Style.Light });   // light icons on dark background
+        await StatusBar.setOverlaysWebView({ overlay: true }); // let WebView draw under status bar
+        await StatusBar.setBackgroundColor({ color: "#0a0820" }).catch(() => {}); // Android-only, ignore iOS rejection
+      } catch (e) {
+        // Plugin not installed yet, web platform, or other expected non-iOS case — silent.
+      }
+    })();
+  }, []);
+
   const [authState, setAuthState] = useState("loading");
   const [user, setUser] = useState(null);
   const [showFarewell, setShowFarewell] = useState(false);

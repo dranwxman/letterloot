@@ -21,6 +21,36 @@ function getTodayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
+
+// ── Haptic feedback helper (May 15, 2026) ─────────────────────
+// Fires iOS native vibration feedback when running inside Capacitor. Silent
+// no-op on web. Three intensities:
+//   "light"   — tile taps, selections
+//   "medium"  — successful word submission
+//   "heavy"   — major celebrations (Perfect Day, BOARD CLEAR)
+// Pre-load plugin once after first call so subsequent triggers are instant.
+let _hapticsPlugin = null;
+let _hapticsLoadAttempted = false;
+function triggerHaptic(intensity) {
+  try {
+    if (typeof window === "undefined" || !window.Capacitor) return;
+    if (!window.Capacitor.isNativePlatform || !window.Capacitor.isNativePlatform()) return;
+    const fire = (mod) => {
+      const ImpactStyle = mod.ImpactStyle || {};
+      const style = intensity === "heavy" ? ImpactStyle.Heavy
+                 : intensity === "medium" ? ImpactStyle.Medium
+                 : ImpactStyle.Light;
+      mod.Haptics.impact({ style }).catch(() => {});
+    };
+    if (_hapticsPlugin) { fire(_hapticsPlugin); return; }
+    if (_hapticsLoadAttempted) return;
+    _hapticsLoadAttempted = true;
+    import("@capacitor/haptics").then(mod => { _hapticsPlugin = mod; fire(mod); }).catch(() => {});
+  } catch (e) {
+    // silent — never break gameplay because haptics failed
+  }
+}
+
 // Convert a date_key string like "2026-5-10" to a sortable integer 20260510.
 // This avoids lexicographic comparison bugs where "2026-5-10" is treated as
 // less than "2026-5-3" because '1' < '3' character-wise.
@@ -787,21 +817,19 @@ function VisualTour({ onDone }) {
 
   const CALLOUTS = {
     date:   "Shows today's date — tiles reset at midnight your local time",
-    music:  "Toggle background music on or off",
-    reset:  "Resets back to Level 1 — WARNING: you will lose your Perfect Day status and streak bonus!",
     tour:   "Replays this visual walkthrough anytime",
-    history:"See every word you played today, sorted by score",
-    stats:  "Your scores, streaks, Perfect Days and personal records",
-    tips:   "Hints and strategies to play smarter",
-    leaders:"Leaderboard — Registered players only! Top Scores, Best Scoring Words, Longest Words, Perfect Days and Streaks",
+    reset:  "Resets back to Level 1 — WARNING: you will lose your Perfect Day status and streak bonus!",
+    retry:  "Retry the current level with the same tiles — forfeits Perfect Day",
+    buy:    "Spend earned points to unlock the next level — forfeits Perfect Day",
     level:  "Shows your current level",
     pause:  "Stops your timer completely — use it anytime",
-    share:  "Copy a link to share the game with friends",
-    undo:   "Reverse your last word for 1,000 pts — one use per game",
+    remaining: "How many tiles are left on the board",
+    vowels: "Vowels remaining on the board",
+    conson: "Consonants remaining on the board",
+    undo:   "Reverse your last word for 1,000 pts — one use per game (keeps Perfect Day intact!)",
     submit: "Checks your word against the Merriam-Webster dictionary",
     clear:  "Removes your tile selection without submitting",
-    retry:  "Retry the current level with the same tiles — forfeits Perfect Day",
-    buy:    "Spend earned points to unlock the next level — forfeits Perfect Day"
+    menu:   "Your hub for History, Stats, Badges, Leaders, Tips and the music toggle"
   };
 
   function startPulse() {
@@ -939,22 +967,23 @@ function VisualTour({ onDone }) {
             👉 Tap any button to learn what it does!
           </div>
           {[
-            { label:'TOP ROW', btns:[
-              {k:'date',t:'📅 Date'},{k:'music',t:'♫ Music'},
-              {k:'reset',t:'🆕 Start New Game'},{k:'tour',t:'↺ Tour'}
+            { label:'ROW 1 — TOP', btns:[
+              {k:'date',t:'📅 Date'},{k:'tour',t:'↺ Tour'}
             ]},
-            { label:'NAV TABS', btns:[
-              {k:'history',t:'📜 History'},{k:'stats',t:'📊 Stats'},
-              {k:'tips',t:'ℹ️ Tips'},{k:'leaders',t:'🏆 Leaders'},
-              {k:'level',t:'✦ L1 ✦',sp:'level'}
+            { label:'ROW 2 — GAME ACTIONS', btns:[
+              {k:'reset',t:'🆕 Start New Game'},
+              {k:'retry',t:'🔄 Replay L#'},{k:'buy',t:'🔓 Buy L#+1'}
             ]},
-            { label:'GAME CONTROLS', btns:[
-              {k:'pause',t:'⏸ Pause'},{k:'share',t:'📤 Share'},
-              {k:'undo',t:'↩️ UNDO',sp:'undo'}
+            { label:'ROW 3 — TIMER BAR', btns:[
+              {k:'level',t:'✦ L# ✦',sp:'level'},{k:'pause',t:'⏸ Pause'}
             ]},
-            { label:'', btns:[
-              {k:'submit',t:'Submit Word',sp:'submit'},{k:'clear',t:'✕ Clear'},
-              {k:'retry',t:'🔄 Replay L1'},{k:'buy',t:'🔓 Buy L2'}
+            { label:'ROW 4 — TILE COUNTS + UNDO', btns:[
+              {k:'remaining',t:'Remaining'},{k:'vowels',t:'Vowels'},
+              {k:'conson',t:'Consonants'},{k:'undo',t:'↩️ UNDO',sp:'undo'}
+            ]},
+            { label:'ROW 5 — BELOW BOARD', btns:[
+              {k:'submit',t:'Submit Word',sp:'submit'},
+              {k:'clear',t:'✕ Clear'},{k:'menu',t:'📋 Menu',sp:'menu'}
             ]},
           ].map(({label,btns},i) => (
             <div key={i}>
@@ -963,9 +992,9 @@ function VisualTour({ onDone }) {
                 {btns.map(({k,t,sp}) => (
                   <button key={k} onClick={()=>setCallout(CALLOUTS[k]||'')} style={{
                     padding:'5px 7px',borderRadius:8,fontSize:9,fontFamily:'Georgia,serif',cursor:'pointer',whiteSpace:'nowrap',
-                    background: sp==='submit'?'linear-gradient(135deg,#f6d365,#fda085)':sp==='level'?'rgba(139,92,246,0.22)':sp==='undo'?'rgba(225,29,72,0.2)':'rgba(255,255,255,0.08)',
-                    border: sp==='submit'?'none':sp==='level'?'1.5px solid rgba(167,139,250,0.7)':sp==='undo'?'1px solid rgba(251,113,133,0.8)':'1px solid rgba(255,255,255,0.25)',
-                    color: sp==='submit'?'#1a1a2e':sp==='level'?'#e9d5ff':sp==='undo'?'#fda4af':'#f0e8d8',
+                    background: sp==='submit'?'linear-gradient(135deg,#f6d365,#fda085)':sp==='level'?'rgba(139,92,246,0.22)':sp==='undo'?'rgba(225,29,72,0.2)':sp==='menu'?'rgba(246,211,101,0.15)':'rgba(255,255,255,0.08)',
+                    border: sp==='submit'?'none':sp==='level'?'1.5px solid rgba(167,139,250,0.7)':sp==='undo'?'1px solid rgba(251,113,133,0.8)':sp==='menu'?'1px solid rgba(246,211,101,0.6)':'1px solid rgba(255,255,255,0.25)',
+                    color: sp==='submit'?'#1a1a2e':sp==='level'?'#e9d5ff':sp==='undo'?'#fda4af':sp==='menu'?'#f6d365':'#f0e8d8',
                     fontWeight: sp==='submit'?'bold':'normal'
                   }}>{t}</button>
                 ))}
@@ -1461,7 +1490,7 @@ const TOUR_STEPS = [
   { emoji:"✏️", title:"Welcome to LetterLoot!", body:"A daily word puzzle where every letter has a point value. Fresh tiles every day at midnight — same board for every player worldwide!", warning:false },
   { emoji:"✨", title:"Letters Don't Need to Connect!", body:"Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!", warning:false },
   { emoji:"💎", title:"Every Letter Has a Value", body:"Common letters (E, T, A) score 3–5 pts. Rare letters score big — Q=20, Z=22, J=16!\n\nGold tiles = 2× the letter's value\nPurple tiles = 3× the letter's value!", warning:false },
-  { emoji:"✏️", title:"What the Buttons Do", body:"Submit Word — checks your word\n✕ Clear — removes your selection\n🔄 ReTry Level — same tiles, fresh start\n⏸️ Pause — stops your timer\n🔓 Buy Level — spend points to advance", warning:false },
+  { emoji:"✏️", title:"What the Buttons Do", body:"Submit Word — checks your word against the dictionary\n✕ Clear — removes your selection\n📋 Menu — opens History, Stats, Badges, Leaders, Tips & music toggle\n🆕 Start New Game — resets to Level 1 (loses Perfect Day)\n🔄 Replay L# — retry the current level with same tiles\n🔓 Buy L#+1 — spend points to advance (loses Perfect Day)\n⏸️ Pause — stops your timer", warning:false },
   { emoji:"↩️", title:"The UNDO Button", body:"Find yourself in a pinch to finish a level?\n\nYou have an optional UNDO available for 1 word per game for 1,000 points.\n\nIt will keep your Perfect Day on track!", warning:false },
   { emoji:"🌟", title:"Clearing a Level", body:"Use ALL tiles to clear the board and earn a big bonus! Can't finish? Spend earned points to buy the next level, or retry with the same tiles.", warning:false },
   { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
@@ -2881,7 +2910,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (valid && longBonus > 0) flashMsg = `${currentWord}  +${longBonus} bonus!`;
     setFlash({ word: flashMsg, score, valid, medical: isMedical, collegiate: isCollegiate });
     setTimeout(() => setFlash(null), 2000);
-    if (!valid) {
+    if (valid) {
+      triggerHaptic("medium");
+    } else {
+      triggerHaptic("light");
       setShake(true); setTimeout(() => setShake(false), 500);
       // Word reporting moved to History page — no in-game popup
     }
@@ -3008,6 +3040,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         if (isGuest) saveLifetimeData(lifetimeRef.current);
         setFlash({ word: "BOARD CLEAR!", score: bonus, valid: true });
         setConfetti(true); setTimeout(() => setConfetti(false), 4000);
+        triggerHaptic("heavy");
         stopTimer();
         const clearedTime = levelTimeRef.current;
         const clearedLevelScore = levelScoreRef.current;
@@ -3065,6 +3098,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
               if (isGuest) saveLifetimeData(lifetimeRef.current);
               // Show streak bonus first — PD screen shows when player taps Continue
+              triggerHaptic("heavy");
               setTimeout(() => setShowStreakBonus(true), 1200);
               // ── Check bonus level unlock ──
               if (ENABLE_BONUS_LEVELS) {
@@ -3965,7 +3999,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:3,marginBottom:3}}>
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; const isLootUsed=tile.lootUsed; return(
-                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${isLootUsed?" loot-used":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id])} style={{width:38,height:44,background:isLootUsed?"linear-gradient(135deg,#f6d365,#fda085)":tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isLootUsed?"2px solid #00e676":isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)",boxShadow:isLootUsed?"0 0 12px rgba(246,211,101,0.6),0 0 4px rgba(0,230,118,0.5)":"none",position:"relative"}}>
+                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${isLootUsed?" loot-used":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&(triggerHaptic("light"),setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id]))} style={{width:38,height:44,background:isLootUsed?"linear-gradient(135deg,#f6d365,#fda085)":tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isLootUsed?"2px solid #00e676":isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)",boxShadow:isLootUsed?"0 0 12px rgba(246,211,101,0.6),0 0 4px rgba(0,230,118,0.5)":"none",position:"relative"}}>
                     <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
                     <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isLootUsed?"5×":isTriple?"3×":isDouble?"2×":tile.value}</div>
                     {isLootUsed&&<div style={{position:"absolute",top:-4,right:-4,fontSize:10}}>✨</div>}

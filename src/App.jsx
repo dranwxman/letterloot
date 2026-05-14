@@ -1961,6 +1961,35 @@ function AdminScreen({ onExit }) {
 }
 
 export default function App() {
+  // ── iOS safe-area handling ────────────────────────────────────
+  // Inside a Capacitor iOS WebView, the env(safe-area-inset-top) variable only
+  // resolves correctly if index.html has <meta viewport ... viewport-fit=cover>.
+  // Belt-and-suspenders: also detect iOS and set a CSS variable --ll-safe-top
+  // we read from the header. On the iPhone 17 Dynamic Island we use 59px;
+  // on older notched iPhones 47px; otherwise 0.
+  useEffect(() => {
+    try {
+      const ua = navigator.userAgent || "";
+      const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
+      const isCapacitor = typeof window !== "undefined" && (window.Capacitor || (window.webkit && window.webkit.messageHandlers));
+      // Try env() first; fall back to hardcoded value if it returns 0
+      const probe = document.createElement("div");
+      probe.style.cssText = "position:fixed;top:0;left:-9999px;padding-top:env(safe-area-inset-top);";
+      document.body.appendChild(probe);
+      const envValue = parseFloat(getComputedStyle(probe).paddingTop) || 0;
+      document.body.removeChild(probe);
+      let safeTop = envValue;
+      if (isIOS && envValue < 20) {
+        // Heuristic: modern iPhones (12+ with notch, 14 Pro+ with Dynamic Island) all have >=47px inset.
+        // If env() returned <20 on iOS, viewport-fit=cover is missing — use a conservative 50px fallback.
+        safeTop = 50;
+      }
+      document.documentElement.style.setProperty("--ll-safe-top", safeTop + "px");
+    } catch (e) {
+      document.documentElement.style.setProperty("--ll-safe-top", "0px");
+    }
+  }, []);
+
   const [authState, setAuthState] = useState("loading");
   const [user, setUser] = useState(null);
   const [showFarewell, setShowFarewell] = useState(false);
@@ -3733,28 +3762,33 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       </div>}
 
       {/* ── HEADER ── */}
-      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"max(env(safe-area-inset-top), 6px) 10px 0"}}>
+      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"calc(var(--ll-safe-top, 0px) + 8px) 10px 0",minHeight:0}}>
 
-        {/* ROW 1: Name · Date (center) · 🎸 · Reset · Tour */}
+        {/* ROW 1: Name · Date · Tour */}
         <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
           <span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:"1px 7px",background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
-          <span style={{flex:1,fontSize:9,color:"rgba(255,255,255,0.7)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
-          <button onClick={()=>setMusicOn(m=>!m)} style={{background:"none",border:"1px solid rgba(255,255,255,0.35)",borderRadius:12,padding:"2px 5px",cursor:"pointer",fontSize:9,color:musicOn?"#f6d365":"rgba(255,255,255,0.6)",fontFamily:"Georgia,serif",flexShrink:0}}>♫</button>
-          {tab==="play" && <button onClick={()=>{
+          <span style={{flex:1,fontSize:11,color:"rgba(255,255,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
+          {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"3px 10px",cursor:"pointer",fontSize:10,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
+        </div>
+
+        {/* ROW 2: Start New Game · Replay L# · Buy L#+1 — only on play tab */}
+        {tab==="play" && (
+        <div style={{display:"flex",gap:3,marginBottom:3}}>
+          <button className="ll-btn" onClick={()=>{
             // If there's no meaningful progress, skip the confirm
             const hasProgress = (submittedRef.current||[]).some(s=>s.valid) || level>1 || totalRef.current>0;
             if (hasProgress) setShowNewGameConfirm(true);
             else handleFullReset();
-          }} style={{background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#fca5a5",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>🆕 Start New Game</button>}
-          {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
+          }} style={{flex:1,padding:"7px 4px",borderRadius:9,background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",color:"#fca5a5",fontSize:10,fontFamily:"Georgia,serif",fontWeight:"bold",textAlign:"center"}}>🆕 Start New Game</button>
+          <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"7px 4px",borderRadius:9,fontSize:10,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>{level===5?"🔄 Replay L5":"🔄 Replay L"+level}</button>
+          {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"7px 4px",borderRadius:9,fontSize:10,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>🔓 Buy L{level+1} — {buyCost} pts</button>}
         </div>
+        )}
 
-        {/* ROW 2 (formerly history/stats/badges/tips/leaders pills) — REMOVED.
-            All five destinations are now reachable via the 📋 Menu button below the tile board. */}
-
-        {/* ROW 3: TIME · Level 00:00 · Total 00:00 · Pause · L5 — only on play tab */}
+        {/* ROW 3: L5 · TIME · Level 00:00 · Total 00:00 · Pause — only on play tab */}
         {tab==="play" && (
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.07)",borderRadius:7,padding:"3px 8px",marginBottom:3,border:"1px solid rgba(255,255,255,0.18)",gap:4}}>
+          <span style={{padding:"2px 8px",borderRadius:10,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
           <span style={{fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
           <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Level</span>
           <span className={pulseTime?"pulse-big":""} style={{fontSize:12,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
@@ -3763,11 +3797,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:"2px 8px",fontSize:9,color:paused?"#003300":"#ffffff",fontWeight:"bold",flexShrink:0}}>
             {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
-          <span style={{padding:"2px 8px",borderRadius:10,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
         </div>
         )}
 
-        {/* ROW 4: Remaining · Vowels · Consonants — only on play tab */}
+        {/* ROW 4: Remaining · Vowels · Consonants · UNDO — only on play tab */}
         {tab==="play" && (
         <div style={{display:"flex",gap:4,marginBottom:3}}>
           <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
@@ -3782,6 +3815,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:12,fontWeight:"bold",color:"#a78bfa"}}>{consonantsRemaining}</div>
             <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>CONSON.</div>
           </div>
+          <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
+            disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
+            style={{flex:2,padding:"3px 4px",borderRadius:8,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif",lineHeight:1.2}}>
+            {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO — 1,000 pts`:<span>↩️ UNDO at <span style={{color:"#fda085"}}>1,000 pts</span></span>)}
+          </button>
         </div>
         )}
 
@@ -3837,6 +3875,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Tips &amp; How to Play</div>
             <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Rules, scoring, strategy</div>
           </button>
+
+          {/* Settings — music toggle */}
+          <div style={{marginTop:12,padding:"10px 14px",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontSize:12,color:"#f5f0e8",fontFamily:"Georgia,serif"}}>♫ Background Music</span>
+            <button onClick={()=>setMusicOn(m=>!m)} style={{background:musicOn?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.08)",border:`1px solid ${musicOn?"rgba(0,230,118,0.7)":"rgba(255,255,255,0.3)"}`,borderRadius:14,padding:"4px 14px",cursor:"pointer",fontSize:11,color:musicOn?"#003300":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif",fontWeight:"bold"}}>
+              {musicOn?"ON":"OFF"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -3844,24 +3890,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 10px 6px",animation:"slideUp 0.3s ease"}}>
 
-          {/* ROW 5: 📋 Menu + UNDO — Share moved to post-game (Perfect Day / Farewell screens) */}
+          {/* ROW 5: Submit Word · Clear · Menu — Replay/Buy moved to Row 2 above tile board, UNDO moved to Row 4 */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>
-            <button className="ll-btn" onClick={()=>setTab("menu")} style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:11,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.6)",color:"#f6d365",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif"}}>
-              📋 Menu
-            </button>
-            <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
-              disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
-              style={{flex:2,padding:"6px 4px",borderRadius:8,fontSize:10,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold"}}>
-              {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO last word — 1,000 pts`:<span>↩️ UNDO at <span style={{color:"#fda085"}}>1,000 pts</span> (you have <span style={{color:"#f6d365"}}>{totalRef.current.toLocaleString()}</span>)</span>)}
-            </button>
-          </div>
-
-          {/* ROW 6: Submit · Clear · ReTry · Buy */}
-          <div style={{display:"flex",gap:3,marginBottom:3}}>
-            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:2,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
+            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:3,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
             <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
-            <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center"}}>{level===5?"🔄 Replay L5":"🔄 Replay L"+level}</button>
-            {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:9,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center"}}>🔓 Buy L{level+1} — {buyCost} pts</button>}
+            <button className="ll-btn" onClick={()=>setTab("menu")} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:11,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.6)",color:"#f6d365",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif"}}>📋 Menu</button>
           </div>
 
           {/* ROW 7: Tap tiles to build a word */}

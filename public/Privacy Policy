@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — LetterLoot</title>
+<style>
+  body {
+    font-family: Georgia, 'Times New Roman', serif;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    line-height: 1.7;
+    color: #1a1a2e;
+    background: #faf8f3;
+  }
+  h1 { color: #6b3fcc; font-size: 28px; margin-bottom: 4px; }
+  h2 { color: #6b3fcc; font-size: 18px; margin-top: 32px; }
+  .updated { color: #888; font-size: 13px; margin-bottom: 32px; }
+  ul { padding-left: 22px; }
+  li { margin-bottom: 6px; }
+  a { color: #6b3fcc; }
+  .footer-note { margin-top: 48px; padding-top: 16px; border-top: 1px solid #ddd; font-size: 13px; color: #666; }
+</style>
+</head>
+<body>
+
+<h1>LetterLoot Privacy Policy</h1>
+<p class="updated">Last updated: May 15, 2026</p>
+
+<p>LetterLoot ("we", "us", "our") is a daily word puzzle game available on the web and as a native iOS app. This policy explains what information we collect, why we collect it, and how it is used. We aim to collect only what is necessary to provide the game.</p>
+
+<h2>1. What we collect</h2>
+
+<p><strong>If you play as a guest</strong> (no account):</p>
+<ul>
+  <li>No personal information.</li>
+  <li>Your gameplay state (scores, words played, badges, streaks) is stored locally on your device only and is not associated with any identifier we hold.</li>
+</ul>
+
+<p><strong>If you create an account</strong>:</p>
+<ul>
+  <li>Email address — used to sign in and (rarely) to send transactional messages such as password resets.</li>
+  <li>Display name — chosen by you, shown on leaderboards if you appear on them.</li>
+  <li>Gameplay data — daily scores, words played, perfect days, streaks, badges, and best times. This data is associated with your account so you can see your progress across devices and appear on leaderboards.</li>
+  <li>The date and time of each play session.</li>
+</ul>
+
+<p>We do not collect device contacts, photos (other than a profile photo you may optionally upload), microphone or location data. We do not use third-party advertising, analytics, or tracking SDKs.</p>
+
+<h2>2. How we use it</h2>
+
+<ul>
+  <li>To let you sign in and sync your progress across devices.</li>
+  <li>To compute and display leaderboards.</li>
+  <li>To recognize achievements such as Perfect Days, streaks, and badges.</li>
+  <li>To moderate user-submitted word reports (when a player reports a rejected word for admin review).</li>
+  <li>To respond to support inquiries you send us.</li>
+</ul>
+
+<p>We do not sell your personal information. We do not use it for advertising. We do not share it with advertisers or data brokers.</p>
+
+<h2>3. Service providers we use</h2>
+
+<p>LetterLoot is operated using a small number of third-party services. Each handles your data only for the limited purpose described below:</p>
+
+<ul>
+  <li><strong>Supabase</strong> — authentication and database hosting. Stores your account email, display name, and gameplay records. <a href="https://supabase.com/privacy" target="_blank" rel="noopener">supabase.com/privacy</a></li>
+  <li><strong>Vercel</strong> — web hosting for the LetterLoot website. <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener">vercel.com/legal/privacy-policy</a></li>
+  <li><strong>Resend</strong> — sends transactional email from <code>hello@letterloot.net</code> (e.g. password resets). <a href="https://resend.com/legal/privacy-policy" target="_blank" rel="noopener">resend.com/legal/privacy-policy</a></li>
+  <li><strong>Apple</strong> — provides the App Store and iOS frameworks. <a href="https://www.apple.com/legal/privacy/en-ww/" target="_blank" rel="noopener">apple.com/legal/privacy</a></li>
+</ul>
+
+<h2>4. Children</h2>
+
+<p>LetterLoot is suitable for general audiences. We do not knowingly collect personal information from children under 13. If you believe a child under 13 has provided personal information to us, please contact us at <a href="mailto:hello@letterloot.net">hello@letterloot.net</a> and we will delete it promptly.</p>
+
+<h2>5. Your rights</h2>
+
+<ul>
+  <li><strong>Access</strong> — you can request a copy of the data we hold about your account.</li>
+  <li><strong>Correction</strong> — you can update your display name or other account details inside the app, or contact us for help.</li>
+  <li><strong>Deletion</strong> — you can request deletion of your account and all associated data by emailing <a href="mailto:hello@letterloot.net">hello@letterloot.net</a>. We will delete your data within 30 days of confirming your request.</li>
+  <li><strong>Guest play</strong> — to delete guest gameplay data, clear the LetterLoot website's storage in your browser, or delete the LetterLoot app from your device.</li>
+</ul>
+
+<h2>6. Data retention</h2>
+
+<p>Account data and gameplay records are kept for as long as your account is active. If you delete your account, all associated data is removed within 30 days. Leaderboard entries tied to a deleted account are anonymized or removed.</p>
+
+<h2>7. Security</h2>
+
+<p>Account passwords are never stored in plain text — authentication is handled by Supabase using industry-standard hashing. All network traffic to and from LetterLoot uses HTTPS.</p>
+
+<h2>8. International users</h2>
+
+<p>LetterLoot is operated from the United States. If you use LetterLoot from another country, your data will be transferred to and processed in the United States and any country where our service providers (listed above) operate.</p>
+
+<h2>9. Changes to this policy</h2>
+
+<p>If we make material changes to this policy, we will update the "Last updated" date at the top and, for significant changes, notify account holders by email. Continued use of LetterLoot after a change indicates acceptance of the updated policy.</p>
+
+<h2>10. Contact</h2>
+
+<p>Questions, requests, or concerns? Email <a href="mailto:hello@letterloot.net">hello@letterloot.net</a>.</p>
+
+<div class="footer-note">
+  LetterLoot is a daily word puzzle game where every letter has a value. Spell, score, and hunt the loot.
+</div>
+
+</body>
+</html>

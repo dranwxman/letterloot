@@ -424,14 +424,16 @@ function selectWordOfTheDay(allLevelTiles) {
   const seed = getDailySeed();
   const rng = seededRandom(seed + 7777);
 
-  // Build a length → candidate-words map. Most candidate lengths are 8-13,
-  // but we descend letter-by-letter (12 → 11 → 10 → ... → 4) so we never
-  // return a WoD the day's boards can't actually play.
-  // CRITICAL FIX (May 15, 2026): Previous tiering was 12+ → 10-11 → 8-9,
-  // which would return null on days where no 8+ letter candidate fit.
-  // Now: try EVERY length from 12 down to 4 before giving up.
-  const MAX_LEN = 12;
-  const MIN_LEN = 4;
+  // WoD selection strategy (revised May 15, 2026):
+  // Players found prior WoDs (12+ letters) technically "fit" a level's raw tile
+  // set but were impractical to actually spell during gameplay because they
+  // consumed too many letters at once. New strategy preferences shorter,
+  // achievable words while still feeling like a worthy challenge.
+  //
+  // Preferred length order: 9, 8, 10, 7, 11, 6, 12, 5, 4
+  // Sweet spot is 8-10 (impressive but playable). Extends both directions
+  // only when no preferred-length word fits the day's boards.
+  const LENGTH_PRIORITY = [9, 8, 10, 7, 11, 6, 12, 5, 4];
 
   const byLength = {};
   for (const w of WOTD_CANDIDATES) {
@@ -439,15 +441,15 @@ function selectWordOfTheDay(allLevelTiles) {
     if (!byLength[len]) byLength[len] = [];
     byLength[len].push(w);
   }
-  // Cap any length >12 at the 12 bucket so we still prefer "impressive" words.
+  // Cap any length >12 at the 12 bucket (still treated as "long" but eligible).
   for (const w of WOTD_CANDIDATES) {
-    if (w.length > MAX_LEN) {
-      if (!byLength[MAX_LEN]) byLength[MAX_LEN] = [];
-      byLength[MAX_LEN].push(w);
+    if (w.length > 12) {
+      if (!byLength[12]) byLength[12] = [];
+      byLength[12].push(w);
     }
   }
 
-  for (let len = MAX_LEN; len >= MIN_LEN; len--) {
+  for (const len of LENGTH_PRIORITY) {
     const tier = byLength[len];
     if (!tier || tier.length === 0) continue;
     const shuffled = [...tier].sort(() => rng() - 0.5);
@@ -460,16 +462,13 @@ function selectWordOfTheDay(allLevelTiles) {
       }
     }
   }
-  // No candidate of any length 4-12 fits any level's tile set today.
-  // This is extremely unlikely with a 600+ word pool but we surface it
-  // rather than silently returning null with no diagnostic.
   try { console.warn("[WoD] No candidate word fits any level's tiles today. WoD disabled for today."); } catch {}
   return null;
 }
 
 // WoD cache version — bump whenever the WoD selection logic changes so
 // stale caches from prior code versions are invalidated even on the same day.
-const WOTD_CACHE_VERSION = 2;
+const WOTD_CACHE_VERSION = 3;
 
 function getCachedWordOfTheDay() {
   try {

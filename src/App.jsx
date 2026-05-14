@@ -2333,7 +2333,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             if (dailySession.tiles && dailySession.tiles.length > 0) setTiles(dailySession.tiles);
             tileCountRef.current = dailySession.tile_count || 42;
             setSubmitted(dailySession.submitted || []); submittedRef.current = dailySession.submitted || [];
-            setPerfectDaySync(dailySession.perfect_day ?? true);
+            // PERFECT DAY GUARD: never let a cloud row clobber local PD=true with PD=false.
+            // Mid-game cloud saves intentionally write perfect_day:false (the cloud row only
+            // commits true when the game is fully complete). So cloud=false can mean "still
+            // in progress with PD intact" — local is the source of truth in that case.
+            // Cloud only overrides when it confirms a true Perfect Day.
+            if (dailySession.perfect_day === true) setPerfectDaySync(true);
             setLongestWordToday(dailySession.longest_word_today || "");
             levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
             setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);

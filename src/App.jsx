@@ -1019,7 +1019,53 @@ function VisualTour({ onDone }) {
       )
     },
 
-        {
+    {
+      title: "📋 The Menu Button",
+      desc:  "Your hub for everything beyond gameplay.",
+      content: () => (
+        <div style={{textAlign:'center'}}>
+          <div style={{display:'flex',justifyContent:'center',marginBottom:14}}>
+            <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.7)",color:"#f6d365",padding:"10px 28px",borderRadius:12,fontSize:18,fontWeight:"bold",fontFamily:"Georgia,serif",boxShadow: pulseOn ? '0 0 20px 6px rgba(246,211,101,0.85)' : 'none',transform: pulseOn ? 'scale(1.06)' : 'scale(1)',transition:'box-shadow 0.7s ease, transform 0.7s ease'}}>📋 Menu</div>
+          </div>
+          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:12.5,color:'#f5f0e8',lineHeight:1.85,textAlign:'left',marginBottom:10}}>
+            The <strong style={{color:'#f6d365'}}>📋 Menu</strong> button (under the tile board, next to UNDO) opens your hub. From there you can reach:
+            <div style={{marginTop:8,paddingLeft:6,fontSize:12,lineHeight:2}}>
+              📜 <strong>History</strong> — every word you've played<br/>
+              📊 <strong>Stats</strong> — your scores, streaks, Perfect Days<br/>
+              🏅 <strong>Badges</strong> — achievements you've earned<br/>
+              🏆 <strong>Leaders</strong> — top players today<br/>
+              ℹ️ <strong>Tips</strong> — rules &amp; strategy
+            </div>
+          </div>
+          <div style={{fontSize:10,color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
+            Tap ✏️ Back to Game from any menu page to return.
+          </div>
+        </div>
+      )
+    },
+
+    {
+      title: "📜 History Keeps Everything",
+      desc:  "Even the words that didn't count.",
+      content: () => (
+        <div style={{textAlign:'center'}}>
+          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:13,color:'#f5f0e8',lineHeight:1.8,textAlign:'left',marginBottom:10}}>
+            History saves <strong style={{color:'#f6d365'}}>every word you played today</strong> — valid words AND rejected ones.
+            <div style={{marginTop:10,padding:'10px 12px',background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.5)',borderRadius:10}}>
+              <div style={{fontSize:11,color:'#c4b5fd',letterSpacing:1.5,fontWeight:'bold',marginBottom:4}}>📝 REPORT FOR REVIEW</div>
+              <div style={{fontSize:12,color:'rgba(255,255,255,0.85)',lineHeight:1.7}}>
+                Think a rejected word should count? Tap <strong style={{color:'#f6d365'}}>📝 Report for review</strong> next to it in History. We review every submission and add valid ones to the dictionary.
+              </div>
+            </div>
+          </div>
+          <div style={{fontSize:10,color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
+            Help us make LetterLoot smarter for everyone!
+          </div>
+        </div>
+      )
+    },
+
+    {
       title: "The Perfect Day",
       desc:  "",
       last:  true,
@@ -1481,11 +1527,17 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewSta
             <button onClick={()=>onPlayAgain && onPlayAgain("tomorrow")} style={{flex:1,padding:"10px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🌙 Tomorrow</button>
           </div>
           {/* Secondary row: Leaderboard / Stats / Close */}
-          <div style={{display:"flex",gap:6,marginBottom:14}}>
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
             <button onClick={onViewLeaderboard} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🏆 Leaders</button>
             <button onClick={onViewStats} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"linear-gradient(135deg,rgba(167,139,250,0.25),rgba(124,58,237,0.15))",border:"1px solid rgba(167,139,250,0.5)",color:"#c4b5fd",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>📊 Stats</button>
             <button onClick={onDone} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"rgba(255,255,255,0.75)",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>✕ Close</button>
           </div>
+          {/* Share LetterLoot — moved here from in-game play screen (May 2026). Post-game is the natural time to share. */}
+          <button onClick={()=>{
+            navigator.clipboard?.writeText(`✏️ Play LetterLoot — the daily word puzzle where every letter has a value! ${getShareUrlLabel()} ${getShareUrl()}`);
+          }} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.6)",color:"#22d3ee",fontSize:12,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif",marginBottom:10}}>
+            ✏️ Share LetterLoot with a friend
+          </button>
           <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",fontStyle:"italic",marginTop:8}}>{getShortDate()}</div>
         </div>
       </div>
@@ -3697,27 +3749,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"2px 7px",cursor:"pointer",fontSize:9,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
         </div>
 
-        {/* ROW 2: History · Stats · Tips · Level pill */}
-        <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:3}}>
-          {[{id:"history",label:"📜 History"},{id:"stats",label:"📊 Stats"},{id:"badges",label:"🏅 Badges"},{id:"info",label:"ℹ️ Tips"},{id:"leaderboard",label:"🏆 Leaders"}].map(t=>(
-            <button key={t.id} className="ll-tab" onClick={()=>{
-              // Guests get an upsell modal when they tap Leaderboard or Stats — but see/use everything else normally.
-              if (isGuest && (t.id === "leaderboard" || t.id === "stats")) {
-                setShowGuestUpsell(true);
-                return;
-              }
-              setTab(t.id);
-            }} style={{flex:1,padding:"4px 2px",borderRadius:12,fontSize:8,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap",textAlign:"center"}}>
-              {t.label}
-            </button>
-          ))}
-          <div style={{padding:"4px 10px",borderRadius:12,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</div>
-        </div>
+        {/* ROW 2 (formerly history/stats/badges/tips/leaders pills) — REMOVED.
+            All five destinations are now reachable via the 📋 Menu button below the tile board. */}
 
-        {/* ROW 3: TIME · Level 00:00 · Total 00:00 · Pause — only on play tab */}
+        {/* ROW 3: TIME · Level pill · Level 00:00 · Total 00:00 · Pause — only on play tab */}
         {tab==="play" && (
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.07)",borderRadius:7,padding:"3px 8px",marginBottom:3,border:"1px solid rgba(255,255,255,0.18)",gap:4}}>
           <span style={{fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
+          <span style={{padding:"2px 8px",borderRadius:10,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
           <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Level</span>
           <span className={pulseTime?"pulse-big":""} style={{fontSize:12,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
           <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Total</span>
@@ -3748,25 +3787,74 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       </div>
 
+      {/* ── MENU HUB TAB ── (new, May 2026) — replaces the old top-row tab pills.
+          Players tap 📋 Menu from the Play screen to reach this hub of secondary destinations. */}
+      {tab==="menu"&&(
+        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 14px 14px",animation:"slideUp 0.3s ease"}}>
+          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ✏️ Back to Game
+          </button>
+
+          <div style={{fontSize:11,color:"#f6d365",letterSpacing:3,fontWeight:"bold",textAlign:"center",marginBottom:14}}>📋 MENU</div>
+
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <button className="ll-btn" onClick={()=>setTab("history")} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
+              <div style={{fontSize:28,marginBottom:6}}>📜</div>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>History</div>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Every word you've played — including rejected words you can submit for review</div>
+            </button>
+
+            <button className="ll-btn" onClick={()=>{
+              // Guests get an upsell modal when tapping Stats
+              if (isGuest) { setShowGuestUpsell(true); return; }
+              setTab("stats");
+            }} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
+              <div style={{fontSize:28,marginBottom:6}}>📊</div>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Stats</div>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Your scores, streaks, Perfect Days &amp; records</div>
+            </button>
+
+            <button className="ll-btn" onClick={()=>setTab("badges")} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
+              <div style={{fontSize:28,marginBottom:6}}>🏅</div>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Badges</div>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Achievements you've earned</div>
+            </button>
+
+            <button className="ll-btn" onClick={()=>{
+              // Guests get an upsell modal when tapping Leaders
+              if (isGuest) { setShowGuestUpsell(true); return; }
+              setTab("leaderboard");
+            }} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
+              <div style={{fontSize:28,marginBottom:6}}>🏆</div>
+              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Leaders</div>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Top scores, longest words, Perfect Days</div>
+            </button>
+          </div>
+
+          {/* Tips spans full width */}
+          <button className="ll-btn" onClick={()=>setTab("info")} style={{width:"100%",padding:"16px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
+            <div style={{fontSize:24,marginBottom:4}}>ℹ️</div>
+            <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Tips &amp; How to Play</div>
+            <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Rules, scoring, strategy</div>
+          </button>
+        </div>
+      )}
+
       {/* ── PLAY TAB ── */}
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 10px 6px",animation:"slideUp 0.3s ease"}}>
 
-          {/* ROW 5: Share LetterLoot + UNDO */}
+          {/* ROW 5: 📋 Menu + UNDO — Share moved to post-game (Perfect Day / Farewell screens) */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>
-            <button className="ll-btn" onClick={()=>{
-              navigator.clipboard?.writeText(`✏️ Play LetterLoot — the daily word puzzle where every letter has a value! ${getShareUrlLabel()} ${getShareUrl()}`);
-              setShareLLCopied(true); setTimeout(()=>setShareLLCopied(false),4000);
-            }} style={{flex:1,padding:"4px 4px",borderRadius:8,fontSize:9,background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.6)",color:"#22d3ee",textAlign:"center",fontWeight:"bold",display:"flex",flexDirection:"row",alignItems:"center",justifyContent:"center",gap:4}}>
-              {shareLLCopied ? <span style={{color:"#22d3ee"}}>✓ Copied!</span> : <><span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",letterSpacing:1}}>Share</span><div style={{display:"flex",flexDirection:"column",alignItems:"center",lineHeight:1}}><PencilIcon size={38}/><span style={{fontSize:7,color:"#F5C518",fontWeight:"bold",letterSpacing:1,marginTop:1}}>LetterLoot</span></div></>}
+            <button className="ll-btn" onClick={()=>setTab("menu")} style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:11,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.6)",color:"#f6d365",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif"}}>
+              📋 Menu
             </button>
             <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
               disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
-              style={{flex:1,padding:"6px 4px",borderRadius:8,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold"}}>
+              style={{flex:2,padding:"6px 4px",borderRadius:8,fontSize:10,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold"}}>
               {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO last word — 1,000 pts`:<span>↩️ UNDO at <span style={{color:"#fda085"}}>1,000 pts</span> (you have <span style={{color:"#f6d365"}}>{totalRef.current.toLocaleString()}</span>)</span>)}
             </button>
           </div>
-          {shareLLCopied&&<div style={{textAlign:"center",fontSize:9,color:"#6ee7b7",marginBottom:2}}>Copied! Share with your friends.</div>}
 
           {/* ROW 6: Submit · Clear · ReTry · Buy */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>

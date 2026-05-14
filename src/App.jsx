@@ -2209,6 +2209,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [perfectDay, setPerfectDay] = useState(ss?.perfectDay ?? true);
   const perfectDayRef = useRef(ss?.perfectDay ?? true);
   const setPerfectDaySync = useCallback((val) => { perfectDayRef.current = val; setPerfectDay(val); }, []);
+  // Stale Perfect Day on launch fix (May 15, 2026):
+  // Once the player has dismissed the Perfect Day modal today, set a localStorage flag.
+  // The auto-show useEffect below checks this so the modal doesn't re-pop on re-launch
+  // after the player closed it earlier in the day.
+  const markPDAcknowledged = useCallback(() => {
+    try { localStorage.setItem("ll_pd_acknowledged_today", getTodayKey()); } catch {}
+  }, []);
   const [showRepeatPerfect, setShowRepeatPerfect] = useState(false);
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
@@ -2228,6 +2235,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       const sess = JSON.parse(localStorage.getItem("ll_session") || "null");
       const d = new Date();
       const todayKey = d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+      // Stale Perfect Day on launch fix (May 15, 2026):
+      // If the player completed and acknowledged a Perfect Day today, show Welcome screen
+      // on re-launch (not the stale completed-game state that triggered the modal). They
+      // can decide from Welcome whether to play another round or just check stats.
+      const pdAcknowledged = localStorage.getItem("ll_pd_acknowledged_today") === todayKey;
+      if (pdAcknowledged) return true;
       // Restore if: same day AND (has submitted words OR is on level > 1)
       const hasActiveGame = sess && sess.savedDate === todayKey && (
         (sess.submitted && sess.submitted.length > 0) || (sess.level && sess.level > 1)
@@ -2296,6 +2309,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (tab !== "play") return;
     if (showRepeatPerfect || perfectDayAchieved || levelComplete || showIntro || showReadyScreen) return;
     try {
+      // Stale Perfect Day on launch fix (May 15, 2026):
+      // If the player has already acknowledged (dismissed) today's Perfect Day modal,
+      // don't auto-pop it again on a fresh app open. They've seen it; they're back to
+      // start a fresh game / play around. The Welcome screen / fresh game flow handles
+      // them from here.
+      const acknowledged = localStorage.getItem("ll_pd_acknowledged_today") === getTodayKey();
+      if (acknowledged) return;
       const completedToday = localStorage.getItem("ll_completed_today") === getTodayKey();
       const remaining = tiles.filter(t => !t.used).length;
       const boardEmpty = level >= 5 && remaining === 0;
@@ -3651,7 +3671,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               <strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
             </div>
           )}
-          <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
+          <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
             🏆 Check Leaderboard
           </button>
           <button className="ll-btn" onClick={()=>{
@@ -3666,19 +3686,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{marginTop:14}}>
               <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginBottom:8}}>Want to play again?</div>
               <div style={{display:"flex",gap:6}}>
-                <button className="ll-btn replay-btn" onClick={()=>{ setPlayAgainChoice("now"); setTimeout(()=>{ setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset({skipWelcome:true}); },2000); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:11,fontWeight:"bold",border:"none"}}>✏️ Now</button>
-                <button className="ll-btn" onClick={()=>setPlayAgainChoice("later")} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:11,fontWeight:"bold"}}>🌅 Later</button>
-                <button className="ll-btn" onClick={()=>setPlayAgainChoice("tomorrow")} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:11,fontWeight:"bold"}}>🌙 Tomorrow</button>
+                <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPlayAgainChoice("now"); setTimeout(()=>{ setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset({skipWelcome:true}); },2000); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:11,fontWeight:"bold",border:"none"}}>✏️ Now</button>
+                <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPlayAgainChoice("later"); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:11,fontWeight:"bold"}}>🌅 Later</button>
+                <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPlayAgainChoice("tomorrow"); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:11,fontWeight:"bold"}}>🌙 Tomorrow</button>
               </div>
             </div>
           )}
           {playAgainChoice==="now"&&<div style={{marginTop:14,fontSize:20,fontWeight:"bold",color:"#00e676"}}>Let's Go! 🎯</div>}
           {playAgainChoice==="later"&&(<div style={{marginTop:14}}>
             <div style={{fontSize:15,color:"#bfdbfe",lineHeight:1.7,fontWeight:"bold"}}>Nice work so far.<br/>See you later! 🌅</div>
-            <button className="ll-btn replay-btn" onClick={()=>{setPerfectDayAchieved(false);setPlayAgainChoice(null);handleFullReset();}} style={{marginTop:14,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
-            <button className="ll-btn" onClick={()=>{setPerfectDayAchieved(false);setPlayAgainChoice(null);handleFullReset();setShowIntro(false);}} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close — I'll be back later</button>
+            <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset(); }} style={{marginTop:14,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
+            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset(); setShowIntro(false); }} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close — I'll be back later</button>
           </div>)}
-          {playAgainChoice==="tomorrow"&&(<div style={{marginTop:14}}><div style={{fontSize:14,color:"#e9d5ff",lineHeight:1.8,fontWeight:"bold"}}>New Boards, New Words.<br/>Another Perfect Day will be waiting! 🌙</div><button className="ll-btn" onClick={()=>{setPerfectDayAchieved(false);setPlayAgainChoice(null);}} style={{marginTop:12,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close</button></div>)}
+          {playAgainChoice==="tomorrow"&&(<div style={{marginTop:14}}><div style={{fontSize:14,color:"#e9d5ff",lineHeight:1.8,fontWeight:"bold"}}>New Boards, New Words.<br/>Another Perfect Day will be waiting! 🌙</div><button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setPlayAgainChoice(null); }} style={{marginTop:12,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close</button></div>)}
         </div>
       </div>}
 
@@ -3706,7 +3726,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
             Perfect Days are tracked daily toward your total — but every one is worth celebrating!
           </div>
-          <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
+          <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
             🏆 Check Leaderboard
           </button>
           <button className="ll-btn" onClick={()=>{
@@ -3719,9 +3739,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
           <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
           <div style={{display:"flex",flexDirection:"row",gap:6}}>
-            <button className="ll-btn replay-btn" onClick={()=>{setShowRepeatPerfect(false);handleFullReset({skipWelcome:true});}} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Now</button>
-            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); handleFullReset(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:12,fontWeight:"bold"}}>🌅 Later</button>
-            <button className="ll-btn" onClick={()=>{ setShowRepeatPerfect(false); triggerFarewell(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold"}}>🌙 Tomorrow</button>
+            <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Now</button>
+            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); handleFullReset(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:12,fontWeight:"bold"}}>🌅 Later</button>
+            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); triggerFarewell(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold"}}>🌙 Tomorrow</button>
           </div>
         </div>
       </div>}

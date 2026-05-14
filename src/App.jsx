@@ -1430,73 +1430,28 @@ function detectPlatform() {
 }
 
 function isInstalled() {
-  // Detect if game is running as installed PWA (standalone display mode)
-  return (
-    window.matchMedia && window.matchMedia('(display-mode: standalone)').matches ||
-    window.navigator.standalone === true
-  );
+  // Kept for backward compat with any saved state; PWA install flow is removed.
+  return false;
 }
 
-function InstallPrompt({ open, onClose, onPermanentDismiss, isSecondVisit }) {
-  const detected = detectPlatform();
-  const [platform, setPlatform] = useState(detected === "android" ? "android" : "ios");
-  if (!open) return null;
-  return (
-    <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={onClose}>
-      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:22,padding:"22px 18px",border:"2px solid rgba(167,139,250,0.6)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:340,width:"100%",boxShadow:"0 16px 60px rgba(0,0,0,0.8)"}}>
-        <div style={{fontSize:42,textAlign:"center",marginBottom:4}}>📱</div>
-        <div style={{fontSize:17,fontWeight:"bold",color:"#f6d365",textAlign:"center",marginBottom:6}}>Add LetterLoot to your phone!</div>
-        <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",textAlign:"center",lineHeight:1.55,marginBottom:12}}>One tap to play every day — no typing the URL.</div>
-        {/* Platform toggle */}
-        <div style={{display:"flex",gap:5,marginBottom:12}}>
-          <button onClick={()=>setPlatform("ios")} style={{flex:1,padding:"6px",borderRadius:8,fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",border:platform==="ios"?"none":"1px solid rgba(255,255,255,0.2)",background:platform==="ios"?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.05)",color:platform==="ios"?"#fff":"rgba(255,255,255,0.5)",fontWeight:platform==="ios"?"bold":"normal",textAlign:"center"}}>📱 iPhone</button>
-          <button onClick={()=>setPlatform("android")} style={{flex:1,padding:"6px",borderRadius:8,fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",border:platform==="android"?"none":"1px solid rgba(255,255,255,0.2)",background:platform==="android"?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.05)",color:platform==="android"?"#fff":"rgba(255,255,255,0.5)",fontWeight:platform==="android"?"bold":"normal",textAlign:"center"}}>🤖 Android</button>
-        </div>
-        {/* Steps */}
-        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"10px 12px",marginBottom:12}}>
-          {platform==="ios" ? (
-            <>
-              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>1</div>
-                <div>Tap the <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",background:"rgba(34,211,238,0.15)",borderRadius:5,padding:"1px 4px",verticalAlign:"middle"}}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a2 2 0 002 2h12a2 2 0 002-2v-7"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                </span> <strong style={{color:"#22d3ee"}}>Share</strong> button at the top of your screen (in URL box)</div>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>2</div>
-                <div>Tap the <strong style={{color:"#f6d365"}}>"MORE"</strong> button (•••)</div>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>3</div>
-                <div>Scroll down, tap <strong style={{color:"#f6d365"}}>"Add to Home Screen"</strong></div>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>4</div>
-                <div>Tap <strong style={{color:"#6ee7b7"}}>"Add"</strong> — done! 🎉</div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>1</div>
-                <div>Tap the <strong style={{color:"#22d3ee"}}>menu (⋮)</strong> at the top right of Chrome</div>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>2</div>
-                <div>Tap <strong style={{color:"#f6d365"}}>"Install app"</strong> or <strong style={{color:"#f6d365"}}>"Add to Home screen"</strong></div>
-              </div>
-              <div style={{display:"flex",alignItems:"flex-start",gap:8,fontSize:12,color:"#f5f0e8",lineHeight:1.55,padding:"5px 0"}}>
-                <div style={{width:20,height:20,borderRadius:"50%",background:"rgba(246,211,101,0.25)",color:"#f6d365",fontWeight:"bold",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,flexShrink:0,marginTop:1}}>3</div>
-                <div>Tap <strong style={{color:"#6ee7b7"}}>"Install"</strong> — done! 🎉</div>
-              </div>
-            </>
-          )}
-        </div>
-        <button onClick={onClose} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontFamily:"Georgia,serif",fontSize:14,fontWeight:"bold",cursor:"pointer"}}>Got it! ✓</button>
-        <button onClick={isSecondVisit ? onPermanentDismiss : onClose} style={{marginTop:8,width:"100%",padding:11,borderRadius:11,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif",fontSize:12,cursor:"pointer"}}>{isSecondVisit ? "Don't show this again" : "Maybe later"}</button>
-      </div>
-    </div>
-  );
+// ── Share URL routing ─────────────────────────────────────────
+// Returns the device-appropriate "where to play" URL for share messages.
+// iOS users get the App Store. Everyone else gets the web URL.
+//
+// REPLACE BEFORE APP STORE LAUNCH: when the app is approved, replace
+// APP_STORE_URL below with the real App Store listing URL (find it in
+// App Store Connect → App Information → Marketing URL once approved).
+const APP_STORE_URL = "https://apps.apple.com/app/letterloot/idREPLACE_AFTER_LAUNCH";
+const WEB_URL = "https://letterloot.net";
+
+function getShareUrl() {
+  const platform = detectPlatform();
+  return platform === "ios" ? APP_STORE_URL : WEB_URL;
+}
+
+function getShareUrlLabel() {
+  const platform = detectPlatform();
+  return platform === "ios" ? "Download free on the App Store:" : "Play free at:";
 }
 
 function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats, onViewLeaderboard, onPlayAgain }) {
@@ -1539,9 +1494,14 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewSta
 }
 
 function AuthScreen({ onGuest, onLogin }) {
-  // If player has a saved name or previous session, go straight to Sign In
-  const isReturning = !!(localStorage.getItem("ll_name") || localStorage.getItem("ll_session"));
-  const [mode, setMode] = useState(isReturning ? "login" : "welcome");
+  // Three player states:
+  //  1. First-time visitor → "welcome" mode (Create Account + Play as Guest, equal weight)
+  //  2. Returning guest (no signed-in account, but has played as guest before) → "welcome" mode with returning-guest copy
+  //  3. Returning signed-in player who explicitly signed out → "login" mode (email/name remembered)
+  const hasSignedInBefore = !!(localStorage.getItem("ll_name") || localStorage.getItem("ll_session"));
+  const hasPlayedAsGuestBefore = localStorage.getItem("ll_guest_returning") === "1";
+  const isReturningGuest = !hasSignedInBefore && hasPlayedAsGuestBefore;
+  const [mode, setMode] = useState(hasSignedInBefore ? "login" : "welcome");
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [name, setName] = useState("");
   const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [success, setSuccess] = useState("");
   const handleSignUp = async () => {
@@ -1577,24 +1537,36 @@ function AuthScreen({ onGuest, onLogin }) {
         {mode==="welcome"&&(
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
             <div style={{textAlign:"center",marginBottom:20}}>
-              <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365",marginBottom:8}}>Welcome!</div>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.6}}>Sign in to save your progress across devices, or play as a guest to try it out.</div>
+              {isReturningGuest ? (
+                <>
+                  <div style={{fontSize:15,fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>Welcome back! 👋</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.6}}>Ready for another round? Create a free account this time to save your progress, share Perfect Day successes, and join the Leaderboard.</div>
+                </>
+              ) : (
+                <>
+                  <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365",marginBottom:8}}>Welcome!</div>
+                  <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.6}}>Create an account to save your progress and compete on the Leaderboard — or play as a guest to try it out.</div>
+                </>
+              )}
             </div>
-            <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={()=>setMode("login")}>Sign In</button>
             <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={()=>setMode("signup")}>Create Account</button>
-            <button style={{...btnStyle("rgba(255,255,255,0.08)","rgba(255,255,255,0.7)"),border:"1px solid rgba(255,255,255,0.2)"}} onClick={onGuest}>Play as Guest<div style={{fontSize:10,color:"rgba(255,255,255,0.4)",fontWeight:"normal",marginTop:2}}>Progress saved on this device only</div></button>
+            <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={onGuest}>
+              {isReturningGuest ? "Continue as Guest" : "Play as Guest"}
+              {!isReturningGuest && <div style={{fontSize:10,color:"rgba(26,26,46,0.65)",fontWeight:"normal",marginTop:2}}>No saved progress · No leaderboard</div>}
+            </button>
+            <div style={{textAlign:"center",marginTop:14,fontSize:11,color:"rgba(255,255,255,0.45)"}}>Already have an account? <span style={{color:"#f6d365",cursor:"pointer",fontWeight:"bold"}} onClick={()=>setMode("login")}>Sign in</span></div>
           </div>
         )}
         {mode==="login"&&(
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
             <div style={{textAlign:"center",marginBottom:18}}>
-              {isReturning && localStorage.getItem("ll_name") && (
+              {hasSignedInBefore && localStorage.getItem("ll_name") && (
                 <div style={{fontSize:16,fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>
                   Welcome back, {localStorage.getItem("ll_name")}! 👋
                 </div>
               )}
               <div style={{fontSize:13,fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>SIGN IN</div>
-              {isReturning && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>Sign in to sync your progress across devices</div>}
+              {hasSignedInBefore && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>Sign in to sync your progress across devices</div>}
             </div>
             {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
             {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
@@ -1947,7 +1919,25 @@ export default function App() {
   useEffect(() => {
     getSession().then(session => {
       if (session) { setUser(session.user); setAuthState("playing"); }
-      else { const isGuest = localStorage.getItem("ll_guest") === "1"; if (isGuest) setAuthState("playing"); else setAuthState("auth"); }
+      else {
+        // Returning guests no longer auto-route to game.
+        // They see the Welcome screen every time, with a pitch to create an account.
+        // The "ll_guest_returning" flag tells AuthScreen this isn't a first-timer.
+        const wasGuest = localStorage.getItem("ll_guest") === "1";
+        if (wasGuest) {
+          // Clear active guest session so they have to re-acknowledge "Continue as Guest"
+          localStorage.removeItem("ll_guest");
+          // Wipe ephemeral guest game data — clean slate for the next guest session
+          localStorage.removeItem("ll_stats");
+          localStorage.removeItem("ll_lifetime");
+          localStorage.removeItem("ll_badges_lifetime");
+          localStorage.removeItem("ll_time_leaderboard");
+          localStorage.removeItem("ll_daily_state");
+          // Mark them as "returning guest" so AuthScreen shows the right copy
+          localStorage.setItem("ll_guest_returning", "1");
+        }
+        setAuthState("auth");
+      }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) { setUser(session.user); setAuthState("playing"); }
@@ -1967,9 +1957,18 @@ export default function App() {
   }, []);
   const [showCelebrate, setShowCelebrate] = useState(() => window.location.hash === '#celebrate');
   const [showAdmin, setShowAdmin] = useState(() => new URLSearchParams(window.location.search).get('admin') === '1');
+  // Guest upsell modal — shown when a guest taps Leaderboard or Stats (signed-up-only features)
+  const [showGuestUpsell, setShowGuestUpsell] = useState(false);
   const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
   const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
+  // From guest upsell modal: send the guest to AuthScreen so they can sign up.
+  // We clear ll_guest so the routing logic doesn't auto-bounce them back to play.
+  const handleGuestUpsellSignUp = () => {
+    localStorage.removeItem("ll_guest");
+    setShowGuestUpsell(false);
+    setAuthState("auth");
+  };
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
   // Close just dismisses the screen back to the game's play tab — does NOT sign out.
   // (Previous buggy behavior kicked logged-in users back to the auth screen.)
@@ -2025,39 +2024,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
   const playerNameRef = useRef("");
   const [editingName, setEditingName] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  // Install prompt state — shows after welcome screen (controlled by PLAY NOW handler)
-  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
   const [rejectedWord, setRejectedWord] = useState(null);
   const [reportSent, setReportSent] = useState(false);
-  // Should we show the install prompt this session?
-  const shouldShowInstallPrompt = (() => {
-    try {
-      if (isInstalled()) return false;
-      if (detectPlatform() === "desktop") return false;
-      if (localStorage.getItem("ll_install_dismissed") === "permanent") return false;
-      return true;
-    } catch { return false; }
-  })();
-  const [installVisitCount, setInstallVisitCount] = useState(() => {
-    try { return parseInt(localStorage.getItem("ll_install_visit_count")||"0", 10); } catch { return 0; }
-  });
-  // Track count when shown
-  const trackInstallShown = () => {
-    try {
-      const newCount = installVisitCount + 1;
-      localStorage.setItem("ll_install_visit_count", String(newCount));
-      setInstallVisitCount(newCount);
-    } catch {}
-  };
-  const handleInstallClose = () => {
-    setShowInstallPrompt(false);
-  };
-  const handleInstallPermanentDismiss = () => {
-    try { localStorage.setItem("ll_install_dismissed", "permanent"); } catch {}
-    setShowInstallPrompt(false);
-  };
-  // Show floating help button only if not installed and not on desktop
-  const showInstallHelpFab = !isInstalled() && detectPlatform() !== "desktop" && localStorage.getItem("ll_install_dismissed") !== "permanent";
   const [online, setOnline] = useState(navigator.onLine);
   const [savedIndicator, setSavedIndicator] = useState(false);
   const completeTour = () => { localStorage.setItem("ll_tour_done","1"); setShowTour(false); requestNotificationPermission(); };
@@ -2685,7 +2653,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
     const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts` : "";
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — play free at:\nhttps://letterloot-6k6v.vercel.app/#celebrate\n🌈🏆`;
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — ${getShareUrlLabel()}\n${getShareUrl()}\n🌈🏆`;
   }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
 
   const fetchLeaderboard = async () => {
@@ -3277,11 +3245,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           setShowIntro(false);
           // Show the "Ready, Daryl?" screen (with green Let's Go) for non-reset entries too
           setShowReadyScreen(true);
-          // If install prompt should be shown, show it first
-          if (shouldShowInstallPrompt) {
-            trackInstallShown();
-            setShowInstallPrompt(true);
-          }
           // No setShowReadyToPlay — the showReadyScreen ("Ready, Daryl?")
           // already handles the pre-game prompt with timer-on-tap behavior.
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
@@ -3392,19 +3355,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
 
       {showTour&&<VisualTour onDone={completeTour}/>}
 
-      <InstallPrompt
-        open={showInstallPrompt}
-        onClose={handleInstallClose}
-        onPermanentDismiss={handleInstallPermanentDismiss}
-        isSecondVisit={installVisitCount >= 1}
-      />
-
-      {showInstallHelpFab && !showInstallPrompt && (
-        <button onClick={()=>setShowInstallPrompt(true)} style={{position:"fixed",bottom:14,right:14,zIndex:99,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"none",borderRadius:24,padding:"8px 14px",color:"#fff",fontFamily:"Georgia,serif",fontSize:11,fontWeight:"bold",cursor:"pointer",display:"flex",alignItems:"center",gap:5,boxShadow:"0 4px 16px rgba(167,139,250,0.5)"}}>
-          📱 Install Help
-        </button>
-      )}
-
       {/* Word of the Day reminder toast — shows at level start until found */}
       {showWotdReminder && wotd && !wotdFound && (
         <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",pointerEvents:"none"}}>
@@ -3513,6 +3463,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         </div>
       </div>}
 
+      {showGuestUpsell&&<div style={{position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"28px 24px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.2)",maxWidth:320,width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
+          <div style={{fontSize:36,marginBottom:6}}>🏆</div>
+          <div style={{fontSize:16,fontWeight:"bold",color:"#f6d365",marginBottom:10}}>Sign up to unlock more</div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.6,marginBottom:14}}>Create a free account to:</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",marginBottom:18,fontSize:12,color:"rgba(255,255,255,0.9)",lineHeight:2,textAlign:"left"}}>
+            <div>✓ Save your game progress</div>
+            <div>✓ Share Perfect Day successes</div>
+            <div>✓ View the Leaderboard</div>
+            <div>✓ Track stats &amp; history</div>
+          </div>
+          <button className="ll-btn" onClick={handleGuestUpsellSignUp} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",marginBottom:8}}>
+            Create Free Account
+          </button>
+          <button className="ll-btn" onClick={()=>setShowGuestUpsell(false)} style={{width:"100%",padding:"10px",borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.55)",fontSize:12,fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.18)",cursor:"pointer"}}>
+            Maybe Later
+          </button>
+        </div>
+      </div>}
+
       {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
           <div style={{fontSize:40}}>🔄</div>
@@ -3602,6 +3572,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             🏆 Check Leaderboard
           </button>
           <button className="ll-btn" onClick={()=>{
+            if (isGuest) { setShowGuestUpsell(true); return; }
             navigator.clipboard?.writeText(getPerfectDayShareText());
             setShareCopied(true); setTimeout(() => setShareCopied(false), 4000);
           }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
@@ -3656,6 +3627,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
             🏆 Check Leaderboard
           </button>
           <button className="ll-btn" onClick={()=>{
+            if (isGuest) { setShowGuestUpsell(true); return; }
             navigator.clipboard?.writeText(getPerfectDayShareText());
             setShareCopied(true); setTimeout(()=>setShareCopied(false),4000);
           }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
@@ -3726,7 +3698,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
         {/* ROW 2: History · Stats · Tips · Level pill */}
         <div style={{display:"flex",gap:3,alignItems:"center",marginBottom:3}}>
           {[{id:"history",label:"📜 History"},{id:"stats",label:"📊 Stats"},{id:"badges",label:"🏅 Badges"},{id:"info",label:"ℹ️ Tips"},{id:"leaderboard",label:"🏆 Leaders"}].map(t=>(
-            <button key={t.id} className="ll-tab" onClick={()=>setTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:12,fontSize:8,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap",textAlign:"center"}}>
+            <button key={t.id} className="ll-tab" onClick={()=>{
+              // Guests get an upsell modal when they tap Leaderboard or Stats — but see/use everything else normally.
+              if (isGuest && (t.id === "leaderboard" || t.id === "stats")) {
+                setShowGuestUpsell(true);
+                return;
+              }
+              setTab(t.id);
+            }} style={{flex:1,padding:"4px 2px",borderRadius:12,fontSize:8,background:tab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:tab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:tab===t.id?"bold":"normal",border:tab===t.id?"none":"1px solid rgba(255,255,255,0.3)",whiteSpace:"nowrap",textAlign:"center"}}>
               {t.label}
             </button>
           ))}
@@ -3774,7 +3753,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed }) 
           {/* ROW 5: Share LetterLoot + UNDO */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>
             <button className="ll-btn" onClick={()=>{
-              navigator.clipboard?.writeText("✏️ Play LetterLoot — the daily word puzzle where every letter has a value! Free at: https://letterloot-6k6v.vercel.app");
+              navigator.clipboard?.writeText(`✏️ Play LetterLoot — the daily word puzzle where every letter has a value! ${getShareUrlLabel()} ${getShareUrl()}`);
               setShareLLCopied(true); setTimeout(()=>setShareLLCopied(false),4000);
             }} style={{flex:1,padding:"4px 4px",borderRadius:8,fontSize:9,background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.6)",color:"#22d3ee",textAlign:"center",fontWeight:"bold",display:"flex",flexDirection:"row",alignItems:"center",justifyContent:"center",gap:4}}>
               {shareLLCopied ? <span style={{color:"#22d3ee"}}>✓ Copied!</span> : <><span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",letterSpacing:1}}>Share</span><div style={{display:"flex",flexDirection:"column",alignItems:"center",lineHeight:1}}><PencilIcon size={38}/><span style={{fontSize:7,color:"#F5C518",fontWeight:"bold",letterSpacing:1,marginTop:1}}>LetterLoot</span></div></>}

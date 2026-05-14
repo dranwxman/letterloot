@@ -2028,6 +2028,42 @@ export default function App() {
     localStorage.removeItem("ll_guest");
     setAuthState("auth");
   };
+  // Delete Account (Apple App Store guideline 5.1.1(v) requires in-app account deletion).
+  // Removes the user's rows from players, daily_sessions, and game_state tables,
+  // signs out, and clears all local storage. Word reports are kept anonymously
+  // (their player_name field is scrubbed but the report data remains for community moderation).
+  const handleDeleteAccount = useCallback(async () => {
+    try {
+      const session = await getSession();
+      if (!session || !session.user) {
+        alert("Not signed in. Nothing to delete.");
+        return;
+      }
+      const uid = session.user.id;
+      // Scrub word_reports first (anonymize player_name instead of deleting the report itself)
+      try { await supabase.from("word_reports").update({ player_name: "[deleted]" }).eq("player_id", uid); } catch {}
+      // Delete user-owned rows
+      try { await supabase.from("daily_sessions").delete().eq("player_id", uid); } catch {}
+      try { await supabase.from("game_state").delete().eq("player_id", uid); } catch {}
+      try { await supabase.from("players").delete().eq("id", uid); } catch {}
+      // Sign out and wipe local storage entirely so no remnants persist
+      try { await signOut(); } catch {}
+      try {
+        const keysToClear = [
+          "ll_guest","ll_stats","ll_lifetime","ll_badges_lifetime","ll_time_leaderboard",
+          "ll_daily_state","ll_session","ll_completed_today","ll_pd_acknowledged_today",
+          "ll_wotd","ll_tour_done","ll_name","ll_photo","ll_nickname","ll_longest",
+          "ll_guest_returning"
+        ];
+        keysToClear.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+      } catch {}
+      setAuthState("auth");
+      // Brief delay so the auth screen renders before the alert
+      setTimeout(() => alert("Your account has been deleted. We're sorry to see you go!"), 200);
+    } catch (e) {
+      alert("Deletion failed: " + (e?.message || "Unknown error") + "\n\nPlease email hello@letterloot.net for help.");
+    }
+  }, []);
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
   // Close just dismisses the screen back to the game's play tab — does NOT sign out.
   // (Previous buggy behavior kicked logged-in users back to the auth screen.)
@@ -2074,11 +2110,17 @@ export default function App() {
     </div>
   );
   if (authState === "auth") return <AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>;
-  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)} onSignUpRequest={handleGuestUpsellSignUp}/>;
+  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)} onSignUpRequest={handleGuestUpsellSignUp} onDeleteAccount={handleDeleteAccount}/>;
 }
 
-function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, onSignUpRequest }) {
+function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, onSignUpRequest, onDeleteAccount }) {
   const [showGuestUpsell, setShowGuestUpsell] = useState(false);
+  // Delete Account two-step confirmation (May 15, 2026).
+  // Apple App Store guideline 5.1.1(v) requires in-app account deletion.
+  // Modal asks user to type DELETE before confirming.
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const isGuest = !user;
   const [playerName, setPlayerName] = useState("");
   const playerNameRef = useRef("");
@@ -3573,6 +3615,58 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
       </div>}
 
+      {/* Delete Account two-step confirmation (May 15, 2026) */}
+      {showDeleteAccount&&<div style={{position:"fixed",inset:0,zIndex:9300,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"28px 24px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.85)",border:"2px solid rgba(239,68,68,0.5)",maxWidth:340,width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
+          <div style={{fontSize:40,marginBottom:6}}>⚠️</div>
+          <div style={{fontSize:18,fontWeight:"bold",color:"#fca5a5",marginBottom:10}}>Delete Your Account?</div>
+          <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",lineHeight:1.6,marginBottom:14,textAlign:"left"}}>
+            This will <strong style={{color:"#fca5a5"}}>permanently delete</strong>:
+          </div>
+          <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:"rgba(255,255,255,0.85)",lineHeight:1.9,textAlign:"left"}}>
+            <div>✗ Your account &amp; email</div>
+            <div>✗ All game history &amp; stats</div>
+            <div>✗ Perfect Days, streaks, badges</div>
+            <div>✗ Leaderboard entries</div>
+          </div>
+          <div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:10,lineHeight:1.5}}>
+            This cannot be undone. To confirm, type <strong style={{color:"#fca5a5"}}>DELETE</strong> below:
+          </div>
+          <input
+            type="text"
+            value={deleteConfirmText}
+            onChange={(e)=>setDeleteConfirmText(e.target.value)}
+            placeholder="Type DELETE to confirm"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid rgba(239,68,68,0.4)",background:"rgba(0,0,0,0.3)",color:"#fff",fontSize:14,fontFamily:"Georgia,serif",textAlign:"center",letterSpacing:2,marginBottom:14,boxSizing:"border-box"}}
+            disabled={deletingAccount}
+          />
+          <button
+            onClick={async ()=>{
+              if (deleteConfirmText.trim().toUpperCase() !== "DELETE") return;
+              setDeletingAccount(true);
+              try { await onDeleteAccount?.(); } catch {}
+              setDeletingAccount(false);
+              setShowDeleteAccount(false);
+              setDeleteConfirmText("");
+            }}
+            disabled={deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE"}
+            style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "rgba(239,68,68,0.25)" : "linear-gradient(135deg,#dc2626,#991b1b)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",cursor: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "not-allowed" : "pointer",marginBottom:8,opacity: deletingAccount ? 0.7 : 1}}
+          >
+            {deletingAccount ? "Deleting…" : "Delete My Account Permanently"}
+          </button>
+          <button
+            onClick={()=>{ setShowDeleteAccount(false); setDeleteConfirmText(""); }}
+            disabled={deletingAccount}
+            style={{width:"100%",padding:"10px",borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.7)",fontSize:13,fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.25)",cursor: deletingAccount ? "not-allowed" : "pointer"}}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>}
+
       {showResetConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
           <div style={{fontSize:40}}>🔄</div>
@@ -3890,6 +3984,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               {musicOn?"ON":"OFF"}
             </button>
           </div>
+
+          {/* Account section — only for signed-in (non-guest) users */}
+          {!isGuest && (
+            <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:2,fontWeight:"bold",textAlign:"center",marginBottom:8}}>ACCOUNT</div>
+              <button onClick={onSignOut} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",fontSize:12,fontFamily:"Georgia,serif",fontWeight:"bold",cursor:"pointer",marginBottom:8}}>
+                Sign Out
+              </button>
+              <button onClick={()=>setShowDeleteAccount(true)} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",color:"#fca5a5",fontSize:12,fontFamily:"Georgia,serif",fontWeight:"bold",cursor:"pointer"}}>
+                Delete Account
+              </button>
+              <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",textAlign:"center",marginTop:6,lineHeight:1.5}}>
+                Deleting your account permanently removes all your data and cannot be undone.
+              </div>
+            </div>
+          )}
         </div>
       )}
 

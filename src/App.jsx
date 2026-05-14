@@ -2357,7 +2357,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       }
       justResetRef.current = false;
       if (!localStorage.getItem("ll_tour_done")) setShowTour(true);
-      if (Notification.permission === "granted") scheduleNotifications();
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") scheduleNotifications();
     };
     init();
   }, [user, isGuest]);

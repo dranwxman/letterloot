@@ -3444,7 +3444,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 <input
                   value={profileNickname}
                   onChange={e=>setProfileNickname(e.target.value)}
-                  onBlur={e=>handleNicknameSave(e.target.value)}
                   placeholder={playerName || "Enter a nickname…"}
                   style={{width:"100%",padding:"8px 12px",borderRadius:10,border:"1px solid rgba(34,211,238,0.4)",background:"rgba(34,211,238,0.08)",color:"#f5f0e8",fontSize:13,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}
                 />

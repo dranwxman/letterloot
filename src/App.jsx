@@ -3627,7 +3627,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         <div style={{position:"fixed",inset:0,zIndex:9700,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
           <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:"24px 32px",boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:340,width:"100%"}}>
             <div style={{fontSize:42,marginBottom:6}}>💥✨</div>
-            <div style={{fontSize:18,color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:8}}>💥 LOOT LETTER! 💥</div>
+            <div style={{fontSize:18,color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:10}}>💥 LOOT LETTER! 💥</div>
+            {/* Big tile-style display of today's actual Loot Letter */}
+            {lootCelebration.letter && (
+              <div style={{display:"inline-block",background:"linear-gradient(135deg,#1a1a2e,#2d1b69)",border:"3px solid #00e676",borderRadius:14,padding:"12px 22px",marginBottom:12,boxShadow:"0 0 20px rgba(0,230,118,0.6),inset 0 0 12px rgba(255,255,255,0.1)"}}>
+                <div style={{fontSize:42,fontWeight:"bold",color:"#f6d365",letterSpacing:2,lineHeight:1,textShadow:"0 0 12px rgba(246,211,101,0.8)"}}>{lootCelebration.letter}</div>
+              </div>
+            )}
             <div style={{fontSize:13,color:"#2d1b00",fontWeight:"bold",marginBottom:6}}>You found the hidden Loot Letter!</div>
             <div style={{fontSize:16,fontWeight:"bold",color:"#003300"}}>5× Letter Bonus Applied!</div>
             <div style={{fontSize:14,fontWeight:"bold",color:"#003300",marginTop:4}}>+{lootCelebration.score} pts on this word</div>
@@ -4118,9 +4124,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 10px 6px",animation:"slideUp 0.3s ease"}}>
 
-          {/* ROW 5: Submit Word · Clear · Menu — Replay/Buy moved to Row 2 above tile board, UNDO moved to Row 4 */}
+          {/* ROW 5: Submit Word · SCORE · Clear · Menu — Replay/Buy moved to Row 2 above tile board, UNDO moved to Row 4 */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>
             <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:3,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
+            <div style={{flex:1.5,padding:"4px 4px",borderRadius:9,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",border:"1.5px solid rgba(246,211,101,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",lineHeight:1.1}}>
+              <div style={{fontSize:7,color:"rgba(246,211,101,0.9)",fontWeight:"bold",letterSpacing:1}}>SCORE</div>
+              <div style={{fontSize:13,color:"#f6d365",fontWeight:"bold",fontFamily:"Georgia,serif"}}>{totalScore.toLocaleString()}</div>
+            </div>
             <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
             <button className="ll-btn" onClick={()=>setTab("menu")} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:11,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.6)",color:"#f6d365",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif"}}>📋 Menu</button>
           </div>
@@ -4453,6 +4463,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               🌈 ← Back to Perfect Day
             </button>
           )}
+
+          {/* Quick nav to History — players often want to review today's words / report rejected ones after seeing leaderboard */}
+          <button className="ll-btn" onClick={()=>setTab("history")} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.3)",color:"#f5f0e8",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            📜 View Today's History & Report Words
+          </button>
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>

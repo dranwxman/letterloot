@@ -2929,11 +2929,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       const last = localStorage.getItem("ll_nickname") || "";
       setProfileNickname(last);
       setTimeout(() => setNameError(""), 4000);
-      return;
+      return false;
     }
     setNameError("");
     setProfileNickname(val);
     localStorage.setItem("ll_nickname", val);
+    return true;
   };
 
   const handleSubmit = async () => {
@@ -3449,7 +3450,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 />
                 {nameError && <div style={{marginTop:6,fontSize:11,color:"#fca5a5",textAlign:"center"}}>{nameError}</div>}
               </div>
-              <button onClick={()=>{ handleNicknameSave(profileNickname); setEditingProfile(false); }} style={{padding:"8px",borderRadius:10,background:"linear-gradient(135deg,#22d3ee,#0ea5e9)",color:"#0a0820",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+              <button onClick={()=>{ if (handleNicknameSave(profileNickname)) setEditingProfile(false); }} style={{padding:"8px",borderRadius:10,background:"linear-gradient(135deg,#22d3ee,#0ea5e9)",color:"#0a0820",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
                 ✓ Save Profile
               </button>
             </div>

@@ -392,6 +392,84 @@ const CUSTOM_WHITELIST = new Set([
   "videoed","videoing",
 ]);
 
+// ── Profanity filter (moderate strictness) ─────────────────────────────────
+// Used in TWO places:
+//   1. validateWord() — block profane dictionary words from scoring during play
+//   2. signup/nickname/name-edit — block profane display names from leaderboards
+// Strategy: substring match against canonicalized text (lowercase, leetspeak
+// reversed, separators removed). Catches "fuck", "F U C K", "f.u.c.k", "fuk",
+// and common embeddings. False positives possible on names like "Scunthorpe"
+// — acceptable tradeoff for App Store guideline 1.1.3 (objectionable content)
+// and 1.2 (user-generated content moderation) compliance.
+const PROFANITY_LIST = [
+  // F-word and variants
+  "fuck","fuk","fck","phuck","fuq",
+  // S-word and variants
+  "shit","sh1t","shyt",
+  // C-word and variants
+  "cunt","kunt",
+  // N-words (racial slurs)
+  "nigger","nigga","nigr",
+  // F-slur (homophobic)
+  "faggot","fagot","fagg",
+  // Anti-Semitic slurs
+  "kike","jewboy",
+  // Anti-Asian slurs
+  "chink","gook",
+  // Anti-Hispanic slurs
+  "spic","wetback",
+  // Misogynistic slurs
+  "whore","slut","cuntface",
+  // R-slur (ableist)
+  "retard","retarded","tard",
+  // Other hard slurs
+  "tranny",
+  // Sexual / explicit
+  "cock","dick","pussy","penis","vagina","boobs","tits","titties",
+  "blowjob","handjob","rimjob","cumshot","jizz","jism","semen",
+  "anal","anus","asshole","arsehole",
+  "pedo","pedophile","paedo",
+  "rape","rapist","raping",
+  // Bestiality / extreme
+  "bestiality","zoophilia",
+  // Common combinations
+  "motherfucker","mfer","mofo","bullshit","horseshit","jackass",
+  "dickhead","cocksucker","fucker","fucking","fucked","sucker",
+];
+const PROFANITY_SET = new Set(PROFANITY_LIST);
+const LEET_MAP = { "0":"o","1":"i","3":"e","4":"a","5":"s","7":"t","8":"b","@":"a","$":"s","!":"i" };
+function canonicalize(text) {
+  if (!text) return "";
+  let s = String(text).toLowerCase();
+  // Replace leetspeak digits/symbols with letter equivalents
+  s = s.replace(/[01345789@$!]/g, ch => LEET_MAP[ch] || ch);
+  // Strip everything except letters
+  s = s.replace(/[^a-z]/g, "");
+  return s;
+}
+function containsProfanity(text) {
+  if (!text) return false;
+  const canon = canonicalize(text);
+  if (!canon) return false;
+  // Exact match (fastest)
+  if (PROFANITY_SET.has(canon)) return true;
+  // Substring match — catches embeddings like "ifuckyou", "f_u_c_k", etc.
+  // Used for DISPLAY NAMES where embedding is the concern.
+  for (const bad of PROFANITY_LIST) {
+    if (canon.includes(bad)) return true;
+  }
+  return false;
+}
+// EXACT-MATCH ONLY — used for dictionary validation during gameplay.
+// "analyze" contains "anal" but is a real word, so we only block when the
+// entered word IS the profanity (or a known inflection of it).
+function isProfaneWord(text) {
+  if (!text) return false;
+  const canon = canonicalize(text);
+  if (!canon) return false;
+  return PROFANITY_SET.has(canon);
+}
+
 // ── Word of the Day candidate pool ──
 // Spans 4 to 12+ letters. Longer words are preferred (more impressive WoD),
 // but the selector descends letter-by-letter when no longer candidate fits
@@ -520,6 +598,12 @@ loadApprovedWords();
 
 async function validateWord(word) {
   const key = word.toLowerCase();
+  // PROFANITY FILTER — block profane words from scoring (App Store guideline 1.1.3)
+  // Exact-match only: blocks "fuck" but allows "analyze" (which contains "anal").
+  if (isProfaneWord(key)) {
+    wordCache[key] = { valid: false, source: "profanity" };
+    return wordCache[key];
+  }
   // Check both static and dynamic whitelists FIRST
   if (CUSTOM_WHITELIST.has(key) || APPROVED_WORDS.has(key)) {
     wordCache[key] = { valid: true, source: "whitelist" };
@@ -1520,6 +1604,7 @@ function AuthScreen({ onGuest, onLogin }) {
   const handleSignUp = async () => {
     if (!email || !password || !name) { setError("Please fill in all fields"); return; }
     if (password.length < 6) { setError("Password must be at least 6 characters"); return; }
+    if (containsProfanity(name)) { setError("Please choose a different display name."); return; }
     setLoading(true); setError("");
     const { error } = await signUp(email, password, name); setLoading(false);
     if (error) { setError(error.message); return; }
@@ -2299,6 +2384,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [profilePhoto, setProfilePhoto] = useState(() => localStorage.getItem("ll_photo") || null);
   const [profileNickname, setProfileNickname] = useState(() => localStorage.getItem("ll_nickname") || "");
   const [editingProfile, setEditingProfile] = useState(false);
+  const [nameError, setNameError] = useState(""); // shown when nickname/name fails profanity check
   const photoInputRef = useRef(null);
   // ── Bonus Level State (dormant when ENABLE_BONUS_LEVELS = false) ──
   const [bonusLevelUnlocked, setBonusLevelUnlocked] = useState(false);
@@ -2759,6 +2845,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
   const handleNameSave = async () => {
     if (!playerName.trim()) return;
+    if (containsProfanity(playerName)) {
+      setNameError("Please choose a different name.");
+      const last = localStorage.getItem("ll_name") || "";
+      setPlayerName(last);
+      playerNameRef.current = last;
+      setTimeout(() => setNameError(""), 4000);
+      return;
+    }
+    setNameError("");
     localStorage.setItem("ll_name", playerName); playerNameRef.current = playerName;
     setEditingName(false);
     if (!isGuest && user) await updatePlayerName(user.id, playerName);
@@ -2828,6 +2923,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     reader.readAsDataURL(file);
   };
   const handleNicknameSave = (val) => {
+    if (containsProfanity(val)) {
+      setNameError("Please choose a different nickname.");
+      // Revert to last clean value from localStorage
+      const last = localStorage.getItem("ll_nickname") || "";
+      setProfileNickname(last);
+      setTimeout(() => setNameError(""), 4000);
+      return;
+    }
+    setNameError("");
     setProfileNickname(val);
     localStorage.setItem("ll_nickname", val);
   };
@@ -3219,6 +3323,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   };
   const handleSaveScore = async () => {
     if (!playerName.trim()) return;
+    if (containsProfanity(playerName)) {
+      setNameError("Please choose a different name.");
+      setTimeout(() => setNameError(""), 4000);
+      return;
+    }
+    setNameError("");
     localStorage.setItem("ll_name", playerName);
     if (!isGuest && user) { await updatePlayerName(user.id, playerName); await syncToCloud(); }
     setShowNameInput(false); clearLocalSession();
@@ -3337,6 +3447,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                   placeholder={playerName || "Enter a nickname…"}
                   style={{width:"100%",padding:"8px 12px",borderRadius:10,border:"1px solid rgba(34,211,238,0.4)",background:"rgba(34,211,238,0.08)",color:"#f5f0e8",fontSize:13,fontFamily:"Georgia,serif",outline:"none",textAlign:"center"}}
                 />
+                {nameError && <div style={{marginTop:6,fontSize:11,color:"#fca5a5",textAlign:"center"}}>{nameError}</div>}
               </div>
               <button onClick={()=>{ handleNicknameSave(profileNickname); setEditingProfile(false); }} style={{padding:"8px",borderRadius:10,background:"linear-gradient(135deg,#22d3ee,#0ea5e9)",color:"#0a0820",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
                 ✓ Save Profile

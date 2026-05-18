@@ -174,6 +174,12 @@ function shouldUseHighValueLoot() {
 function getLootLetterToday() {
   const seed = getDailySeed();
   const rng = seededRandom(seed + 31337);
+  // RNG WARMUP (May 18, 2026 fix): The LCG produces correlated first outputs
+  // for sequential integer seeds (date-shaped), which previously locked the
+  // Loot Letter level to L2 for ~28 days at a stretch and made L1/L5 literally
+  // unreachable. Burning 3 outputs decorrelates the state so the level
+  // distribution becomes uniformly random across L1-L5 day-over-day.
+  rng(); rng(); rng();
   const level = 1 + Math.floor(rng() * 5); // Level 1-5
   // tile count for this level
   const tileCount = 42 + (level - 1) * 6;

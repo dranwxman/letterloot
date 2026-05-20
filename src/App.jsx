@@ -2265,10 +2265,15 @@ export default function App() {
     </div>
   );
   if (authState === "auth") return <AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>;
-  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)} onSignUpRequest={handleGuestUpsellSignUp} onDeleteAccount={handleDeleteAccount}/>;
+  return (
+    <>
+      <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} onRequestLeaderboardConsent={() => { if (user && getLeaderboardConsent() === null) setShowLeaderboardConsent(true); }} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)} onSignUpRequest={handleGuestUpsellSignUp} onDeleteAccount={handleDeleteAccount}/>
+      {showLeaderboardConsent && <LeaderboardConsentPrompt onAccept={handleLeaderboardConsentAccept} onDecline={handleLeaderboardConsentDecline}/>}
+    </>
+  );
 }
 
-function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, onSignUpRequest, onDeleteAccount }) {
+function GameScreen({ user, onSignOut, onFarewell, onRequestLeaderboardConsent, initialTab, onTabConsumed, onSignUpRequest, onDeleteAccount }) {
   const [showGuestUpsell, setShowGuestUpsell] = useState(false);
   // Delete Account two-step confirmation (May 15, 2026).
   // Apple App Store guideline 5.1.1(v) requires in-app account deletion.
@@ -3223,6 +3228,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           setTimeout(() => setLevelComplete(true), 1200);
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
+          // Apple App Store guideline 5.1.2: at the moment game completes, ask consent for
+          // leaderboard uploads if not yet recorded. This covers BOTH paths — Perfect Day
+          // celebration modal AND regular Farewell — since both flow through here at L5 finish.
+          if (user && getLeaderboardConsent() === null) onRequestLeaderboardConsent && onRequestLeaderboardConsent();
           // ── Game completion badges ──
           awardBadge("first_word"); // First Loot — first complete game
           awardBadge("level_5"); // Diamond Looter — completed Level 5

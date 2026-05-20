@@ -14,6 +14,11 @@ export async function signUp(email, password, name) {
 export async function signIn(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error };
+  // Defensive: if the players row was wiped (e.g., beta data wipe), ensure it exists.
+  // This is idempotent — if the row exists, this only updates email/last-seen.
+  if (data.user) {
+    try { await ensurePlayerRecord(data.user.id, email); } catch {}
+  }
   return { data };
 }
 export async function signOut() {
@@ -28,6 +33,19 @@ export async function resetPassword(email) {
 export async function getSession() {
   const { data } = await supabase.auth.getSession();
   return data.session;
+}
+// ── Player record ensurer (May 19, 2026 — added after beta wipe) ────────────
+// Idempotent upsert that creates the players row if missing.
+// Safe to call any time we need to guarantee the FK parent exists before
+// game_state or daily_sessions inserts run.
+export async function ensurePlayerRecord(playerId, email, name) {
+  const payload = { id: playerId };
+  if (email) payload.email = email;
+  if (name)  payload.name = name;
+  const { error } = await supabase
+    .from("players")
+    .upsert(payload, { onConflict: "id", ignoreDuplicates: false });
+  return { error };
 }
 // ── Game state sync ────────────────────────────────────────────
 export async function loadGameState(playerId) {
@@ -129,11 +147,13 @@ export async function saveDailySession(playerId, dateKey, session) {
   return { error };
 }
 // ── Player name & photo ────────────────────────────────────────
+// Changed from .update() to .upsert() (May 19, 2026) so the row is created
+// if missing. Previously, after the beta data wipe, .update() would silently
+// no-op because there was no row to modify, breaking the FK chain for game_state.
 export async function updatePlayerName(playerId, name) {
   const { error } = await supabase
     .from("players")
-    .update({ name })
-    .eq("id", playerId);
+    .upsert({ id: playerId, name }, { onConflict: "id" });
   await supabase
     .from("game_state")
     .update({ player_name: name })
@@ -143,8 +163,7 @@ export async function updatePlayerName(playerId, name) {
 export async function savePlayerPhoto(playerId, photoBase64) {
   const { error } = await supabase
     .from("players")
-    .update({ photo: photoBase64 })
-    .eq("id", playerId);
+    .upsert({ id: playerId, photo: photoBase64 }, { onConflict: "id" });
   return { error };
 }
 export async function loadPlayerPhoto(playerId) {

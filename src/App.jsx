@@ -1486,6 +1486,11 @@ function loadLocalSession() {
   try { const data = JSON.parse(localStorage.getItem("ll_session") || "null"); if (!data || data.savedDate !== getTodayKey()) return null; return data; } catch { return null; }
 }
 function clearLocalSession() { try { localStorage.removeItem("ll_session"); } catch {} }
+// Leaderboard consent (App Store guideline 5.1.2 — added May 19, 2026 after Apple rejection).
+// Players must explicitly consent before their scores/name are uploaded to the global leaderboard.
+// Returns: "yes" (opted in), "no" (declined), or null (never asked).
+function getLeaderboardConsent() { try { return localStorage.getItem("ll_leaderboard_consent"); } catch { return null; } }
+function setLeaderboardConsentValue(v) { try { localStorage.setItem("ll_leaderboard_consent", v); } catch {} }
 function getAllTimeStats() { try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; } }
 function saveAllTimeStats(stats) { try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {} }
 
@@ -1549,6 +1554,39 @@ function getShareUrl() {
 function getShareUrlLabel() {
   const platform = detectPlatform();
   return platform === "ios" ? "Download free on the App Store:" : "Play free at:";
+}
+
+// Leaderboard consent overlay (App Store guideline 5.1.2 — added May 19, 2026).
+// Shown on top of FarewellScreen after the first completed game for signed-in players who
+// haven't yet been asked. Tells the player exactly what gets uploaded and lets them decide.
+// They can change their mind anytime via Menu → Account.
+function LeaderboardConsentPrompt({ onAccept, onDecline }) {
+  return (
+    <div style={{ position:"fixed", inset:0, zIndex:100000, background:"rgba(10,8,32,0.92)", display:"flex", alignItems:"center", justifyContent:"center", padding:"24px", fontFamily:"Georgia,serif", color:"#f5f0e8", overflowY:"auto" }}>
+      <div style={{ width:"100%", maxWidth:380, background:"linear-gradient(135deg,#1a1a3e,#0f0a2e)", border:"2px solid rgba(246,211,101,0.6)", borderRadius:18, padding:"22px 20px", boxShadow:"0 0 32px rgba(246,211,101,0.25)" }}>
+        <div style={{ textAlign:"center", fontSize:30, marginBottom:8 }}>🏆</div>
+        <div style={{ textAlign:"center", fontSize:18, fontWeight:"bold", color:"#f6d365", marginBottom:12, letterSpacing:1 }}>Join the Global Leaderboard?</div>
+        <div style={{ fontSize:13, color:"#f5f0e8", lineHeight:1.7, marginBottom:14 }}>
+          With your permission, LetterLoot will upload the following to our server so you can compete on the global leaderboard:
+        </div>
+        <ul style={{ fontSize:12, color:"rgba(255,255,255,0.85)", lineHeight:1.8, marginBottom:14, paddingLeft:20 }}>
+          <li>Your display name</li>
+          <li>Your daily scores and best words</li>
+          <li>Your level completion times</li>
+          <li>Your Perfect Day streaks</li>
+        </ul>
+        <div style={{ fontSize:11, color:"rgba(255,255,255,0.65)", lineHeight:1.6, marginBottom:18, background:"rgba(255,255,255,0.04)", padding:"10px 12px", borderRadius:10, border:"1px solid rgba(255,255,255,0.1)" }}>
+          You can play LetterLoot fully without joining the leaderboard. You can change your choice anytime from <strong style={{color:"#f6d365"}}>📋 Menu → Account</strong>. Read our <a href="https://letterloot.net/privacy.html" target="_blank" rel="noopener noreferrer" style={{color:"#60a5fa",textDecoration:"underline"}}>privacy policy</a> for details.
+        </div>
+        <button onClick={onAccept} style={{ width:"100%", padding:"13px", borderRadius:13, background:"linear-gradient(135deg,#f6d365,#fda085)", color:"#1a1a2e", fontSize:14, fontWeight:"bold", fontFamily:"Georgia,serif", border:"none", cursor:"pointer", marginBottom:8 }}>
+          ✓ Yes, join the Leaderboard
+        </button>
+        <button onClick={onDecline} style={{ width:"100%", padding:"11px", borderRadius:13, background:"rgba(255,255,255,0.06)", color:"rgba(255,255,255,0.75)", fontSize:13, fontFamily:"Georgia,serif", fontWeight:"bold", border:"1px solid rgba(255,255,255,0.25)", cursor:"pointer" }}>
+          Not now — keep my scores private
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats, onViewLeaderboard, onPlayAgain }) {
@@ -2068,6 +2106,10 @@ export default function App() {
   const [showFarewell, setShowFarewell] = useState(false);
   const [farewellData, setFarewellData] = useState({ totalScore:0, bestWord:"", bestWordScore:0 });
   const [postFarewellTab, setPostFarewellTab] = useState(null);
+  // Leaderboard consent overlay state (App Store guideline 5.1.2 — added May 19, 2026).
+  // Shown on top of FarewellScreen after the first completed game for signed-in players
+  // who haven't yet been asked. Decoupled from Farewell so the answer persists either way.
+  const [showLeaderboardConsent, setShowLeaderboardConsent] = useState(false);
   const showFarewellRef = useRef(false);
   useEffect(() => { showFarewellRef.current = showFarewell; }, [showFarewell]);
   useEffect(() => {
@@ -2144,7 +2186,7 @@ export default function App() {
           "ll_guest","ll_stats","ll_lifetime","ll_badges_lifetime","ll_time_leaderboard",
           "ll_daily_state","ll_session","ll_completed_today","ll_pd_acknowledged_today",
           "ll_wotd","ll_tour_done","ll_name","ll_photo","ll_nickname","ll_longest",
-          "ll_guest_returning"
+          "ll_guest_returning","ll_leaderboard_consent"
         ];
         keysToClear.forEach(k => { try { localStorage.removeItem(k); } catch {} });
       } catch {}
@@ -2155,7 +2197,24 @@ export default function App() {
       alert("Deletion failed: " + (e?.message || "Unknown error") + "\n\nPlease email hello@letterloot.net for help.");
     }
   }, []);
-  const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
+  const handleShowFarewell = (data) => {
+    setFarewellData(data);
+    setShowFarewell(true);
+    // Apple App Store guideline 5.1.2: prompt for leaderboard consent on the FIRST completed
+    // game for signed-in players who haven't yet been asked. Guests are exempt — their data
+    // never uploads regardless. The prompt renders on top of FarewellScreen as an overlay.
+    if (user && getLeaderboardConsent() === null) {
+      setShowLeaderboardConsent(true);
+    }
+  };
+  const handleLeaderboardConsentAccept = () => {
+    setLeaderboardConsentValue("yes");
+    setShowLeaderboardConsent(false);
+  };
+  const handleLeaderboardConsentDecline = () => {
+    setLeaderboardConsentValue("no");
+    setShowLeaderboardConsent(false);
+  };
   // Close just dismisses the screen back to the game's play tab — does NOT sign out.
   // (Previous buggy behavior kicked logged-in users back to the auth screen.)
   const handleFarewellDone = () => { setShowFarewell(false); setPostFarewellTab("play"); };
@@ -2194,7 +2253,12 @@ export default function App() {
       </div>
     </div>
   );
-  if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats} onViewLeaderboard={handleFarewellLeaderboard} onPlayAgain={handleFarewellPlayAgain}/>;
+  if (showFarewell) return (
+    <>
+      <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats} onViewLeaderboard={handleFarewellLeaderboard} onPlayAgain={handleFarewellPlayAgain}/>
+      {showLeaderboardConsent && <LeaderboardConsentPrompt onAccept={handleLeaderboardConsentAccept} onDecline={handleLeaderboardConsentDecline}/>}
+    </>
+  );
   if (authState === "loading") return (
     <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", position:"relative" }}>
       <Starfield/><div style={{textAlign:"center",zIndex:1}}><LetterLootLogo titleFontSize={28} boxPadding="8px 24px"/><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",letterSpacing:2,marginTop:16}}>LOADING…</div></div>
@@ -2318,6 +2382,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   const [musicOn, setMusicOn] = useState(false);
+  // Leaderboard consent reactive state (May 19, 2026 — Apple guideline 5.1.2).
+  // Synced with localStorage via setLeaderboardConsentValue; toggled from Menu → Account.
+  const [leaderboardConsent, setLeaderboardConsent] = useState(() => getLeaderboardConsent());
   const [statsData, setStatsData] = useState(() => getLocalStats());
   const [timeLeaderboard, setTimeLeaderboard] = useState(() => getLocalTimeLeaderboard());
   const [showNameInput, setShowNameInput] = useState(false);
@@ -2581,6 +2648,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
   const syncToCloud = useCallback(async () => {
     if (isGuest || !user) return;
+    // Apple App Store guideline 5.1.2: do not upload scores/names to the global leaderboard
+    // without explicit user consent. If consent is null (never asked) or "no", skip cloud writes.
+    // Local play continues normally; only cloud sync is gated.
+    if (getLeaderboardConsent() !== "yes") return;
     const todayKey = getTodayKey();
     // Compute top scoring word of all submitted words this game
     const validWords = submittedRef.current.filter(s => s.valid);
@@ -2862,7 +2933,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setNameError("");
     localStorage.setItem("ll_name", playerName); playerNameRef.current = playerName;
     setEditingName(false);
-    if (!isGuest && user) await updatePlayerName(user.id, playerName);
+    // Gate cloud name updates on leaderboard consent — name appears on the leaderboard (5.1.2).
+    if (!isGuest && user && getLeaderboardConsent() === "yes") await updatePlayerName(user.id, playerName);
   };
 
   const triggerFarewell = useCallback(() => {
@@ -2923,8 +2995,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       const dataUrl = ev.target.result;
       setProfilePhoto(dataUrl);
       localStorage.setItem('ll_photo', dataUrl);
-      // Sync to Supabase if signed in
-      if (!isGuest && user) savePlayerPhoto(user.id, dataUrl);
+      // Sync to Supabase if signed in AND user has consented to leaderboard participation
+      // (the photo appears on the leaderboard, so it counts as leaderboard data — App Store 5.1.2).
+      if (!isGuest && user && getLeaderboardConsent() === "yes") savePlayerPhoto(user.id, dataUrl);
     };
     reader.readAsDataURL(file);
   };
@@ -3337,7 +3410,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     }
     setNameError("");
     localStorage.setItem("ll_name", playerName);
-    if (!isGuest && user) { await updatePlayerName(user.id, playerName); await syncToCloud(); }
+    // Gate cloud name updates + sync on leaderboard consent (5.1.2). syncToCloud also self-gates.
+    if (!isGuest && user && getLeaderboardConsent() === "yes") { await updatePlayerName(user.id, playerName); await syncToCloud(); }
     setShowNameInput(false); clearLocalSession();
   };
   const handleGiveUp = () => { setShowStuckModal(false); handleFullReset(); };
@@ -4112,6 +4186,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {!isGuest && (
             <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
               <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:2,fontWeight:"bold",textAlign:"center",marginBottom:8}}>ACCOUNT</div>
+              {/* Leaderboard participation toggle (May 19, 2026 — App Store guideline 5.1.2).
+                  When turned ON, runs an immediate cloud sync so the player's accumulated scores
+                  go up right away. When OFF, all future cloud writes are silently skipped. */}
+              <div style={{marginBottom:8,padding:"10px 14px",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{fontSize:12,color:"#f5f0e8",fontFamily:"Georgia,serif"}}>🏆 Join the Leaderboard</span>
+                  <button onClick={()=>{
+                    const newVal = leaderboardConsent === "yes" ? "no" : "yes";
+                    setLeaderboardConsentValue(newVal);
+                    setLeaderboardConsent(newVal);
+                    // If they just turned it ON, push their current data up immediately.
+                    if (newVal === "yes") { syncToCloud(); }
+                  }} style={{background:leaderboardConsent==="yes"?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.08)",border:`1px solid ${leaderboardConsent==="yes"?"rgba(0,230,118,0.7)":"rgba(255,255,255,0.3)"}`,borderRadius:14,padding:"4px 14px",cursor:"pointer",fontSize:11,color:leaderboardConsent==="yes"?"#003300":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif",fontWeight:"bold"}}>
+                    {leaderboardConsent==="yes"?"ON":"OFF"}
+                  </button>
+                </div>
+                <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",lineHeight:1.5,marginTop:6}}>
+                  When ON, your name, scores, times, and streaks are uploaded so you can compete globally. When OFF, nothing leaves your device.
+                </div>
+              </div>
               <button onClick={onSignOut} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",fontSize:12,fontFamily:"Georgia,serif",fontWeight:"bold",cursor:"pointer",marginBottom:8}}>
                 Sign Out
               </button>

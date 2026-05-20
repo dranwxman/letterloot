@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto } from "./supabase";
+import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto, ensurePlayerRecord } from "./supabase";
 
 const LETTER_VALUES = {};
 const SCORE_MAP = {
@@ -2207,9 +2207,19 @@ export default function App() {
       setShowLeaderboardConsent(true);
     }
   };
-  const handleLeaderboardConsentAccept = () => {
+  const handleLeaderboardConsentAccept = async () => {
     setLeaderboardConsentValue("yes");
     setShowLeaderboardConsent(false);
+    // Ensure the players row exists for this user. After the beta wipe (May 19, 2026)
+    // the players table was emptied, so existing signed-in users have no parent row —
+    // which means game_state and daily_sessions inserts fail the FK chain. Calling
+    // ensurePlayerRecord here is idempotent: creates the row if missing, no-op if present.
+    if (user) {
+      try {
+        const localName = (typeof localStorage !== "undefined" && localStorage.getItem("ll_name")) || "";
+        await ensurePlayerRecord(user.id, user.email || "", localName);
+      } catch (e) { /* silent — sync will retry via the auto-timer */ }
+    }
   };
   const handleLeaderboardConsentDecline = () => {
     setLeaderboardConsentValue("no");

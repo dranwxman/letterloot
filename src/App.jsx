@@ -3075,6 +3075,11 @@ function GameScreen({ user, onSignOut, onFarewell, onRequestLeaderboardConsent, 
     setTimeout(() => setFlash(null), 2000);
     if (valid) {
       triggerHaptic("medium");
+      // Apple App Store guideline 5.1.2: ask consent for leaderboard uploads as early as
+      // possible — on the FIRST valid word of any signed-in player's first session. This
+      // guarantees the prompt fires even if the player gives up mid-game and never reaches
+      // Level 5. The completion-time trigger (in level-up handler) remains as a backup.
+      if (user && getLeaderboardConsent() === null) onRequestLeaderboardConsent && onRequestLeaderboardConsent();
     } else {
       triggerHaptic("light");
       setShake(true); setTimeout(() => setShake(false), 500);

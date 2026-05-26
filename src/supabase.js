@@ -26,7 +26,7 @@ export async function signOut() {
 }
 export async function resetPassword(email) {
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: "https://letterloot-6k6v.vercel.app",
+    redirectTo: "https://letterloot-6k6v.vercel.app/reset-password.html",,
   });
   return { error };
 }

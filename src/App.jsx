@@ -435,13 +435,16 @@ function generateLevelTiles(level, startId, rng, bonusPositions) {
     isLoot: i === lootTileIndex,
   }));
 }
-function calcWordScore(tileIds, tiles) {
+// v109: hideLoot suppresses the 5x for the LIVE running-score display only, so a
+// player can't identify which of the >=2 matching tiles is the loot by watching the
+// counter jump. The 5x is still fully applied on submit (hideLoot omitted/false).
+function calcWordScore(tileIds, tiles, hideLoot) {
   let score = 0;
   tileIds.forEach(id => {
     const tile = tiles.find(t => t.id === id);
     if (!tile) return;
     let val = tile.value;
-    if (tile.isLoot && !tile.lootUsed) val = tile.value * 5; // Loot Letter: 5x base value (one-time per game)
+    if (tile.isLoot && !tile.lootUsed && !hideLoot) val = tile.value * 5; // Loot Letter: 5x base value (one-time per game)
     if (tile.bonus === "double") score += val * 2;
     else if (tile.bonus === "triple") score += val * 3;
     else score += val;
@@ -3214,7 +3217,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const tileRows = [];
   for (let i = 0; i < tiles.length; i += 7) tileRows.push(tiles.slice(i, i + 7));
   const currentWord = selected.map(id => tiles.find(t => t.id === id)?.letter).join("");
-  const currentScore = calcWordScore(selected, tiles);
+  // v109: the DISPLAYED running score hides the loot 5x (so the loot tile can't be
+  // identified by watching the counter). currentScoreReal keeps the 5x for scoring on submit.
+  const currentScore = calcWordScore(selected, tiles, true);
+  const currentScoreReal = calcWordScore(selected, tiles);
   const buyCost = LEVEL_BUY_COST[level] || 0;
   const canBuy = totalRef.current >= buyCost && buyCost > 0;
   const weekPerfectCount = Object.values(statsData.perfectDaysWeek || {}).reduce((a,b)=>a+b,0);
@@ -3960,7 +3966,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         saveLocalStats(dStats);
       }
     }
-    const baseScore = valid ? currentScore : 0;
+    const baseScore = valid ? currentScoreReal : 0; // v109: real score (5x loot applied) — display used the hidden value
     const longBonus = valid ? getLongWordBonus(currentWord.length) : 0;
     const score = baseScore + longBonus;
     const newStreak = valid ? streak + 1 : 0;
@@ -4729,6 +4735,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         @keyframes plClearL4{0%{transform:scale(0.4);opacity:0}20%{transform:scale(1.1) rotate(-6deg);opacity:1}35%{transform:scale(1.05) rotate(6deg)}50%{transform:scale(1.08) rotate(-5deg)}65%{transform:scale(1.04) rotate(4deg)}80%{transform:scale(1.06) rotate(-2deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}
         @keyframes plClearL5{0%{transform:translateY(160px) scale(0.5) rotate(-15deg);opacity:0}40%{transform:translateY(-22px) scale(1.2) rotate(8deg);opacity:1}55%{transform:translateY(0) scale(1.1) rotate(-5deg)}70%{transform:translateY(-10px) scale(1.12) rotate(5deg)}85%{transform:translateY(0) scale(1.05) rotate(-2deg)}100%{transform:translateY(0) scale(1) rotate(0deg);opacity:1}}
         @keyframes plSpeechIn{0%{opacity:0;transform:translateY(8px) scale(0.9)}100%{opacity:1;transform:translateY(0) scale(1)}}
+        /* v109: speech-bubble pop-in — scale-up bounce, origin bottom (tail). Replaces caption-below with a real PNG bubble above the mascot's head. */
+        @keyframes bubbleIn{0%{opacity:0;transform:translateX(-50%) scale(0.9)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
         @keyframes lootAnnounce{0%{transform:scale(0.85) translateY(20px);opacity:0}12%{transform:scale(1.03) translateY(0);opacity:1}85%{transform:scale(1) translateY(0);opacity:1}100%{transform:scale(0.95) translateY(-12px);opacity:0}}
         @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         @keyframes warningPulse{0%,100%{background:rgba(220,38,38,0.2)}50%{background:rgba(220,38,38,0.4)}}
@@ -5175,12 +5183,34 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(36)}px ${ipadTour(32)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(320),width:"90%"}}>
           {/* v94: celebrating pirate with a per-level entrance animation + level-specific saying */}
           {/* v104: mascot image + saying gated behind showMascotCelebrations(); results below always show */}
-          {showMascotCelebrations() && <>
-          <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
-            <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{width:ipadTour(120),height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
-          </div>
-          <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#f6d365",fontFamily:"Georgia,serif",lineHeight:1.4,marginBottom:4,animation:"plSpeechIn 0.4s ease 0.5s both"}}>{clearSayingText||pickClearSaying(level,Math.max(0,clearSayingIdxRef.current))}</div>
-          </>}
+          {showMascotCelebrations() && (()=>{
+            // v109: speech bubble above the mascot's head, replacing the old caption-below.
+            // Geometry locked in the lab (bubbleWidthPct=115, gap≈10px@162 → fraction, textTop=16%, textHeight=54%).
+            // Source PNG is square with transparent margin; solid bubble crops to 1.44:1 (w:h).
+            const pw = ipadTour(120);                     // rendered pirate width
+            const bw = pw * 1.15;                          // bubbleWidthPct=115
+            const cropWR = 786/1024, cropHR = 546/1024;   // solid-bubble fraction of the square img
+            const solidBottomFrac = (1 + cropHR)/2;       // ~0.766 within the square
+            const marginBelow = bw * (1 - solidBottomFrac);
+            const gap = pw * (10/162);                     // lab gap normalized to pirate width (≈17px @ iPad)
+            const bubbleTop = -bw + marginBelow - gap;     // tail tip sits `gap` above top of head
+            const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
+            const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
+            const zWidth = (81.7/100) * cropWR * 100;
+            const zTop = (cropTopFrac + (16/100)*cropHR) * 100;   // textTopPct=16
+            const zHeight = (54/100) * cropHR * 100;              // textHeightPct=54
+            const line = clearSayingText || pickClearSaying(level, Math.max(0, clearSayingIdxRef.current));
+            return (
+              <div style={{position:"relative",display:"inline-block",marginBottom:4}}>
+                {/* speech bubble overlay — absolute, above head */}
+                <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
+                  <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
+                  <div style={{position:"absolute",left:`${zLeft}%`,top:`${zTop}%`,width:`${zWidth}%`,height:`${zHeight}%`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",color:"#5a3a12",fontFamily:"Georgia,serif",fontWeight:"bold",lineHeight:1.15,fontSize:ipadTour(11),overflow:"hidden",wordBreak:"break-word"}}>{line}</div>
+                </div>
+                <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
+              </div>
+            );
+          })()}
           <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
           <div style={{fontSize:ipadTour(13),color:"#ccc",marginTop:8}}>You used every tile!</div>
           <div style={{fontSize:ipadTour(22),color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>

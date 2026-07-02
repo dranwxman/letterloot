@@ -15,13 +15,83 @@ const DEBUG_MODE = true;
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
+// v108: rotating Level Clear lines — 10 per level, Loot-forward/comical/rhyming.
+// A-hybrid rotation (see picker below): first clear of the day shows a
+// deterministic line (same for every player that day); each subsequent clear in
+// the same session advances to the next line (wraps). Session index resets on
+// app launch (no stored key — deliberate, per design lock July 2).
 const PIRATE_CLEAR_SAYINGS = {
-  1: "Well done, recruit! Welcome to me crew. ⚓",
-  2: "Ye done 'er, matey! On to the next! ⚔️",
-  3: "Halfway to the treasure — and ye haven't sunk 'er yet! Onward! 🧭",
-  4: "Blisterin' barnacles, Level 4 be conquered! 💪",
-  5: "A flawless raid! Ye've proven yerself worthy, matey. Part o' me crew always! 🏆",
+  1: [
+    "Well done, recruit! Welcome to me crew. ⚓",
+    "Shiver me timbers, ye Loot with vim! ⭐",
+    "Ye Looted that one clean — now dive back in! 💰",
+    "Arrr, the crew be impressed, me friend! 🦜",
+    "A tidy bit o' booty Looted! 🪙",
+    "Ye sail so fine, the Loot be thine! ⛵",
+    "Keep 'er steady, matey — more Loot be ready! 🧭",
+    "Chest be cracked and the gold be packed! 🗝️",
+    "Smooth sailin', ye salty ol' Looter! 🌊",
+    "Anchors aweigh — ye Looted the day! ⚓",
+  ],
+  2: [
+    "Two chests down and ye wear the crown! 💰",
+    "Blimey, ye Loot like a scallywag pro! ⭐",
+    "The tide be high and so be yer buy! 🌊",
+    "Cuttin' through waters, ye Lootin' son 'n daughters! ⛵",
+    "Ye've got the crew excited fer d' Loot! 🦜",
+    "D'Looted Booty be pilin' up nicely, mate! 🪙",
+    "Steady she goes — that's how Loot flows! 🧭",
+    "Proper pirate work, ye Lootin' berserk! 🗝️",
+    "Shiver me timbers, ye just don't quit! ⚓",
+    "Onward, ye legend — richer Loot ahead! 💎",
+  ],
+  3: [
+    "Ye be a Lootin' machine, ye fiend! 💰",
+    "The seven seas bow — ye Loot like a wow! 🌊",
+    "Grand haul, matey — the crew stands tall! 🦜",
+    "Ye sail so keen, the finest e'er seen! ⛵",
+    "Booty for days, ye clever ol' knave! 🪙",
+    "Arrr, a captain's Loot, no doubt about it! ⚓",
+    "Keep this up 'n we'll need a bigger cup! 🚢",
+    "Sharp as a cutlass, twice as ruthless! 🗡️",
+    "Treasure be leapin' aboard while ye're reapin'! 💎",
+    "Full sails, fair winds, 'n Loot that never ends! 🧭",
+  ],
+  4: [
+    "Nearly there, matey — the Loot be laid bare! 🧭",
+    "Ye be sniffin' out the motherlode, ye rogue! 💎",
+    "The crew can taste the Loot — no waste! 🪙",
+    "Blimey, what a run — ye Loot for fun! ⭐",
+    "One more, ye legend, 'n the seas be yer heaven! 🌊",
+    "Ye Loot like the tide — relentless 'n wide! 💰",
+    "Steady, sailor — the big chest be nearer! 🗝️",
+    "Arrr, ye make it look like a lark! 🦜",
+    "The map's near ours — hoist them Loot-filled hours! 🗺️",
+    "Hold fast, ye rascal — glory's in yer grasp-al! ⚓",
+  ],
+  5: [
+    "A grand voyage, matey — ye did it, ye brave-y! 🏆",
+    "The whole sea be singin' yer Lootin' name! 🌊",
+    "Every chest cracked — ye legend, that's a fact! 👑",
+    "Arrr, a captain true through 'n through! ⚓",
+    "Loot won, crew cheerin' — magnificent 'n endearin'! 🦜",
+    "Ye Looted the lot, ye grand buccaneer-y sort! 💎",
+    "Top o' the mast for ye, unsurpassed! ⭐",
+    "That be how a pirate finishes the fight! 💰",
+    "Shiver me timbers — a grand 'n glorious run! 🗝️",
+    "Bow to the legend who Looted the seven! 👑",
+  ],
 };
+// A-hybrid picker. `sessionIdx` is a running counter for this app session
+// (a useRef in the component, starts at -1). First call of the session uses the
+// deterministic daily index (getDailySeed() % 10); each later call advances +1
+// (wrapping). Returns the line string for the given level.
+function pickClearSaying(level, sessionIdx) {
+  const lines = PIRATE_CLEAR_SAYINGS[level] || PIRATE_CLEAR_SAYINGS[1];
+  const daily = getDailySeed() % 10;
+  const idx = (daily + Math.max(0, sessionIdx)) % lines.length;
+  return lines[idx];
+}
 // Which character image appears per level: female captain on odd, male pirate on even.
 const PIRATE_CLEAR_IMG = {
   1: "/pirate-captain-female.png",
@@ -2721,6 +2791,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // persistent reminder lives in the Tap-tiles strip badge.
   const [lootAnnounceLevel, setLootAnnounceLevel] = useState(null); // level number or null
   const lootAnnounceTimerRef = useRef(null);
+  // v108: A-hybrid rotating Level Clear line — running session counter. Starts at
+  // -1; the render advances it once per clear (first clear of session uses the
+  // deterministic daily line, subsequent clears advance). Resets on app launch.
+  const clearSayingIdxRef = useRef(-1);
+  // Captured line to display for the current clear (set when the clear fires so
+  // the counter doesn't advance on unrelated re-renders).
+  const [clearSayingText, setClearSayingText] = useState("");
   const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
     try {
       const cached = getCachedWordOfTheDay();
@@ -4062,6 +4139,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setTimeLeaderboard(updatedTimes);
         if (isNewTimeRecord) setTimeout(() => flashNewRecord("time", clearedTime, level), 1500);
         if (level < 5) {
+          // v108: advance the A-hybrid rotation once per genuine clear + capture
+          // the line to show (captured here so re-renders/re-shows don't advance it).
+          clearSayingIdxRef.current = clearSayingIdxRef.current + 1;
+          setClearSayingText(pickClearSaying(level, clearSayingIdxRef.current));
           setTimeout(() => setLevelComplete(true), 1200);
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
@@ -4254,6 +4335,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // Priority 4: If a level is mid-completion (modal was dismissed but level still done)
     // re-show levelComplete modal so they can advance
     if (level < 5 && remaining === 0 && !levelComplete) {
+      // v108: re-showing the SAME clear — do NOT advance the rotation. Only
+      // capture a line if we somehow have none yet (e.g. after a reload).
+      if (!clearSayingText) {
+        clearSayingIdxRef.current = clearSayingIdxRef.current + 1;
+        setClearSayingText(pickClearSaying(level, clearSayingIdxRef.current));
+      }
       setLevelComplete(true);
       return;
     }
@@ -5092,7 +5179,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
             <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{width:ipadTour(120),height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
           </div>
-          <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#f6d365",fontFamily:"Georgia,serif",lineHeight:1.4,marginBottom:4,animation:"plSpeechIn 0.4s ease 0.5s both"}}>{PIRATE_CLEAR_SAYINGS[level]||PIRATE_CLEAR_SAYINGS[1]}</div>
+          <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#f6d365",fontFamily:"Georgia,serif",lineHeight:1.4,marginBottom:4,animation:"plSpeechIn 0.4s ease 0.5s both"}}>{clearSayingText||pickClearSaying(level,Math.max(0,clearSayingIdxRef.current))}</div>
           </>}
           <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
           <div style={{fontSize:ipadTour(13),color:"#ccc",marginTop:8}}>You used every tile!</div>

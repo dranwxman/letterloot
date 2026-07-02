@@ -1,5 +1,98 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto } from "./supabase";
+import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
+import { Clipboard } from "@capacitor/clipboard";
+
+// ═══════════════════════════════════════════════════════════════════
+// 🛠 DEBUG MODE — set false before App Store submission!
+// When true, shows a floating 🛠 DEBUG badge top-right on every screen.
+// Tap badge → opens Debug Menu with quick-jump buttons to any level/modal/state.
+// TODO BEFORE APP STORE SUBMISSION: set DEBUG_MODE = false
+// v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
+// Flip back to true for local development if needed.
+// ═══════════════════════════════════════════════════════════════════
+const DEBUG_MODE = true;
+
+// v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
+// EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
+const PIRATE_CLEAR_SAYINGS = {
+  1: "Well done, recruit! Welcome to me crew. ⚓",
+  2: "Ye done 'er, matey! On to the next! ⚔️",
+  3: "Halfway to the treasure — and ye haven't sunk 'er yet! Onward! 🧭",
+  4: "Blisterin' barnacles, Level 4 be conquered! 💪",
+  5: "A flawless raid! Ye've proven yerself worthy, matey. Part o' me crew always! 🏆",
+};
+// Which character image appears per level: female captain on odd, male pirate on even.
+const PIRATE_CLEAR_IMG = {
+  1: "/pirate-captain-female.png",
+  2: "/pirate-cheer.png",
+  3: "/pirate-captain-female.png",
+  4: "/pirate-cheer.png",
+  5: "/pirate-captain-female.png",
+};
+const PIRATE_CLEAR_ANIM = { 1:"plClearL1", 2:"plClearL2", 3:"plClearL3", 4:"plClearL4", 5:"plClearL5" };
+
+// ── iPad responsive width helper (May 21, 2026) ──────────────
+// On iPad-sized screens (≥768px wide), bump page-container widths so the
+// app fills the screen comfortably instead of looking like a tiny phone
+// app marooned in the middle. Modal cards keep their original widths —
+// they're meant to feel focused, not stretched.
+const isIpadWidth = () => typeof window !== "undefined" && window.innerWidth >= 768;
+const ipadW = (base) => isIpadWidth() ? Math.round(base * 1.78) : base;
+// ipadTile: per-level scaling to keep larger boards (L4-L5 = 60-66 tiles, 9-10 rows)
+// from overflowing the iPad screen. L1/L2 stay at 2.2× (perfect size). L3 nudges
+// to 2.0×. L4 drops to 1.8×. L5 drops to 1.65× — still much bigger than phone
+// (1.0×) but compact enough that a 10-row board plus all UI fits on an 11" iPad.
+// Width gets a separate, more generous curve at L4/L5 so tiles don't get too
+// narrow horizontally as the board lengthens vertically. Letter/value fonts stay
+// on the HEIGHT curve (ipadTile) to keep text proportional to vertical space.
+// v48 update May 25, 2026: Tile count formula bumped to 42+(L-1)*7, giving 63 tiles
+// on L4 (9×7) and 70 on L5 (10×7). The extra row at each level was tight on 11"
+// iPad — dropping L4 from 1.8→1.6 and L5 from 1.65→1.5 height, with proportional
+// width adjustments, gives the extra row breathing room.
+const IPAD_TILE_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.2, 3: 2.0, 4: 1.6, 5: 1.5 };
+const IPAD_TILE_WIDTH_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.2, 3: 2.1, 4: 2.15, 5: 2.05 }; // v60: L4 1.9→2.15, L5 1.85→2.05 (bug #13)
+// iPhone per-level scaling (added May 24, 2026): L1 had only 4 rows of 7 tiles
+// on a big iPhone screen like the 17 Pro Max — tiles felt tiny with empty space
+// below. Scale UP on early levels, gradually returning closer to base by L5 where
+// the board grows to 10 rows. Curve refined after iPhone 17 Pro Max smoke test
+// showed L3-L5 had room to grow comfortably.
+const IPHONE_TILE_SCALE_BY_LEVEL = { 1: 1.45, 2: 1.30, 3: 1.20, 4: 1.10, 5: 1.05 };
+const ipadTile = (base, level = 1) => {
+  if (!isIpadWidth()) {
+    // iPhone path: apply per-level iPhone scale
+    const phoneScale = IPHONE_TILE_SCALE_BY_LEVEL[level] || 1.00;
+    return Math.round(base * phoneScale);
+  }
+  const scale = IPAD_TILE_SCALE_BY_LEVEL[level] || 1.65; // fallback for any future levels
+  return Math.round(base * scale);
+};
+const ipadTileW = (base, level = 1) => {
+  if (!isIpadWidth()) {
+    // iPhone path: apply per-level iPhone scale (same curve as height for symmetric tiles)
+    const phoneScale = IPHONE_TILE_SCALE_BY_LEVEL[level] || 1.00;
+    return Math.round(base * phoneScale);
+  }
+  const scale = IPAD_TILE_WIDTH_SCALE_BY_LEVEL[level] || 2.05;
+  return Math.round(base * scale);
+};
+const ipadChrome = (base) => isIpadWidth() ? Math.round(base * 1.5) : base;
+const ipadIntro = (base) => isIpadWidth() ? Math.round(base * 2.0) : base; // welcome/intro card content
+const ipadIntroPad = (base) => isIpadWidth() ? Math.round(base * 2.0) : base; // welcome/intro card padding
+// ipadProfile (added v48): Profile Setup screen — 2.0× was overflowing on 11" iPad
+// (Save button below the safe area). 1.5× on iPad keeps everything visible while
+// still feeling proportional. iPhone unchanged.
+const ipadProfile = (base) => isIpadWidth() ? Math.round(base * 1.5) : base;
+const ipadProfilePad = (base) => isIpadWidth() ? Math.round(base * 1.5) : base;
+const ipadTour = (base) => isIpadWidth() ? Math.round(base * 2.3) : base; // tour scenes - slightly larger than intro
+const ipadMenu = (base) => isIpadWidth() ? Math.round(base * 1.75) : base; // menu hub - moderate scale, fits all cards on screen
+const ipadDense = (base) => isIpadWidth() ? Math.round(base * 1.6) : base; // dense screens (Stats, Debug Menu) - v60: bumped 1.3→1.6 for readability (bug #15)
+const ipadWord = (base) => isIpadWidth() ? Math.round(base * 2.5) : base; // word-being-built row (largest scale)
+const ipadIcon = (base) => isIpadWidth() ? Math.round(base * 1.8) : base; // pencil/letterloot icon
+const ipadBoardW = () => isIpadWidth() ? 1500 : undefined; // wider tile-board container on iPad
+// 360 → 640, 480 → 854 (UI rows). Game board itself goes to 1400px on iPad.
+// Tiles: 2.2× (38→84, 44→97, 17→37, 7→15). Chrome (buttons/labels): 1.5×.
+// Welcome card fonts: 1.3×, padding: 1.4×. App icon: 1.8× on iPad.
 
 const LETTER_VALUES = {};
 const SCORE_MAP = {
@@ -182,7 +275,7 @@ function getLootLetterToday() {
   rng(); rng(); rng();
   const level = 1 + Math.floor(rng() * 5); // Level 1-5
   // tile count for this level
-  const tileCount = 42 + (level - 1) * 6;
+  const tileCount = 42 + (level - 1) * 7;
   // We pick a target index; the actual final index will be resolved during tile
   // generation by finding the nearest qualifying letter (value >= LOOT_MIN_VALUE).
   const targetIndex = Math.floor(rng() * tileCount);
@@ -191,7 +284,7 @@ function getLootLetterToday() {
 
 function generateLevelTiles(level, startId, rng, bonusPositions) {
   const pool = buildPool(rng);
-  const count = 42 + (level - 1) * 6;
+  const count = 42 + (level - 1) * 7;
   let letters = pool.slice(0, count);
   if (letters.includes("Q") && !letters.includes("U")) {
     const replaceIdx = letters.findIndex(l => !["Q","A","E","I","O","U"].includes(l));
@@ -892,7 +985,7 @@ function TileScene({ tileStyle, onAnimDone }) {
   return (
     <div style={{position:'relative'}} ref={containerRef}>
       {fp && (
-        <div style={{position:'absolute',left:fp.x,top:fp.y,fontSize:fs2,transition:'left 0.4s ease,top 0.4s ease,font-size 0.3s',pointerEvents:'none',zIndex:10}}>
+        <div style={{position:'absolute',left:fp.x,top:fp.y,fontSize:ipadTour(fs2),transition:'left 0.4s ease,top 0.4s ease,font-size 0.3s',pointerEvents:'none',zIndex:10}}>
           &#128070;
         </div>
       )}
@@ -901,36 +994,36 @@ function TileScene({ tileStyle, onAnimDone }) {
           {row.map(letter => (
             <div key={letter} id={'t'+letter} style={tileStyle(letter, selectedTiles.includes(letter))}>
               {letter}
-              <span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{VALS[letter]||4}</span>
+              <span style={{fontSize:ipadTour(7),color:'#fda085',fontWeight:'bold'}}>{VALS[letter]||4}</span>
             </div>
           ))}
         </div>
       ))}
       {showOops && (
-        <div style={{position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(220,38,38,0.95)',borderRadius:14,padding:'10px 20px',fontSize:16,fontWeight:'bold',color:'#fff',zIndex:20,whiteSpace:'nowrap',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
+        <div style={{position:'absolute',top:'35%',left:'50%',transform:'translate(-50%,-50%)',background:'rgba(220,38,38,0.95)',borderRadius:14,padding:`${ipadTour(10)}px ${ipadTour(20)}px`,fontSize:ipadTour(16),fontWeight:'bold',color:'#fff',zIndex:20,whiteSpace:'nowrap',boxShadow:'0 4px 20px rgba(0,0,0,0.5)'}}>
           Oops! ✕
         </div>
       )}
-      <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1.5px solid '+borderColor,borderRadius:8,padding:'8px 12px',minHeight:36,display:'flex',alignItems:'center',gap:6,margin:'8px 0',position:'relative'}}>
+      <div style={{width:'100%',background:'rgba(255,255,255,0.05)',border:'1.5px solid '+borderColor,borderRadius:8,padding:`${ipadTour(8)}px ${ipadTour(12)}px`,minHeight:ipadTour(36),display:'flex',alignItems:'center',gap:ipadTour(6),margin:`${ipadTour(8)}px 0`,position:'relative'}}>
         {wordLetters.length === 0
-          ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:11,fontStyle:'italic'}}>Tap tiles to build a word...</span>
+          ? <span style={{color:'rgba(255,255,255,0.3)',fontSize:ipadTour(11),fontStyle:'italic'}}>Tap tiles to build a word...</span>
           : <>
               {wordLetters.map((l,i) => (
-                <span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:'4px 7px',fontSize:14,fontWeight:'bold',color:'#fff'}}>{l}</span>
+                <span key={i} style={{background:'linear-gradient(135deg,#5c6bc0,#512da8)',borderRadius:5,padding:`${ipadTour(4)}px ${ipadTour(7)}px`,fontSize:ipadTour(14),fontWeight:'bold',color:'#fff'}}>{l}</span>
               ))}
-              <span style={{position:'absolute',right:8,fontSize:submitted?13:12,color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>
+              <span style={{position:'absolute',right:ipadTour(8),fontSize:submitted?ipadTour(13):ipadTour(12),color:submitted?'#22d3ee':'#f6d365',fontWeight:'bold'}}>
                 {submitted ? '✓ +37 pts!' : '+' + wordScore + ' pts'}
               </span>
             </>
         }
       </div>
-      <div style={{display:'flex',gap:6,marginBottom:6}}>
-        <div id="tour-submit" style={{flex:2,padding:7,borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
-        <div id="tour-clear" style={{flex:1,padding:7,borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:10,fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>&#10005; Clear</div>
+      <div style={{display:'flex',gap:ipadTour(6),marginBottom:ipadTour(6)}}>
+        <div id="tour-submit" style={{flex:2,padding:ipadTour(7),borderRadius:8,background:submitted?'rgba(246,211,101,0.4)':'rgba(246,211,101,0.15)',border:'1px solid rgba(246,211,101,0.4)',color:'#f6d365',fontSize:ipadTour(10),fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>Submit Word</div>
+        <div id="tour-clear" style={{flex:1,padding:ipadTour(7),borderRadius:8,background:showClear?'rgba(216,180,254,0.6)':'rgba(192,132,252,0.2)',border:'2px solid rgba(216,180,254,0.8)',color:'#ede9fe',fontSize:ipadTour(10),fontWeight:'bold',textAlign:'center',transition:'all 0.2s'}}>&#10005; Clear</div>
       </div>
-      <div style={{fontSize:10,color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere &#8212; no adjacency needed!</div>
+      <div style={{fontSize:ipadTour(10),color:'rgba(255,255,255,0.5)',textAlign:'center'}}>Tiles can be anywhere &#8212; no adjacency needed!</div>
       {pulsing && (
-        <div style={{marginTop:8,textAlign:'center',fontSize:11,color:'rgba(246,211,101,0.7)',fontStyle:'italic',opacity:pulseOn?1:0.3,transition:'opacity 0.7s'}}>
+        <div style={{marginTop:ipadTour(8),textAlign:'center',fontSize:ipadTour(11),color:'rgba(246,211,101,0.7)',fontStyle:'italic',opacity:pulseOn?1:0.3,transition:'opacity 0.7s'}}>
           Tap Next &#8594;
         </div>
       )}
@@ -957,11 +1050,12 @@ function VisualTour({ onDone }) {
   }, [cur]);
 
   const tileStyle = (letter, sel) => ({
-    width: 42, height: 48, borderRadius: 8,
+    width: ipadTour(42), height: ipadTour(48), borderRadius: 8,
     background: sel ? 'linear-gradient(135deg,#5c6bc0,#512da8)' : 'linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))',
     border: sel ? '1px solid #9fa8da' : '1px solid rgba(255,255,255,0.22)',
+    boxShadow: sel ? `0 0 ${ipadTour(12)}px ${ipadTour(3)}px rgba(0,230,118,0.85), 0 0 ${ipadTour(4)}px rgba(0,230,118,0.5)` : 'none',
     display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    fontWeight: 'bold', fontSize: 16, color: '#fff',
+    fontWeight: 'bold', fontSize: ipadTour(16), color: '#fff',
     transform: sel ? 'translateY(-4px) scale(1.08)' : 'none',
     transition: 'all 0.2s', margin: 2, position: 'relative', cursor: 'default'
   });
@@ -1010,13 +1104,13 @@ function VisualTour({ onDone }) {
       desc:  "",
       content: () => (
         <div style={{textAlign:'center',padding:'10px 0'}}>
-          <div style={{fontSize:64,marginBottom:20}}>✏️</div>
-          <div style={{display:'flex',flexDirection:'column',gap:14,fontSize:15,fontWeight:'bold'}}>
+          <div style={{marginBottom:ipadTour(20),display:'flex',justifyContent:'center'}}><PencilLogo size={ipadIcon(96)}/></div>
+          <div style={{display:'flex',flexDirection:'column',gap:ipadTour(14),fontSize:ipadTour(15),fontWeight:'bold'}}>
             <div style={{color:'#22d3ee'}}>🌅 Fresh Tiles Daily</div>
             <div style={{color:'#f6d365'}}>💎 Every letter is worth points</div>
             <div style={{color:'#fda085'}}>⭐ Bonuses increase points</div>
             <div style={{color:'#6ee7b7'}}>💥 Hidden "Loot Letter" daily — 5× the letter's value!</div>
-            <div style={{color:'#a78bfa'}}>🌈 Clear 5 levels for a Perfect Day! <SmallPot/></div>
+            <div style={{color:'#a78bfa'}}>🌈 Clear 5 levels + find the Word of the Day for a Perfect Day! <SmallPot/></div>
           </div>
         </div>
       )
@@ -1032,38 +1126,38 @@ function VisualTour({ onDone }) {
       content: () => (
         <div>
           {/* Line 1: Spell 8+ — bigger */}
-          <div style={{background:'rgba(110,231,183,0.08)',border:'1px solid rgba(110,231,183,0.4)',borderRadius:10,padding:10,textAlign:'center',fontSize:14,color:'#6ee7b7',fontWeight:'bold',marginBottom:10}}>
+          <div style={{background:'rgba(110,231,183,0.08)',border:'1px solid rgba(110,231,183,0.4)',borderRadius:10,padding:ipadTour(10),textAlign:'center',fontSize:ipadTour(14),color:'#6ee7b7',fontWeight:'bold',marginBottom:ipadTour(10)}}>
             💡 Spell 8+ letter words for long-word bonuses!
           </div>
           {/* Line 2: Bonus tiles — slightly smaller */}
-          <div style={{fontSize:11,color:'rgba(255,255,255,0.75)',textAlign:'center',marginBottom:6,fontWeight:'bold'}}>Bonus tiles multiply your score!</div>
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
-            <div style={{background:'rgba(255,215,0,0.08)',border:'1px solid rgba(255,215,0,0.4)',borderRadius:10,padding:8,textAlign:'center'}}>
-              <div style={{...tileStyle('B',false),width:38,height:44,fontSize:14,margin:'0 auto 5px',boxShadow:'0 0 12px 3px rgba(255,215,0,0.8)',borderColor:'rgba(255,215,0,0.7)'}}>
-                B<span style={{fontSize:7,color:'#ffd700',fontWeight:'bold'}}>2x</span>
+          <div style={{fontSize:ipadTour(11),color:'rgba(255,255,255,0.75)',textAlign:'center',marginBottom:ipadTour(6),fontWeight:'bold'}}>Bonus tiles multiply your score!</div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:ipadTour(8),marginBottom:ipadTour(10)}}>
+            <div style={{background:'rgba(255,215,0,0.08)',border:'1px solid rgba(255,215,0,0.4)',borderRadius:10,padding:ipadTour(8),textAlign:'center'}}>
+              <div style={{...tileStyle('B',false),width:ipadTour(38),height:ipadTour(44),fontSize:ipadTour(14),margin:'0 auto 5px',boxShadow:'0 0 12px 3px rgba(255,215,0,0.8)',borderColor:'rgba(255,215,0,0.7)'}}>
+                B<span style={{fontSize:ipadTour(7),color:'#ffd700',fontWeight:'bold'}}>2x</span>
               </div>
-              <div style={{fontSize:9,color:'#ffd700'}}>Gold = 2x letter value</div>
+              <div style={{fontSize:ipadTour(9),color:'#ffd700'}}>Gold = 2x letter value</div>
             </div>
-            <div style={{background:'rgba(224,64,251,0.08)',border:'1px solid rgba(224,64,251,0.4)',borderRadius:10,padding:8,textAlign:'center'}}>
-              <div style={{...tileStyle('V',false),width:38,height:44,fontSize:14,margin:'0 auto 5px',boxShadow:'0 0 14px 4px rgba(255,100,255,0.9)',borderColor:'rgba(224,64,251,0.7)'}}>
-                V<span style={{fontSize:7,color:'#e040fb',fontWeight:'bold'}}>3x</span>
+            <div style={{background:'rgba(224,64,251,0.08)',border:'1px solid rgba(224,64,251,0.4)',borderRadius:10,padding:ipadTour(8),textAlign:'center'}}>
+              <div style={{...tileStyle('V',false),width:ipadTour(38),height:ipadTour(44),fontSize:ipadTour(14),margin:'0 auto 5px',boxShadow:'0 0 14px 4px rgba(255,100,255,0.9)',borderColor:'rgba(224,64,251,0.7)'}}>
+                V<span style={{fontSize:ipadTour(7),color:'#e040fb',fontWeight:'bold'}}>3x</span>
               </div>
-              <div style={{fontSize:9,color:'#e040fb'}}>Purple = 3x letter value</div>
+              <div style={{fontSize:ipadTour(9),color:'#e040fb'}}>Purple = 3x letter value</div>
             </div>
           </div>
           {/* Line 3: Rare letters */}
-          <div style={{textAlign:'center',marginBottom:10}}>
-            <div style={{fontSize:11,color:'rgba(255,255,255,0.75)',marginBottom:6,fontWeight:'bold'}}>Rare letters score big!</div>
-            <div style={{display:'flex',gap:5,justifyContent:'center'}}>
+          <div style={{textAlign:'center',marginBottom:ipadTour(10)}}>
+            <div style={{fontSize:ipadTour(11),color:'rgba(255,255,255,0.75)',marginBottom:ipadTour(6),fontWeight:'bold'}}>Rare letters score big!</div>
+            <div style={{display:'flex',gap:ipadTour(5),justifyContent:'center'}}>
               {[['Z',22],['J',16],['K',12],['X',14]].map(([l,v]) => (
-                <div key={l} style={{...tileStyle(l,false),width:38,height:44,fontSize:14}}>
-                  {l}<span style={{fontSize:7,color:'#fda085',fontWeight:'bold'}}>{v}</span>
+                <div key={l} style={{...tileStyle(l,false),width:ipadTour(38),height:ipadTour(44),fontSize:ipadTour(14)}}>
+                  {l}<span style={{fontSize:ipadTour(7),color:'#fda085',fontWeight:'bold'}}>{v}</span>
                 </div>
               ))}
             </div>
           </div>
           {/* Line 4: MW note — smaller */}
-          <div style={{background:'rgba(255,255,255,0.05)',borderRadius:10,padding:7,textAlign:'center',fontSize:10,color:'rgba(255,255,255,0.55)',lineHeight:1.6}}>
+          <div style={{background:'rgba(255,255,255,0.05)',borderRadius:10,padding:ipadTour(7),textAlign:'center',fontSize:ipadTour(10),color:'rgba(255,255,255,0.55)',lineHeight:1.6}}>
             Words checked against <strong style={{color:'rgba(246,211,101,0.7)'}}>Merriam-Webster Dictionary</strong> — Collegiate + Medical
           </div>
         </div>
@@ -1075,12 +1169,12 @@ function VisualTour({ onDone }) {
       desc:  "Your hub for everything beyond gameplay.",
       content: () => (
         <div style={{textAlign:'center'}}>
-          <div style={{display:'flex',justifyContent:'center',marginBottom:14}}>
-            <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.7)",color:"#f6d365",padding:"10px 28px",borderRadius:12,fontSize:18,fontWeight:"bold",fontFamily:"Georgia,serif",boxShadow: pulseOn ? '0 0 20px 6px rgba(246,211,101,0.85)' : 'none',transform: pulseOn ? 'scale(1.06)' : 'scale(1)',transition:'box-shadow 0.7s ease, transform 0.7s ease'}}>📋 Menu</div>
+          <div style={{display:'flex',justifyContent:'center',marginBottom:ipadTour(14)}}>
+            <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.7)",color:"#f6d365",padding:`${ipadTour(10)}px ${ipadTour(28)}px`,borderRadius:12,fontSize:ipadTour(18),fontWeight:"bold",fontFamily:"Georgia,serif",boxShadow: pulseOn ? '0 0 20px 6px rgba(246,211,101,0.85)' : 'none',transform: pulseOn ? 'scale(1.06)' : 'scale(1)',transition:'box-shadow 0.7s ease, transform 0.7s ease'}}>📋 Menu</div>
           </div>
-          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:12.5,color:'#f5f0e8',lineHeight:1.85,textAlign:'left',marginBottom:10}}>
+          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:ipadTour(14),fontSize:ipadTour(12.5),color:'#f5f0e8',lineHeight:1.85,textAlign:'left',marginBottom:ipadTour(10)}}>
             The <strong style={{color:'#f6d365'}}>📋 Menu</strong> button (under the tile board, next to UNDO) opens your hub. From there you can reach:
-            <div style={{marginTop:8,paddingLeft:6,fontSize:12,lineHeight:2}}>
+            <div style={{marginTop:ipadTour(8),paddingLeft:ipadTour(6),fontSize:ipadTour(12),lineHeight:2}}>
               📜 <strong>History</strong> — every word you've played<br/>
               📊 <strong>Stats</strong> — your scores, streaks, Perfect Days<br/>
               🏅 <strong>Badges</strong> — achievements you've earned<br/>
@@ -1088,8 +1182,8 @@ function VisualTour({ onDone }) {
               ℹ️ <strong>Tips</strong> — rules &amp; strategy
             </div>
           </div>
-          <div style={{fontSize:10,color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
-            Tap ✏️ Back to Game from any menu page to return.
+          <div style={{fontSize:ipadTour(10),color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
+            Each menu page has a ← Back to Menu button. From the menu, ✏️ Back to Game returns to play.
           </div>
         </div>
       )
@@ -1100,16 +1194,16 @@ function VisualTour({ onDone }) {
       desc:  "Even the words that didn't count.",
       content: () => (
         <div style={{textAlign:'center'}}>
-          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:13,color:'#f5f0e8',lineHeight:1.8,textAlign:'left',marginBottom:10}}>
+          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:ipadTour(14),fontSize:ipadTour(13),color:'#f5f0e8',lineHeight:1.8,textAlign:'left',marginBottom:ipadTour(10)}}>
             History saves <strong style={{color:'#f6d365'}}>every word you played today</strong> — valid words AND rejected ones.
-            <div style={{marginTop:10,padding:'10px 12px',background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.5)',borderRadius:10}}>
-              <div style={{fontSize:11,color:'#c4b5fd',letterSpacing:1.5,fontWeight:'bold',marginBottom:4}}>📝 REPORT FOR REVIEW</div>
-              <div style={{fontSize:12,color:'rgba(255,255,255,0.85)',lineHeight:1.7}}>
+            <div style={{marginTop:ipadTour(10),padding:`${ipadTour(10)}px ${ipadTour(12)}px`,background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.5)',borderRadius:10}}>
+              <div style={{fontSize:ipadTour(11),color:'#c4b5fd',letterSpacing:1.5,fontWeight:'bold',marginBottom:ipadTour(4)}}>📝 REPORT FOR REVIEW</div>
+              <div style={{fontSize:ipadTour(12),color:'rgba(255,255,255,0.85)',lineHeight:1.7}}>
                 Think a rejected word should count? Tap <strong style={{color:'#f6d365'}}>📝 Report for review</strong> next to it in History. We review every submission and add valid ones to the dictionary.
               </div>
             </div>
           </div>
-          <div style={{fontSize:10,color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
+          <div style={{fontSize:ipadTour(10),color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
             Help us make LetterLoot smarter for everyone!
           </div>
         </div>
@@ -1122,8 +1216,8 @@ function VisualTour({ onDone }) {
       last:  true,
       content: () => (
         <div style={{textAlign:'center'}}>
-          <div style={{display:'flex',justifyContent:'center',marginBottom:6}}>
-            <svg viewBox="0 0 300 160" width="160" height="86" xmlns="http://www.w3.org/2000/svg">
+          <div style={{display:'flex',justifyContent:'center',marginBottom:ipadTour(6)}}>
+            <svg viewBox="0 0 300 160" width={ipadTour(160)} height={ipadTour(86)} xmlns="http://www.w3.org/2000/svg">
               <path d="M 10 140 A 160 150 0 0 1 200 80" fill="none" stroke="#8B00FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
               <path d="M 20 143 A 147 137 0 0 1 197 86" fill="none" stroke="#4400CC" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
               <path d="M 30 146 A 134 124 0 0 1 194 92" fill="none" stroke="#0055FF" strokeWidth="13" strokeLinecap="round" opacity="0.9"/>
@@ -1143,15 +1237,16 @@ function VisualTour({ onDone }) {
               <text x="166" y="122" fontFamily="Georgia,serif" fontSize="8" fill="#FFD700" opacity="0.8">&#10022;</text>
             </svg>
           </div>
-          <div style={{background:'rgba(255,255,255,0.07)',border:'1.5px solid rgba(255,255,255,0.2)',borderRadius:14,padding:14,fontSize:13,color:'#f5f0e8',lineHeight:2,textAlign:'left',marginBottom:10}}>
+          <div style={{background:'rgba(255,255,255,0.07)',border:'1.5px solid rgba(255,255,255,0.2)',borderRadius:14,padding:ipadTour(14),fontSize:ipadTour(13),color:'#f5f0e8',lineHeight:2,textAlign:'left',marginBottom:ipadTour(10)}}>
             ✨ Clear all 5 levels — no buying or repeating<br/>
+            🎯 Find the Word of the Day<br/>
             🎉 Experience the big bonuses at Rainbow's End!<br/>
             <strong style={{color:'#f6d365'}}>Streaks increase your bonuses!</strong>
           </div>
-          <div style={{fontSize:20,fontWeight:'bold',color:'#f6d365',marginBottom:10,letterSpacing:1}}>
+          <div style={{fontSize:ipadTour(20),fontWeight:'bold',color:'#f6d365',marginBottom:ipadTour(10),letterSpacing:1}}>
             Now Get to Looting! ✏️
           </div>
-          <div style={{fontSize:10,color:'rgba(255,255,255,0.35)',fontStyle:'italic'}}>
+          <div style={{fontSize:ipadTour(10),color:'rgba(255,255,255,0.35)',fontStyle:'italic'}}>
             Tap ↺ Tour anytime to replay this walkthrough
           </div>
         </div>
@@ -1161,18 +1256,18 @@ function VisualTour({ onDone }) {
 
   const scene = scenes[cur];
   const nextBtnStyle = {
-    flex:2, padding:12, borderRadius:12,
+    flex:2, padding:ipadTour(12), borderRadius:12,
     background:'linear-gradient(135deg,#f6d365,#fda085)',
-    color:'#1a1a2e', fontFamily:'Georgia,serif', fontSize:14,
+    color:'#1a1a2e', fontFamily:'Georgia,serif', fontSize:ipadTour(14),
     fontWeight:'bold', border:'none', cursor:'pointer',
     boxShadow: pulseOn ? '0 0 20px 6px rgba(246,211,101,0.9)' : 'none',
     transform: pulseOn ? 'scale(1.05)' : 'scale(1)',
     transition: 'box-shadow 0.7s ease, transform 0.7s ease'
   };
   const doneBtnStyle = {
-    flex:2, padding:12, borderRadius:12,
+    flex:2, padding:ipadTour(12), borderRadius:12,
     background:'linear-gradient(135deg,#00c853,#00e676)',
-    color:'#003300', fontFamily:'Georgia,serif', fontSize:14,
+    color:'#003300', fontFamily:'Georgia,serif', fontSize:ipadTour(14),
     fontWeight:'bold', border:'none', cursor:'pointer',
     boxShadow: pulseOn ? '0 0 20px 6px rgba(0,200,83,0.9)' : 'none',
     transform: pulseOn ? 'scale(1.05)' : 'scale(1)',
@@ -1180,19 +1275,19 @@ function VisualTour({ onDone }) {
   };
 
   return (
-    <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:'16px',overflowY:'auto'}}>
-      <div style={{width:'100%',maxWidth:400}}>
-        <div style={{display:'flex',gap:6,justifyContent:'center',marginBottom:10}}>
+    <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:ipadIntroPad(16),overflowY:'auto'}}>
+      <div style={{width:'100%',maxWidth:ipadW(400)}}>
+        <div style={{display:'flex',gap:ipadTour(6),justifyContent:'center',marginBottom:ipadTour(10)}}>
           {scenes.map((_,i) => (
-            <div key={i} onClick={()=>setCur(i)} style={{width:i===cur?20:8,height:8,borderRadius:4,background:i===cur?'#a78bfa':i<cur?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.2)',transition:'all 0.3s',cursor:'pointer'}}/>
+            <div key={i} onClick={()=>setCur(i)} style={{width:i===cur?ipadTour(20):ipadTour(8),height:ipadTour(8),borderRadius:4,background:i===cur?'#a78bfa':i<cur?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.2)',transition:'all 0.3s',cursor:'pointer'}}/>
           ))}
         </div>
-        <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:20,border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
-          <div style={{fontSize:16,fontWeight:'bold',color:'#f6d365',marginBottom:6,textAlign:'center'}}>{scene.title}</div>
-          {scene.desc ? <div style={{fontSize:13,color:'rgba(255,255,255,0.88)',textAlign:'center',lineHeight:1.7,marginBottom:14,fontWeight:'bold'}}>{scene.desc}</div> : null}
+        <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:ipadIntroPad(20),border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
+          <div style={{fontSize:ipadTour(16),fontWeight:'bold',color:'#f6d365',marginBottom:ipadTour(6),textAlign:'center'}}>{scene.title}</div>
+          {scene.desc ? <div style={{fontSize:ipadTour(13),color:'rgba(255,255,255,0.88)',textAlign:'center',lineHeight:1.7,marginBottom:ipadTour(14),fontWeight:'bold'}}>{scene.desc}</div> : null}
           {scene.content()}
-          <div style={{display:'flex',gap:10,marginTop:16}}>
-            <button className="ll-btn" onClick={()=>cur>0?setCur(c=>c-1):onDone()} style={{flex:1,padding:10,borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:12,cursor:'pointer'}}>
+          <div style={{display:'flex',gap:ipadTour(10),marginTop:ipadTour(16)}}>
+            <button className="ll-btn" onClick={()=>cur>0?setCur(c=>c-1):onDone()} style={{flex:1,padding:ipadTour(10),borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:ipadTour(12),cursor:'pointer'}}>
               {cur===0?'Skip':'← Back'}
             </button>
             {scene.last
@@ -1207,8 +1302,13 @@ function VisualTour({ onDone }) {
 }
 
 function PencilLogo({ size = 120 }) {
-  const fontSize = Math.round(size * 0.35);
-  return <span style={{fontSize:fontSize, lineHeight:1, display:"inline-block"}}>&#9999;&#65039;</span>;
+  // Render the LetterLoot app icon image; fall back to pencil emoji if asset not found.
+  const [imgOk, setImgOk] = useState(true);
+  if (!imgOk) {
+    const fontSize = Math.round(size * 0.35);
+    return <span style={{fontSize:fontSize, lineHeight:1, display:"inline-block"}}>&#9999;&#65039;</span>;
+  }
+  return <img src="/icon-512.png" alt="LetterLoot" width={size} height={size} onError={()=>setImgOk(false)} style={{display:"inline-block", borderRadius: Math.round(size*0.18)}}/>;
 }
 
 function PencilIcon({ size = 32 }) {
@@ -1248,10 +1348,33 @@ function RainbowPot({ size = 120 }) {
   );
 }
 
+// PotOfGold: pot-only variant of RainbowPot (no rainbow arcs). Used inline next to titles
+// where the title already includes a rainbow emoji, avoiding redundancy.
+function PotOfGold({ size = 60 }) {
+  const w = size; const h = size;
+  return (
+    <svg viewBox="120 115 110 60" width={w} height={h} xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="200" cy="150" rx="30" ry="9" fill="#FFD700" opacity="0.25"/>
+      <ellipse cx="200" cy="150" rx="28" ry="10" fill="#1a1a1a" stroke="#555" strokeWidth="1.2"/>
+      <path d="M 172 138 Q 170 150 172 162 L 228 162 Q 230 150 228 138 Z" fill="#1c1c1c" stroke="#555" strokeWidth="1.2"/>
+      <ellipse cx="200" cy="162" rx="28" ry="8" fill="#111" stroke="#444" strokeWidth="1"/>
+      <path d="M 172 138 Q 175 128 200 126 Q 225 128 228 138 Z" fill="#333" stroke="#555" strokeWidth="1"/>
+      <ellipse cx="200" cy="138" rx="28" ry="9" fill="#2a2a2a" stroke="#777" strokeWidth="1.5"/>
+      <ellipse cx="188" cy="133" rx="8" ry="4" fill="#B8860B" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="200" cy="129" rx="9" ry="4.5" fill="#DAA520" stroke="#FFD700" strokeWidth="0.8"/>
+      <ellipse cx="212" cy="133" rx="8" ry="4" fill="#B8860B" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="193" cy="135" rx="8.5" ry="4" fill="#FFD700" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="207" cy="135" rx="8.5" ry="4" fill="#FFD700" stroke="#DAA520" strokeWidth="0.8"/>
+      <ellipse cx="200" cy="131" rx="10" ry="5" fill="#FFE555" stroke="#DAA520" strokeWidth="1.2"/>
+      <text x="200" y="133" textAnchor="middle" fontFamily="Georgia,serif" fontSize="5" fontWeight="bold" fill="#8B6914">LL</text>
+    </svg>
+  );
+}
+
 function LetterLootLogo({ titleFontSize = 28, boxPadding = "8px 24px", showSubtitle = false }) {
   return (
     <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-      <PencilLogo size={140} />
+      <PencilLogo size={ipadIcon(140)} />
       <div style={{ display:"inline-block", background:"rgba(139,92,246,0.25)", border:"2.5px solid rgba(167,139,250,0.95)", borderRadius:12, padding:boxPadding, boxShadow:"0 0 28px rgba(139,92,246,0.5)" }}>
         <span style={{ fontSize:titleFontSize, fontWeight:"bold", letterSpacing:5, color:"#ffffff", textShadow:"0 0 16px rgba(167,139,250,0.85)", fontFamily:"Georgia,serif" }}>LetterLoot</span>
       </div>
@@ -1285,17 +1408,13 @@ function Starfield() {
 }
 
 function getLifetimeData() {
+  // Decay removed (May 24, 2026): Lifetime points are pure cumulative — they only
+  // ever go up. Missed days no longer penalize the player. We keep the function
+  // signature and return missedDays:0 to remain compatible with any callers that
+  // still reference it.
   try {
     const data = JSON.parse(localStorage.getItem("ll_lifetime") || "null");
     if (!data) return { total: 0, lastPlayedDate: null, missedDays: 0 };
-    const todayKey = getTodayKey(); const yesterdayKey = getYesterdayKey();
-    if (!data.lastPlayedDate || data.lastPlayedDate === todayKey || data.lastPlayedDate === yesterdayKey) return { ...data, missedDays: 0 };
-    const last = new Date(data.lastPlayedDate); const today = new Date(todayKey);
-    const diffDays = Math.floor((today - last) / 86400000);
-    const missedDays = diffDays - 1;
-    if (missedDays >= 3) return { total: 0, lastPlayedDate: null, missedDays: 3, wasReset: true, originalTotal: data.total };
-    if (missedDays === 2) return { total: Math.floor(data.total * (1/3)), lastPlayedDate: data.lastPlayedDate, missedDays: 2, wasDecayed: true, originalTotal: data.total };
-    if (missedDays === 1) return { total: Math.floor(data.total * (2/3)), lastPlayedDate: data.lastPlayedDate, missedDays: 1, wasDecayed: true, originalTotal: data.total };
     return { ...data, missedDays: 0 };
   } catch { return { total: 0, lastPlayedDate: null, missedDays: 0 }; }
 }
@@ -1448,10 +1567,10 @@ function getDailyHistory() {
   } catch { return { date: getTodayKey(), games: [] }; }
 }
 function saveDailyHistory(history) { try { localStorage.setItem("ll_daily_history", JSON.stringify(history)); } catch {} }
-function appendToDailyHistory(word, score, valid, medical, collegiate, gameIndex, loot=false) {
+function appendToDailyHistory(word, score, valid, medical, collegiate, gameIndex, loot=false, wotd=false) {
   const history = getDailyHistory();
   if (!history.games[gameIndex]) history.games[gameIndex] = [];
-  history.games[gameIndex].push({ word, score, valid, medical, collegiate, loot });
+  history.games[gameIndex].push({ word, score, valid, medical, collegiate, loot, wotd });
   saveDailyHistory(history);
 }
 
@@ -1508,18 +1627,25 @@ async function requestNotificationPermission() {
   return false;
 }
 
-const TOUR_STEPS = [
-  { emoji:"✏️", title:"Welcome to LetterLoot!", body:"A daily word puzzle where every letter has a point value. Fresh tiles every day at midnight — same board for every player worldwide!", warning:false },
-  { emoji:"✨", title:"Letters Don't Need to Connect!", body:"Unlike other word games, tap ANY tiles in ANY order to spell words. No adjacency rules — pure vocabulary power!", warning:false },
-  { emoji:"💎", title:"Every Letter Has a Value", body:"Common letters (E, T, A) score 3–5 pts. Rare letters score big — Q=20, Z=22, J=16!\n\nGold tiles = 2× the letter's value\nPurple tiles = 3× the letter's value!", warning:false },
-  { emoji:"✏️", title:"What the Buttons Do", body:"Submit Word — checks your word against the dictionary\n✕ Clear — removes your selection\n📋 Menu — opens History, Stats, Badges, Leaders, Tips & music toggle\n🆕 Start New Game — resets to Level 1 (loses Perfect Day)\n🔄 Replay L# — retry the current level with same tiles\n🔓 Buy L#+1 — spend points to advance (loses Perfect Day)\n⏸️ Pause — stops your timer", warning:false },
-  { emoji:"↩️", title:"The UNDO Button", body:"Find yourself in a pinch to finish a level?\n\nYou have an optional UNDO available for 1 word per game for 1,000 points.\n\nIt will keep your Perfect Day on track!", warning:false },
-  { emoji:"🌟", title:"Clearing a Level", body:"Use ALL tiles to clear the board and earn a big bonus! Can't finish? Spend earned points to buy the next level, or retry with the same tiles.", warning:false },
-  { emoji:"💰", title:"Your Points Are Everything!", body:"", warning:true },
-];
+// NOTE (v101, item #4): the former TOUR_STEPS array that lived here was DEAD CODE — defined but
+// never rendered anywhere. The live in-app tour is the <VisualTour> component (search "function
+// VisualTour"), which is already fully iPad-scaled via ipadTour(). The old backlog item #4 ("wrap
+// TOUR_STEPS in ipadIntro()") was based on a stale diagnosis; there was nothing to wrap. Removed
+// to prevent future confusion. If a text-step tour is ever wanted again, build it fresh.
 
 // ── Install Prompt (Add to Home Screen) ───────────────────────
 function detectPlatform() {
+  // v89 FIX: inside the native Capacitor app, trust Capacitor's own platform detection.
+  // The old user-agent sniff (below) is unreliable on iPadOS — iPad WebViews often report
+  // a desktop/Mac user-agent, so isIOS came back false and share links wrongly used the
+  // web URL instead of the App Store URL. Capacitor.getPlatform() returns "ios"/"android"
+  // reliably inside the native app regardless of the UA string.
+  try {
+    if (window.Capacitor && typeof window.Capacitor.getPlatform === "function") {
+      const p = window.Capacitor.getPlatform();
+      if (p === "ios" || p === "android") return p;
+    }
+  } catch (e) {}
   const ua = navigator.userAgent || "";
   const isIOS = /iPad|iPhone|iPod/.test(ua) && !window.MSStream;
   const isAndroid = /Android/i.test(ua);
@@ -1535,10 +1661,9 @@ function isInstalled() {
 // Returns the device-appropriate "where to play" URL for share messages.
 // iOS users get the App Store. Everyone else gets the web URL.
 //
-// REPLACE BEFORE APP STORE LAUNCH: when the app is approved, replace
-// APP_STORE_URL below with the real App Store listing URL (find it in
-// App Store Connect → App Information → Marketing URL once approved).
-const APP_STORE_URL = "https://apps.apple.com/app/letterloot/idREPLACE_AFTER_LAUNCH";
+// App Store listing (live as of June 13, 2026). Canonical short form using the
+// numeric Apple ID — redirects to the full localized listing. App ID: 6769522298.
+const APP_STORE_URL = "https://apps.apple.com/app/id6769522298";
 const WEB_URL = "https://letterloot.net";
 
 function getShareUrl() {
@@ -1551,45 +1676,61 @@ function getShareUrlLabel() {
   return platform === "ios" ? "Download free on the App Store:" : "Play free at:";
 }
 
-function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats, onViewLeaderboard, onPlayAgain }) {
+function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats, onViewLeaderboard, onPlayAgain, onShareResults, isGuest }) {
+  // v87 (C+): feedback state for the "Share LetterLoot with a friend" copy action.
+  const [inviteCopied, setInviteCopied] = useState(false);
   return (
     <div style={{ position:"fixed", inset:0, zIndex:99999, background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"30px 24px", fontFamily:"Georgia,serif", color:"#f5f0e8", overflowY:"auto" }}>
       <Starfield/>
-      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360}}>
-        <div style={{textAlign:"center",marginBottom:20}}><LetterLootLogo titleFontSize={32} boxPadding="10px 28px"/></div>
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:ipadW(360)}}>
+        <div style={{textAlign:"center",marginBottom:20}}><LetterLootLogo titleFontSize={ipadTour(32)} boxPadding={`${ipadTour(10)}px ${ipadTour(28)}px`}/></div>
         <div style={{textAlign:"center",width:"100%"}}>
-          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:14}}>Great effort today! 🎉</div>
-          <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:14,padding:"14px",marginBottom:16,width:"100%"}}>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:6}}>Highest scoring word:</div>
-            <div style={{fontSize:22,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>{bestWord||"—"}</div>
-            <div style={{fontSize:14,color:"#fda085",fontWeight:"bold",marginBottom:10}}>{bestWordScore||0} points</div>
+          <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginBottom:14}}>Great effort today! 🎉</div>
+          <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:14,padding:ipadIntro(14),marginBottom:16,width:"100%"}}>
+            <div style={{fontSize:ipadIntro(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5,marginBottom:6}}>Highest scoring word:</div>
+            <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>{bestWord||"—"}</div>
+            <div style={{fontSize:ipadTour(14),color:"#fda085",fontWeight:"bold",marginBottom:10}}>{bestWordScore||0} points</div>
             <div style={{height:1,background:"rgba(255,255,255,0.12)",marginBottom:10}}/>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Total Score Today</div>
-            <div style={{fontSize:30,fontWeight:"bold",color:"#f6d365"}}>{totalScore||0}</div>
+            <div style={{fontSize:ipadIntro(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5,marginBottom:4}}>Total Score Today</div>
+            <div style={{fontSize:ipadTour(30),fontWeight:"bold",color:"#f6d365"}}>{totalScore||0}</div>
           </div>
-          <div style={{fontSize:13,color:"#ffffff",lineHeight:1.6,fontWeight:"bold",marginBottom:14}}>
+          <div style={{fontSize:ipadIntro(13),color:"#ffffff",lineHeight:1.6,fontWeight:"bold",marginBottom:14}}>
             Try again? Replay for a higher score, but no Perfect Day chance today.
           </div>
-          {/* Play Again row: Now / Later / Tomorrow */}
-          <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginBottom:6,letterSpacing:1}}>PLAY AGAIN</div>
+          {/* v64 (May 26): Simplified — Now + Later only. Tomorrow removed. */}
+          <div style={{fontSize:ipadIntro(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:1.5,marginBottom:6}}>PLAY AGAIN</div>
           <div style={{display:"flex",gap:6,marginBottom:14}}>
-            <button onClick={()=>onPlayAgain && onPlayAgain("now")} style={{flex:1,padding:"10px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif"}}>✏️ Now</button>
-            <button onClick={()=>onPlayAgain && onPlayAgain("later")} style={{flex:1,padding:"10px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:12,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🌅 Later</button>
-            <button onClick={()=>onPlayAgain && onPlayAgain("tomorrow")} style={{flex:1,padding:"10px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🌙 Tomorrow</button>
+            <button onClick={()=>onPlayAgain && onPlayAgain("now")} style={{flex:1,padding:`${ipadChrome(10)}px ${ipadChrome(4)}px`,borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadChrome(12),fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif"}}>✏️ Now</button>
+            <button onClick={()=>onPlayAgain && onPlayAgain("later")} style={{flex:1,padding:`${ipadChrome(10)}px ${ipadChrome(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.35),rgba(59,130,246,0.25))",border:"1px solid rgba(96,165,250,0.7)",color:"#dbeafe",fontSize:ipadChrome(12),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🌅 Later</button>
           </div>
           {/* Secondary row: Leaderboard / Stats / Close */}
           <div style={{display:"flex",gap:6,marginBottom:10}}>
-            <button onClick={onViewLeaderboard} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🏆 Leaders</button>
-            <button onClick={onViewStats} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"linear-gradient(135deg,rgba(167,139,250,0.25),rgba(124,58,237,0.15))",border:"1px solid rgba(167,139,250,0.5)",color:"#c4b5fd",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>📊 Stats</button>
-            <button onClick={onDone} style={{flex:1,padding:"9px 4px",borderRadius:11,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.25)",color:"rgba(255,255,255,0.75)",fontSize:11,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>✕ Close</button>
+            <button onClick={onViewLeaderboard} style={{flex:1,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:11,background:isGuest?"rgba(255,255,255,0.05)":"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.2))",border:isGuest?"1px solid rgba(255,255,255,0.18)":"1px solid rgba(246,211,101,0.6)",color:isGuest?"rgba(255,255,255,0.55)":"#fef3c7",fontSize:ipadChrome(11),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>{isGuest?<span><span style={{filter:"grayscale(0.6)",opacity:0.55}}>🏆</span> Leaders <span style={{color:"rgba(167,139,250,0.85)"}}>🔒</span></span>:"🏆 Leaders"}</button>
+            <button onClick={onViewStats} style={{flex:1,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:11,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#ede9fe",fontSize:ipadChrome(11),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>📊 Stats</button>
+            <button onClick={onDone} style={{flex:1,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.35)",color:"rgba(255,255,255,0.95)",fontSize:ipadChrome(11),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>✕ Close</button>
           </div>
-          {/* Share LetterLoot — moved here from in-game play screen (May 2026). Post-game is the natural time to share. */}
-          <button onClick={()=>{
-            navigator.clipboard?.writeText(`✏️ Play LetterLoot — the daily word puzzle where every letter has a value! ${getShareUrlLabel()} ${getShareUrl()}`);
-          }} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(34,211,238,0.1)",border:"1px solid rgba(34,211,238,0.6)",color:"#22d3ee",fontSize:12,fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif",marginBottom:10}}>
-            ✏️ Share LetterLoot with a friend
+          {/* v72 (item 6): Share the player's actual day results (score, levels, words, time, WoD)
+              even when it wasn't a Perfect Day. Routes through the parent's reliable share menu
+              (Text / Email / Copy) rather than the navigator.clipboard call that fails in the WebView. */}
+          {onShareResults && <button onClick={onShareResults} style={{width:"100%",padding:ipadChrome(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadChrome(12),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif",border:"none",marginBottom:8}}>
+            📤 Share My Results
+          </button>}
+          {/* Share LetterLoot — moved here from in-game play screen (May 2026). Post-game is the natural time to share.
+              v87 (C+): use the reliable Capacitor Clipboard plugin (navigator.clipboard fails silently in the
+              Capacitor WebView) + show "Copied!" feedback so the invite (with the App Store URL) actually copies. */}
+          <button onClick={async ()=>{
+            const inviteText = `✏️ Play LetterLoot — the daily word puzzle where every letter has a value! ${getShareUrlLabel()} ${getShareUrl()}`;
+            try {
+              await Clipboard.write({ string: inviteText });
+              setInviteCopied(true);
+              setTimeout(()=>setInviteCopied(false), 3000);
+            } catch (e) {
+              try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(inviteText); setInviteCopied(true); setTimeout(()=>setInviteCopied(false), 3000); } } catch (e2) {}
+            }
+          }} style={{width:"100%",padding:ipadChrome(10),borderRadius:12,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.75)",color:"#67e8f9",fontSize:ipadChrome(12),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif",marginBottom:10}}>
+            {inviteCopied ? "✓ Copied — paste anywhere to invite a friend!" : "✏️ Share LetterLoot with a friend"}
           </button>
-          <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",fontStyle:"italic",marginTop:8}}>{getShortDate()}</div>
+          <div style={{fontSize:ipadChrome(11),color:"rgba(255,255,255,0.85)",fontStyle:"italic",marginTop:8}}>{getShortDate()}</div>
         </div>
       </div>
     </div>
@@ -1600,11 +1741,13 @@ function AuthScreen({ onGuest, onLogin }) {
   // Three player states:
   //  1. First-time visitor → "welcome" mode (Create Account + Play as Guest, equal weight)
   //  2. Returning guest (no signed-in account, but has played as guest before) → "welcome" mode with returning-guest copy
-  //  3. Returning signed-in player who explicitly signed out → "login" mode (email/name remembered)
+  //  3. Returning signed-in player who explicitly signed out → "welcome" mode too (v57 fix: previously
+  //     defaulted to "login" which hid the Guest button. Now everyone sees the full menu including
+  //     "Play as Guest" — they can tap "Sign In" to reach the login form if they want.)
   const hasSignedInBefore = !!(localStorage.getItem("ll_name") || localStorage.getItem("ll_session"));
   const hasPlayedAsGuestBefore = localStorage.getItem("ll_guest_returning") === "1";
   const isReturningGuest = !hasSignedInBefore && hasPlayedAsGuestBefore;
-  const [mode, setMode] = useState(hasSignedInBefore ? "login" : "welcome");
+  const [mode, setMode] = useState("welcome");
   const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [name, setName] = useState("");
   const [loading, setLoading] = useState(false); const [error, setError] = useState(""); const [success, setSuccess] = useState("");
   const handleSignUp = async () => {
@@ -1631,62 +1774,64 @@ function AuthScreen({ onGuest, onLogin }) {
     if (error) { setError(error.message); return; }
     setSuccess("Reset link sent! Check your email.");
   };
-  const inputStyle = { width:"100%", padding:"11px 14px", borderRadius:10, border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.08)", color:"#f5f0e8", fontSize:14, fontFamily:"Georgia,serif", outline:"none", marginBottom:10, boxSizing:"border-box" };
-  const btnStyle = (bg, color="#1a1a2e") => ({ width:"100%", padding:"13px", borderRadius:12, border:"none", background:bg, color, fontSize:14, fontWeight:"bold", fontFamily:"Georgia,serif", cursor:"pointer", marginBottom:8 });
+  const inputStyle = { width:"100%", padding:`${ipadMenu(11)}px ${ipadMenu(14)}px`, borderRadius:10, border:"1px solid rgba(255,255,255,0.25)", background:"rgba(255,255,255,0.08)", color:"#f5f0e8", fontSize:ipadMenu(14), fontFamily:"Georgia,serif", outline:"none", marginBottom:10, boxSizing:"border-box" };
+  const btnStyle = (bg, color="#1a1a2e") => ({ width:"100%", padding:ipadMenu(13), borderRadius:12, border:"none", background:bg, color, fontSize:ipadMenu(14), fontWeight:"bold", fontFamily:"Georgia,serif", cursor:"pointer", marginBottom:8 });
   return (
-    <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"20px", fontFamily:"Georgia,serif", color:"#f5f0e8", position:"relative" }}>
+    <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:ipadMenu(20), fontFamily:"Georgia,serif", color:"#f5f0e8", position:"relative" }}>
       <Starfield/>
-      <div style={{zIndex:1, width:"100%", maxWidth:360}}>
-        <div style={{textAlign:"center", marginBottom:28}}><LetterLootLogo titleFontSize={30} boxPadding="8px 24px" showSubtitle={true}/></div>
+      <div style={{zIndex:1, width:"100%", maxWidth:ipadW(360)}}>
+        <div style={{textAlign:"center", marginBottom:28}}><LetterLootLogo titleFontSize={ipadMenu(30)} boxPadding={`${ipadMenu(8)}px ${ipadMenu(24)}px`} showSubtitle={true}/></div>
         {mode==="welcome"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:`${ipadMenu(28)}px ${ipadMenu(24)}px`,border:"1px solid rgba(255,255,255,0.15)"}}>
             <div style={{textAlign:"center",marginBottom:20}}>
               {isReturningGuest ? (
                 <>
-                  <div style={{fontSize:15,fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>Welcome back! 👋</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.6}}>Ready for another round? Create a free account this time to save your progress, share Perfect Day successes, and join the Leaderboard.</div>
+                  <div style={{fontSize:ipadMenu(15),fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>Welcome back! 👋</div>
+                  <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.6}}>Ready for another round? Create a free account this time to save your progress, share Perfect Day successes, and join the Leaderboard.</div>
                 </>
               ) : (
                 <>
-                  <div style={{fontSize:14,fontWeight:"bold",color:"#f6d365",marginBottom:8}}>Welcome!</div>
-                  <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.6}}>Create an account to save your progress and compete on the Leaderboard — or play as a guest to try it out.</div>
+                  <div style={{fontSize:ipadMenu(14),fontWeight:"bold",color:"#f6d365",marginBottom:8}}>Welcome!</div>
+                  <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.9)",lineHeight:1.6}}>Create an account to save your progress and compete on the Leaderboard — or play as a guest to try it out.</div>
                 </>
               )}
             </div>
             <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={()=>setMode("signup")}>Create Account</button>
-            <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={onGuest}>
-              {isReturningGuest ? "Continue as Guest" : "Play as Guest"}
-              {!isReturningGuest && <div style={{fontSize:10,color:"rgba(26,26,46,0.65)",fontWeight:"normal",marginTop:2}}>No saved progress · No leaderboard</div>}
-            </button>
-            <div style={{textAlign:"center",marginTop:14,fontSize:11,color:"rgba(255,255,255,0.45)"}}>Already have an account? <span style={{color:"#f6d365",cursor:"pointer",fontWeight:"bold"}} onClick={()=>setMode("login")}>Sign in</span></div>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}>
+              <button style={{...btnStyle("linear-gradient(135deg,#f6d365,#fda085)"),width:"60%",padding:ipadMenu(8),fontSize:ipadMenu(12),marginBottom:0}} onClick={onGuest}>
+                {isReturningGuest ? "Continue as Guest" : "Play as Guest"}
+                {!isReturningGuest && <div style={{fontSize:ipadMenu(9),color:"rgba(26,26,46,0.95)",fontWeight:"bold",marginTop:2}}>Create account to join Leaderboard</div>}
+              </button>
+            </div>
+            <div style={{textAlign:"center",marginTop:14,fontSize:ipadMenu(11),color:"rgba(255,255,255,0.9)"}}>Already have an account? <span style={{color:"#f6d365",cursor:"pointer",fontWeight:"bold"}} onClick={()=>setMode("login")}>Sign in</span></div>
           </div>
         )}
         {mode==="login"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:`${ipadMenu(28)}px ${ipadMenu(24)}px`,border:"1px solid rgba(255,255,255,0.15)"}}>
             <div style={{textAlign:"center",marginBottom:18}}>
               {hasSignedInBefore && localStorage.getItem("ll_name") && (
-                <div style={{fontSize:16,fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>
+                <div style={{fontSize:ipadMenu(16),fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>
                   Welcome back, {localStorage.getItem("ll_name")}! 👋
                 </div>
               )}
-              <div style={{fontSize:13,fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>SIGN IN</div>
-              {hasSignedInBefore && <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>Sign in to sync your progress across devices</div>}
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>SIGN IN</div>
+              {hasSignedInBefore && <div style={{fontSize:ipadMenu(11),color:"rgba(255,255,255,0.9)",marginTop:4}}>Sign in to sync your progress across devices</div>}
             </div>
-            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
-            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
+            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,fontSize:ipadMenu(12),color:"#fca5a5",marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,fontSize:ipadMenu(12),color:"#86efac",marginBottom:10}}>{success}</div>}
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSignIn()}/>
             <input style={inputStyle} type="password" placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} onKeyDown={e=>e.key==="Enter"&&handleSignIn()}/>
             <button style={btnStyle("linear-gradient(135deg,#f6d365,#fda085)")} onClick={handleSignIn} disabled={loading}>{loading?"Signing in…":"Sign In"}</button>
-            <div style={{textAlign:"center",marginTop:4}}><span style={{fontSize:11,color:"rgba(255,255,255,0.4)",cursor:"pointer"}} onClick={()=>{setMode("forgot");setError("");}}>Forgot password?</span></div>
-            <div style={{textAlign:"center",marginTop:12,fontSize:12,color:"rgba(255,255,255,0.4)"}}>Don't have an account? <span style={{color:"#a78bfa",cursor:"pointer"}} onClick={()=>{setMode("signup");setError("");}}>Sign up</span></div>
-            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:12,marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
+            <div style={{textAlign:"center",marginTop:4}}><span style={{fontSize:ipadMenu(11),color:"rgba(255,255,255,0.85)",cursor:"pointer"}} onClick={()=>{setMode("forgot");setError("");}}>Forgot password?</span></div>
+            <div style={{textAlign:"center",marginTop:12,fontSize:ipadMenu(12),color:"rgba(255,255,255,0.85)"}}>Don't have an account? <span style={{color:"#a78bfa",cursor:"pointer"}} onClick={()=>{setMode("signup");setError("");}}>Sign up</span></div>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:ipadMenu(12),marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
           </div>
         )}
         {mode==="signup"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center",marginBottom:18}}><div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>CREATE ACCOUNT</div></div>
-            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
-            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:`${ipadMenu(28)}px ${ipadMenu(24)}px`,border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center",marginBottom:18}}><div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>CREATE ACCOUNT</div></div>
+            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,fontSize:ipadMenu(12),color:"#fca5a5",marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,fontSize:ipadMenu(12),color:"#86efac",marginBottom:10}}>{success}</div>}
             <input style={inputStyle} type="text" placeholder="Your name" value={name} onChange={e=>setName(e.target.value)}/>
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
             <input style={inputStyle} type="password" placeholder="Password (6+ characters)" value={password} onChange={e=>setPassword(e.target.value)}/>
@@ -1695,29 +1840,29 @@ function AuthScreen({ onGuest, onLogin }) {
                 without obtaining the user's consent. By placing this explicit disclosure directly above
                 the Create Account button, signup itself becomes the consent event: the user is clearly
                 informed about what data will be uploaded before they create the account. */}
-            <div style={{background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:12,padding:"12px 14px",marginBottom:12,fontFamily:"Georgia,serif"}}>
-              <div style={{fontSize:12,fontWeight:"bold",color:"#f6d365",marginBottom:6,letterSpacing:0.5}}>🏆 About the Leaderboard</div>
-              <div style={{fontSize:11,lineHeight:1.6,color:"rgba(255,255,255,0.82)"}}>
+            <div style={{background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:12,padding:`${ipadMenu(12)}px ${ipadMenu(14)}px`,marginBottom:12,fontFamily:"Georgia,serif"}}>
+              <div style={{fontSize:ipadMenu(12),fontWeight:"bold",color:"#f6d365",marginBottom:6,letterSpacing:0.5}}>🏆 About the Leaderboard</div>
+              <div style={{fontSize:ipadMenu(11),lineHeight:1.6,color:"rgba(255,255,255,0.82)"}}>
                 Creating an account lets you compete on the global leaderboard. We'll upload your name, scores, level times, and Perfect Day streaks so other players can see them. You can delete your account anytime from Menu → Account.
               </div>
-              <div style={{marginTop:6,fontSize:11}}>
+              <div style={{marginTop:6,fontSize:ipadMenu(11)}}>
                 <a href="https://letterloot.net/privacy.html" target="_blank" rel="noopener noreferrer" style={{color:"#60a5fa",textDecoration:"underline"}}>Read our privacy policy →</a>
               </div>
             </div>
             <button style={btnStyle("linear-gradient(135deg,#a78bfa,#7c3aed)","#fff")} onClick={handleSignUp} disabled={loading}>{loading?"Creating account…":"Create Account"}</button>
-            <div style={{textAlign:"center",marginTop:8,fontSize:12,color:"rgba(255,255,255,0.4)"}}>Already have an account? <span style={{color:"#f6d365",cursor:"pointer"}} onClick={()=>{setMode("login");setError("");}}>Sign in</span></div>
-            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:12,marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
+            <div style={{textAlign:"center",marginTop:8,fontSize:ipadMenu(12),color:"rgba(255,255,255,0.85)"}}>Already have an account? <span style={{color:"#f6d365",cursor:"pointer"}} onClick={()=>{setMode("login");setError("");}}>Sign in</span></div>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:ipadMenu(12),marginTop:4}} onClick={()=>setMode("welcome")}>← Back</button>
           </div>
         )}
         {mode==="forgot"&&(
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"28px 24px",border:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center",marginBottom:18}}><div style={{fontSize:13,fontWeight:"bold",color:"#60a5fa",letterSpacing:2}}>RESET PASSWORD</div></div>
-            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#fca5a5",marginBottom:10}}>{error}</div>}
-            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:"8px 12px",fontSize:12,color:"#86efac",marginBottom:10}}>{success}</div>}
-            <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginBottom:14,lineHeight:1.6}}>Enter your email and we'll send you a reset link.</div>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:`${ipadMenu(28)}px ${ipadMenu(24)}px`,border:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center",marginBottom:18}}><div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#60a5fa",letterSpacing:2}}>RESET PASSWORD</div></div>
+            {error&&<div style={{background:"rgba(220,38,38,0.2)",border:"1px solid rgba(220,38,38,0.4)",borderRadius:8,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,fontSize:ipadMenu(12),color:"#fca5a5",marginBottom:10}}>{error}</div>}
+            {success&&<div style={{background:"rgba(34,197,94,0.2)",border:"1px solid rgba(34,197,94,0.4)",borderRadius:8,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,fontSize:ipadMenu(12),color:"#86efac",marginBottom:10}}>{success}</div>}
+            <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.9)",marginBottom:14,lineHeight:1.6}}>Enter your email and we'll send you a reset link.</div>
             <input style={inputStyle} type="email" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}/>
             <button style={btnStyle("linear-gradient(135deg,#60a5fa,#3b82f6)","#fff")} onClick={handleForgot} disabled={loading}>{loading?"Sending…":"Send Reset Link"}</button>
-            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:12,marginTop:4}} onClick={()=>setMode("login")}>← Back to Sign In</button>
+            <button style={{...btnStyle("transparent","rgba(255,255,255,0.3)"),border:"none",fontSize:ipadMenu(12),marginTop:4}} onClick={()=>setMode("login")}>← Back to Sign In</button>
           </div>
         )}
       </div>
@@ -1813,7 +1958,7 @@ function AdminScreen({ onExit }) {
     <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',position:'relative'}}>
       <Starfield/>
       <div style={{position:'relative',zIndex:1,background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:20,padding:'36px 32px',textAlign:'center',border:'1px solid rgba(255,255,255,0.15)',maxWidth:320,width:'90%'}}>
-        <PencilLogo size={140}/>
+        <PencilLogo size={ipadIcon(140)}/>
         <div style={{fontSize:13,fontWeight:'bold',color:'#f6d365',letterSpacing:3,margin:'16px 0 20px'}}>ADMIN DASHBOARD</div>
         <input type="password" value={pw} onChange={e=>setPw(e.target.value)} onKeyDown={e=>e.key==='Enter'&&(pw===ADMIN_PASSWORD?(setAuthed(true),setPwError('')):(setPwError('Incorrect password')))} placeholder="Password" style={{width:'100%',padding:'11px 14px',borderRadius:10,border:'1px solid rgba(255,255,255,0.25)',background:'rgba(255,255,255,0.08)',color:'#f5f0e8',fontSize:14,fontFamily:'Georgia,serif',outline:'none',marginBottom:10,textAlign:'center'}}/>
         {pwError && <div style={{color:'#fca5a5',fontSize:11,marginBottom:8}}>{pwError}</div>}
@@ -2026,6 +2171,135 @@ function AdminScreen({ onExit }) {
   );
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// 🛠 DEBUG MENU COMPONENT
+// Full-screen panel with quick-jump buttons. Triggered when DEBUG_MODE=true
+// and user taps the floating "🛠 DEBUG" badge.
+// Calls onAction(actionString) which is set as debugAction state — both App
+// and GameScreen watch this and execute on detection.
+// ═══════════════════════════════════════════════════════════════════
+function DebugMenu({ onClose, onAction, currentMode }) {
+  const btn = (label, action, color = "#22d3ee") => (
+    <button onClick={() => { onAction(action); onClose(); }} style={{
+      padding: `${ipadDense(14)}px ${ipadDense(16)}px`, borderRadius: 10, border: `1px solid ${color}`,
+      background: `${color}15`, color, fontSize: ipadDense(14), fontWeight: "bold",
+      fontFamily: "Georgia,serif", cursor: "pointer", textAlign: "left"
+    }}>
+      {label}
+    </button>
+  );
+  const sectionStyle = { marginBottom: 18 };
+  const headerStyle = { fontSize: ipadDense(12), color: "rgba(255,255,255,0.6)", letterSpacing: 2, fontWeight: "bold", marginBottom: 8, textTransform: "uppercase" };
+  const gridStyle = { display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 };
+  return (
+    <div style={{ minHeight: "100vh", background: "linear-gradient(160deg,#0a0820 0%,#1a0a1a 50%,#0a0820 100%)", color: "#f5f0e8", fontFamily: "Georgia,serif", padding: "24px 20px", overflowY: "auto" }}>
+      <div style={{ maxWidth: isIpadWidth() ? 760 : 500, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24, paddingTop: "env(safe-area-inset-top, 0px)" }}>
+          <div>
+            <div style={{ fontSize: ipadDense(24), fontWeight: "bold", color: "#fb7185" }}>🛠 DEBUG MENU</div>
+            <div style={{ fontSize: ipadDense(11), color: "rgba(255,255,255,0.5)", marginTop: 4 }}>Currently: <span style={{ color: "#22d3ee" }}>{currentMode}</span></div>
+          </div>
+          <button onClick={onClose} style={{ padding: `${ipadDense(10)}px ${ipadDense(16)}px`, borderRadius: 10, background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.2)", color: "#f5f0e8", fontSize: ipadDense(14), fontFamily: "Georgia,serif", cursor: "pointer" }}>
+            Close ✕
+          </button>
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={headerStyle}>🎮 Jump to Level (fresh game)</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 6 }}>
+            {btn("L1", "jump-L1", "#22d3ee")}
+            {btn("L2", "jump-L2", "#22d3ee")}
+            {btn("L3", "jump-L3", "#22d3ee")}
+            {btn("L4", "jump-L4", "#22d3ee")}
+            {btn("L5", "jump-L5", "#22d3ee")}
+          </div>
+          <div style={{ fontSize: ipadDense(10), color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Starts fresh game at chosen level. Tiles auto-generated.</div>
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={headerStyle}>🎉 Trigger End-Game Modals</div>
+          <div style={gridStyle}>
+            {btn("🌈 Perfect Day", "modal-perfect-day", "#f6d365")}
+            {btn("🏆 Streak Bonus", "modal-streak", "#f6d365")}
+            {btn("🔁 Repeat PD", "modal-repeat-pd", "#f6d365")}
+            {btn("👋 Farewell", "modal-farewell", "#fda085")}
+          </div>
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={headerStyle}>🎯 Trigger Mid-Game Modals</div>
+          <div style={gridStyle}>
+            {btn("😬 Stuck Modal", "modal-stuck", "#fb7185")}
+            {btn("💰 Buy Level", "modal-buy-level", "#a78bfa")}
+            {btn("👤 Guest Upsell", "modal-guest-upsell", "#a78bfa")}
+          </div>
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={headerStyle}>⚙️ State Helpers</div>
+          <div style={gridStyle}>
+            {btn("🆕 Start Fresh Game", "fresh-game", "#22d3ee")}
+            {btn("🏁 Near Game End", "near-end", "#22d3ee")}
+            {btn("🗑 Wipe localStorage", "wipe-local", "#fb7185")}
+            {btn("📋 Welcome Screen", "go-welcome", "#22d3ee")}
+          </div>
+        </div>
+
+        <div style={sectionStyle}>
+          <div style={headerStyle}>👤 Guest Mode</div>
+          <div style={gridStyle}>
+            {btn("🆔 Become Guest", "become-guest", "#a78bfa")}
+            {btn("🔐 Sign Out → Auth", "sign-out-to-auth", "#a78bfa")}
+          </div>
+          <div style={{ fontSize: ipadDense(10), color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Become Guest: instantly switch to guest mode without going through Auth screen. Sign Out → Auth: full sign-out flow that lets you re-enter as guest, sign in, or sign up.</div>
+        </div>
+
+        <div style={{ marginTop: 32, padding: 12, borderRadius: 10, background: "rgba(251,113,133,0.1)", border: "1px solid rgba(251,113,133,0.3)" }}>
+          <div style={{ fontSize: ipadDense(11), color: "#fb7185", fontWeight: "bold", marginBottom: 4 }}>⚠ DEBUG_MODE is currently TRUE</div>
+          <div style={{ fontSize: ipadDense(10), color: "rgba(255,255,255,0.6)", lineHeight: 1.5 }}>Set <code>DEBUG_MODE = false</code> at top of App.jsx before App Store submission. The 🛠 badge will disappear and this menu will be unreachable.</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Floating "🛠 DEBUG" badge — bottom-right corner, always visible when DEBUG_MODE=true.
+// Bottom-right avoids the iPad/iPhone status bar (battery, signal indicators)
+// which was hiding/blocking the top-right placement.
+function DebugBadge({ onClick }) {
+  const handleTap = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    onClick();
+  };
+  return (
+    <div
+      onClick={handleTap}
+      onTouchEnd={handleTap}
+      style={{
+        position: "fixed",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
+        right: 12,
+        zIndex: 999999,
+        padding: "10px 16px",
+        borderRadius: 24,
+        background: "rgba(220,38,38,0.95)",
+        color: "#fff",
+        fontSize: 13,
+        fontWeight: "bold",
+        fontFamily: "Georgia,serif",
+        letterSpacing: 1,
+        cursor: "pointer",
+        boxShadow: "0 4px 16px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.4)",
+        userSelect: "none",
+        WebkitUserSelect: "none",
+        touchAction: "manipulation",
+        pointerEvents: "auto",
+        whiteSpace: "nowrap"
+      }}>🛠 DEBUG</div>
+  );
+}
+
 export default function App() {
   // ── iOS safe-area handling ────────────────────────────────────
   // Inside a Capacitor iOS WebView, the env(safe-area-inset-top) variable only
@@ -2080,7 +2354,12 @@ export default function App() {
   const [authState, setAuthState] = useState("loading");
   const [user, setUser] = useState(null);
   const [showFarewell, setShowFarewell] = useState(false);
-  const [farewellData, setFarewellData] = useState({ totalScore:0, bestWord:"", bestWordScore:0 });
+  const [farewellData, setFarewellData] = useState({ totalScore:0, bestWord:"", bestWordScore:0, shareText:"" });
+  // v74 (Option A): App-level share menu for the Farewell "Share My Results" flow.
+  // Fed by farewellData.shareText (precomputed in GameScreen). Independent of the
+  // GameScreen Perfect Day share, which is untouched.
+  const [showResultsShareMenu, setShowResultsShareMenu] = useState(false);
+  const [resultsShareCopied, setResultsShareCopied] = useState(false);
   const [postFarewellTab, setPostFarewellTab] = useState(null);
   const showFarewellRef = useRef(false);
   useEffect(() => { showFarewellRef.current = showFarewell; }, [showFarewell]);
@@ -2095,12 +2374,11 @@ export default function App() {
         if (wasGuest) {
           // Clear active guest session so they have to re-acknowledge "Continue as Guest"
           localStorage.removeItem("ll_guest");
-          // Wipe ephemeral guest game data — clean slate for the next guest session
-          localStorage.removeItem("ll_stats");
-          localStorage.removeItem("ll_lifetime");
-          localStorage.removeItem("ll_badges_lifetime");
-          localStorage.removeItem("ll_time_leaderboard");
-          localStorage.removeItem("ll_daily_state");
+          // NOTE: We intentionally do NOT wipe ll_stats, ll_lifetime, ll_badges_lifetime,
+          // or ll_time_leaderboard here. Guest progress is cumulative on this device —
+          // lifetime points, stats, and badges persist across guest sessions. The
+          // v1.1 backlog includes a feature to migrate guest progress to an account
+          // when they sign up.
           // Mark them as "returning guest" so AuthScreen shows the right copy
           localStorage.setItem("ll_guest_returning", "1");
         }
@@ -2108,7 +2386,14 @@ export default function App() {
       }
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) { setUser(session.user); setAuthState("playing"); }
+      if (event === "SIGNED_IN" && session) {
+        // v97: Clear any lingering guest flag on sign-in. Without this, a player who
+        // was in Guest mode and then signs into an account keeps ll_guest="1", so
+        // gameplay saves misattribute their records to "Guest" (the phantom-Guest
+        // leaderboard-entry bug). A signed-in session must never be treated as guest.
+        localStorage.removeItem("ll_guest");
+        setUser(session.user); setAuthState("playing");
+      }
       if (event === "SIGNED_OUT") {
         // Don't kick the user to auth if they're viewing a Farewell screen — they're
         // mid-celebration and shouldn't be interrupted by token refresh failures.
@@ -2125,8 +2410,62 @@ export default function App() {
   }, []);
   const [showCelebrate, setShowCelebrate] = useState(() => window.location.hash === '#celebrate');
   const [showAdmin, setShowAdmin] = useState(() => new URLSearchParams(window.location.search).get('admin') === '1');
+  // Debug menu state — only meaningful when DEBUG_MODE = true
+  const [showDebugMenu, setShowDebugMenu] = useState(false);
+  const [debugAction, setDebugAction] = useState(null);
+  // Local handlers for debug actions that operate at App level (vs GameScreen level)
+  const handleDebugAction = (action) => {
+    if (action === "go-welcome") {
+      // Force back to Welcome/Game screen
+      setShowFarewell(false);
+      setShowCelebrate(false);
+      // GameScreen will read this via debugAction prop and clear its own intro/menu state
+      setDebugAction("go-welcome");
+      return;
+    }
+    if (action === "wipe-local") {
+      try {
+        // Preserve auth + guest flag, wipe game data only
+        const keysToWipe = Object.keys(localStorage).filter(k => k.startsWith("ll_") && k !== "ll_guest");
+        keysToWipe.forEach(k => localStorage.removeItem(k));
+        alert("✓ Wiped " + keysToWipe.length + " localStorage keys. App will reload.");
+        setTimeout(() => window.location.reload(), 500);
+      } catch (e) { alert("Wipe error: " + e.message); }
+      return;
+    }
+    if (action === "become-guest") {
+      // Instantly switch to Guest mode. If currently signed in, sign out first.
+      (async () => {
+        try {
+          if (user) await signOut();
+          setUser(null);
+          localStorage.setItem("ll_guest", "1");
+          setAuthState("playing");
+          // Force a reload to ensure clean state — GameScreen needs to re-mount
+          // with isGuest=true and the correct initial state.
+          setTimeout(() => window.location.reload(), 200);
+        } catch (e) { alert("Become Guest error: " + e.message); }
+      })();
+      return;
+    }
+    if (action === "sign-out-to-auth") {
+      // Full sign-out flow: clears auth, routes to AuthScreen where user can
+      // pick Guest / Sign In / Sign Up.
+      (async () => {
+        try {
+          await signOut();
+          setUser(null);
+          localStorage.removeItem("ll_guest");
+          setAuthState("auth");
+        } catch (e) { alert("Sign Out error: " + e.message); }
+      })();
+      return;
+    }
+    // All other actions are delegated to GameScreen via debugAction prop
+    setDebugAction(action);
+  };
   const handleGuest = () => { localStorage.setItem("ll_guest","1"); setAuthState("playing"); };
-  const handleLogin = async () => { const session = await getSession(); if (session) { setUser(session.user); setAuthState("playing"); } };
+  const handleLogin = async () => { const session = await getSession(); if (session) { localStorage.removeItem("ll_guest"); setUser(session.user); setAuthState("playing"); } };
   const handleSignOut = async () => { await signOut(); localStorage.removeItem("ll_guest"); setAuthState("auth"); };
   // From guest upsell modal in GameScreen: clear guest flag and route to AuthScreen for signup.
   const handleGuestUpsellSignUp = () => {
@@ -2134,9 +2473,12 @@ export default function App() {
     setAuthState("auth");
   };
   // Delete Account (Apple App Store guideline 5.1.1(v) requires in-app account deletion).
-  // Removes the user's rows from players, daily_sessions, and game_state tables,
-  // signs out, and clears all local storage. Word reports are kept anonymously
-  // (their player_name field is scrubbed but the report data remains for community moderation).
+  // v69: calls the server-side delete_user_account() RPC (SECURITY DEFINER function in
+  // Supabase) which deletes the user's daily_sessions, game_state, and players rows AND
+  // the auth.users login identity (the auth-user deletion can only be done server-side
+  // with elevated rights — the prior client-side code left the auth user behind, so the
+  // app still recognized "deleted" accounts). word_reports is intentionally left untouched
+  // (community moderation data, no reliable per-user link). Then signs out + wipes local storage.
   const handleDeleteAccount = useCallback(async () => {
     try {
       const session = await getSession();
@@ -2144,21 +2486,26 @@ export default function App() {
         alert("Not signed in. Nothing to delete.");
         return;
       }
-      const uid = session.user.id;
-      // Scrub word_reports first (anonymize player_name instead of deleting the report itself)
-      try { await supabase.from("word_reports").update({ player_name: "[deleted]" }).eq("player_id", uid); } catch {}
-      // Delete user-owned rows
-      try { await supabase.from("daily_sessions").delete().eq("player_id", uid); } catch {}
-      try { await supabase.from("game_state").delete().eq("player_id", uid); } catch {}
-      try { await supabase.from("players").delete().eq("id", uid); } catch {}
+      // Server-side full deletion (data rows + auth user) via SECURITY DEFINER RPC.
+      const { error: rpcError } = await supabase.rpc("delete_user_account");
+      if (rpcError) {
+        alert("Deletion failed: " + (rpcError.message || "Unknown error") + "\n\nPlease email hello@letterloot.net for help.");
+        return;
+      }
       // Sign out and wipe local storage entirely so no remnants persist
       try { await signOut(); } catch {}
       try {
+        // v99: corrected to match the keys the app ACTUALLY writes. Previously this list
+        // named three phantom keys that are never written (ll_time_leaderboard, ll_daily_state,
+        // ll_badges_lifetime) while MISSING four real user-data keys (ll_times, ll_alltime,
+        // ll_badges_v2, ll_daily_history) — so a deleted user's time leaderboard, all-time data,
+        // badges, and daily history persisted locally on the device (e.g. the "Frankie V." ghost
+        // best-time). ll_tour_done is intentionally NOT wiped — the tour is device-level and
+        // always available to anyone. ll_photo is also removed elsewhere but kept here for safety.
         const keysToClear = [
-          "ll_guest","ll_stats","ll_lifetime","ll_badges_lifetime","ll_time_leaderboard",
-          "ll_daily_state","ll_session","ll_completed_today","ll_pd_acknowledged_today",
-          "ll_wotd","ll_tour_done","ll_name","ll_photo","ll_nickname","ll_longest",
-          "ll_guest_returning"
+          "ll_guest","ll_guest_returning","ll_stats","ll_lifetime","ll_badges_v2",
+          "ll_times","ll_alltime","ll_daily_history","ll_session","ll_completed_today",
+          "ll_pd_acknowledged_today","ll_wotd","ll_name","ll_photo","ll_nickname","ll_longest"
         ];
         keysToClear.forEach(k => { try { localStorage.removeItem(k); } catch {} });
       } catch {}
@@ -2170,11 +2517,59 @@ export default function App() {
     }
   }, []);
   const handleShowFarewell = (data) => { setFarewellData(data); setShowFarewell(true); };
+
+  // v74 (Option A): App-level "Share My Results" menu for the Farewell screen.
+  // Uses the precomputed farewellData.shareText. Mirrors GameScreen's reliable
+  // Text(sms:)/Email(mailto:)/Copy(Capacitor Clipboard) channels.
+  const openResultsShareMenu = () => setShowResultsShareMenu(true);
+  const resultsShareViaText = () => {
+    const text = farewellData.shareText || "";
+    window.location.href = `sms:&body=${encodeURIComponent(text)}`;
+    setShowResultsShareMenu(false);
+  };
+  const resultsShareViaEmail = () => {
+    const text = farewellData.shareText || "";
+    window.location.href = `mailto:?subject=${encodeURIComponent("My LetterLoot results today")}&body=${encodeURIComponent(text)}`;
+    setShowResultsShareMenu(false);
+  };
+  const resultsShareViaCopy = async () => {
+    const text = farewellData.shareText || "";
+    try {
+      await Clipboard.write({ string: text });
+      setResultsShareCopied(true);
+      setTimeout(() => setResultsShareCopied(false), 4000);
+    } catch (e) {
+      try { if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(text); setResultsShareCopied(true); setTimeout(() => setResultsShareCopied(false), 4000); } }
+      catch (e2) { alert("Copy failed. Please try Text Message or Email instead."); }
+    }
+    setShowResultsShareMenu(false);
+  };
+  const renderResultsShareMenu = () => (
+    <div style={{position:"fixed",inset:0,zIndex:100000,background:"rgba(0,0,0,0.78)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setShowResultsShareMenu(false)}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:`${ipadTour(24)}px ${ipadTour(20)}px`,border:"2px solid rgba(246,211,101,0.5)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:ipadTour(340),width:"100%",textAlign:"center"}}>
+        <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f6d365",marginBottom:ipadTour(6),letterSpacing:1}}>Share Your Results</div>
+        <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.65)",marginBottom:ipadTour(20)}}>Choose how to share your day</div>
+        <button onClick={resultsShareViaText} style={{width:"100%",padding:`${ipadTour(14)}px ${ipadTour(16)}px`,marginBottom:ipadTour(10),borderRadius:12,background:"linear-gradient(135deg,#34d399,#10b981)",color:"#003322",fontSize:ipadTour(15),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>💬 Text Message</button>
+        <button onClick={resultsShareViaEmail} style={{width:"100%",padding:`${ipadTour(14)}px ${ipadTour(16)}px`,marginBottom:ipadTour(10),borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:ipadTour(15),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>✉️ Email</button>
+        <button onClick={resultsShareViaCopy} style={{width:"100%",padding:`${ipadTour(14)}px ${ipadTour(16)}px`,marginBottom:ipadTour(14),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(15),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>{resultsShareCopied?"✓ Copied!":"📋 Copy"}</button>
+        <div style={{fontSize:ipadTour(10),color:"rgba(255,255,255,0.45)",marginBottom:ipadTour(14),fontStyle:"italic"}}>Copy works for Twitter, Facebook, Notes, and anywhere else you want to paste.</div>
+        <button onClick={()=>setShowResultsShareMenu(false)} style={{width:"100%",padding:`${ipadTour(10)}px ${ipadTour(14)}px`,borderRadius:11,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.85)",fontSize:ipadTour(13),fontFamily:"Georgia,serif",cursor:"pointer"}}>← Cancel</button>
+      </div>
+    </div>
+  );
   // Close just dismisses the screen back to the game's play tab — does NOT sign out.
   // (Previous buggy behavior kicked logged-in users back to the auth screen.)
   const handleFarewellDone = () => { setShowFarewell(false); setPostFarewellTab("play"); };
   const handleFarewellStats = () => { setShowFarewell(false); setPostFarewellTab("stats"); };
-  const handleFarewellLeaderboard = () => { setShowFarewell(false); setPostFarewellTab("leaderboard"); };
+  // v59: Guest tapping Leaderboard from Farewell → routes to Guest Upsell, not Leaderboard.
+  const handleFarewellLeaderboard = () => {
+    setShowFarewell(false);
+    if (localStorage.getItem("ll_guest") === "1") {
+      setPostFarewellTab("guest-upsell");
+    } else {
+      setPostFarewellTab("leaderboard");
+    }
+  };
   // Play Again from Farewell: "now" → fresh game immediately; "later"/"tomorrow" → close
   // and return to game (player navigates back themselves whenever they want)
   const handleFarewellPlayAgain = (choice) => {
@@ -2186,8 +2581,27 @@ export default function App() {
       setPostFarewellTab("play");
     }
   };
-  if (showAdmin) return <AdminScreen onExit={()=>setShowAdmin(false)}/>;
-  if (showCelebrate) return (
+  // ── Debug menu / badge wrapper ──
+  // When DEBUG_MODE is true, every screen gets a floating "🛠 DEBUG" badge top-right
+  // and the menu screen can be entered/exited.
+  if (DEBUG_MODE && showDebugMenu) {
+    let mode = "unknown";
+    if (showAdmin) mode = "Admin";
+    else if (showCelebrate) mode = "Celebrate";
+    else if (showFarewell) mode = "Farewell";
+    else if (authState === "loading") mode = "Loading";
+    else if (authState === "auth") mode = "Auth";
+    else mode = "Game";
+    return <DebugMenu onClose={()=>setShowDebugMenu(false)} onAction={handleDebugAction} currentMode={mode}/>;
+  }
+
+  // Helper to wrap any screen with the floating DEBUG badge
+  const withBadge = (screen) => DEBUG_MODE ? (
+    <>{screen}<DebugBadge onClick={()=>setShowDebugMenu(true)}/></>
+  ) : screen;
+
+  if (showAdmin) return withBadge(<AdminScreen onExit={()=>setShowAdmin(false)}/>);
+  if (showCelebrate) return withBadge(
     <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',color:'#f5f0e8',padding:'30px 24px',position:'relative',overflow:'hidden'}} onClick={()=>setShowCelebrate(false)}>
       <Starfield/>
       <ConfettiCanvas active={true} rainbow={true}/>
@@ -2202,23 +2616,26 @@ export default function App() {
           Daily word puzzle · Every letter has a value · Free to play!
         </div>
         <button onClick={()=>setShowCelebrate(false)} style={{width:'100%',padding:'16px',borderRadius:14,background:'linear-gradient(135deg,#f6d365,#fda085)',color:'#1a1a2e',fontSize:16,fontWeight:'bold',fontFamily:'Georgia,serif',border:'none',cursor:'pointer',boxShadow:'0 0 24px rgba(246,211,101,0.4)'}}>
-          ✏️ Play LetterLoot Free!
+          Play LetterLoot Free!
         </button>
         <div style={{fontSize:10,color:'rgba(255,255,255,0.3)',marginTop:14}}>Tap anywhere to dismiss</div>
       </div>
     </div>
   );
-  if (showFarewell) return <FarewellScreen {...farewellData} onDone={handleFarewellDone} onViewStats={handleFarewellStats} onViewLeaderboard={handleFarewellLeaderboard} onPlayAgain={handleFarewellPlayAgain}/>;
-  if (authState === "loading") return (
+  if (showFarewell) return withBadge(<>
+    <FarewellScreen {...farewellData} isGuest={!user} onDone={handleFarewellDone} onViewStats={handleFarewellStats} onViewLeaderboard={handleFarewellLeaderboard} onPlayAgain={handleFarewellPlayAgain} onShareResults={farewellData.shareText ? openResultsShareMenu : null}/>
+    {showResultsShareMenu && renderResultsShareMenu()}
+  </>);
+  if (authState === "loading") return withBadge(
     <div style={{ minHeight:"100vh", background:"#0a0820", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"Georgia,serif", position:"relative" }}>
       <Starfield/><div style={{textAlign:"center",zIndex:1}}><LetterLootLogo titleFontSize={28} boxPadding="8px 24px"/><div style={{fontSize:12,color:"rgba(255,255,255,0.4)",letterSpacing:2,marginTop:16}}>LOADING…</div></div>
     </div>
   );
-  if (authState === "auth") return <AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>;
-  return <GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)} onSignUpRequest={handleGuestUpsellSignUp} onDeleteAccount={handleDeleteAccount}/>;
+  if (authState === "auth") return withBadge(<AuthScreen onGuest={handleGuest} onLogin={handleLogin}/>);
+  return withBadge(<GameScreen user={user} onSignOut={handleSignOut} onFarewell={handleShowFarewell} initialTab={postFarewellTab} onTabConsumed={()=>setPostFarewellTab(null)} onSignUpRequest={handleGuestUpsellSignUp} onDeleteAccount={handleDeleteAccount} debugAction={debugAction} onDebugConsumed={()=>setDebugAction(null)}/>);
 }
 
-function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, onSignUpRequest, onDeleteAccount }) {
+function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, onSignUpRequest, onDeleteAccount, debugAction, onDebugConsumed }) {
   const [showGuestUpsell, setShowGuestUpsell] = useState(false);
   // Delete Account two-step confirmation (May 15, 2026).
   // Apple App Store guideline 5.1.1(v) requires in-app account deletion.
@@ -2231,8 +2648,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const playerNameRef = useRef("");
   const [editingName, setEditingName] = useState(false);
   const [showTour, setShowTour] = useState(false);
-  const [rejectedWord, setRejectedWord] = useState(null);
-  const [reportSent, setReportSent] = useState(false);
+  // v60: removed rejectedWord + reportSent state — modal was dead code (bug #14)
   const [online, setOnline] = useState(navigator.onLine);
   const [savedIndicator, setSavedIndicator] = useState(false);
   const completeTour = () => { localStorage.setItem("ll_tour_done","1"); setShowTour(false); requestNotificationPermission(); };
@@ -2253,6 +2669,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const wotdData = useRef(getCachedWordOfTheDay() || null);
   const [wotd, setWotd] = useState(wotdData.current?.word || null);
   const [wotdFound, setWotdFound] = useState(wotdData.current?.found || false);
+  // v76 (item 15): mirror wotdFound into a ref so the async L5-completion handler reads
+  // the CURRENT value (not a stale closure) when deciding Perfect Day eligibility.
+  const wotdFoundRef = useRef(wotdData.current?.found || false);
+  useEffect(() => { wotdFoundRef.current = wotdFound; }, [wotdFound]);
   const [showWotdReminder, setShowWotdReminder] = useState(false);
   const [wotdCelebration, setWotdCelebration] = useState(false);
   const [lootCelebration, setLootCelebration] = useState(null); // {word, score, letter}
@@ -2270,7 +2690,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         const allLevelTiles = [];
         for (let lv = 1; lv <= 5; lv++) {
           const rng = lv === 1 ? seededRandom(getDailySeed()) : seededRandom(getDailySeed() + lv * 999);
-          const tcount = 42 + (lv - 1) * 6;
+          const tcount = 42 + (lv - 1) * 7;
           const bp = getBonusPositions(tcount, getBonusCount(lv), rng);
           const tiles = generateLevelTiles(lv, 0, rng, bp);
           allLevelTiles.push(tiles.map(t => t.letter));
@@ -2324,10 +2744,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [confetti, setConfetti] = useState(false);
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
   const [levelComplete, setLevelComplete] = useState(ss?.levelComplete || false);
+  // TIMER FREEZE (v67): between levels, the clock must stay frozen until the
+  // player's first tap of the new level. awaitingFirstTap gates the fair-timer
+  // effect so it won't auto-start the timer on level entry.
+  const [awaitingFirstTap, setAwaitingFirstTap] = useState(false);
+  const awaitingFirstTapRef = useRef(false);
+  useEffect(() => { awaitingFirstTapRef.current = awaitingFirstTap; }, [awaitingFirstTap]);
+  // v71: mirror levelComplete into a ref so async handlers (celebration dismiss
+  // setTimeouts) can read the CURRENT value instead of a stale closure value.
+  const levelCompleteRef = useRef(false);
+  useEffect(() => { levelCompleteRef.current = levelComplete; }, [levelComplete]);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showNewGameConfirm, setShowNewGameConfirm] = useState(false);
   const [showStuckModal, setShowStuckModal] = useState(false);
+  // v83 (item 18): confirm dialog for the always-available "End Game & Share Results"
+  // button at the base of the tile board — lets a player end their day and share their
+  // results anytime, without needing the game to detect they're "stuck".
+  const [showEndGameConfirm, setShowEndGameConfirm] = useState(false);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(false);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
@@ -2344,11 +2778,34 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // after the player closed it earlier in the day.
   const markPDAcknowledged = useCallback(() => {
     try { localStorage.setItem("ll_pd_acknowledged_today", getTodayKey()); } catch {}
+    // v64 (May 26): Removed automatic Guest streak upsell trigger. Previously
+    // Now/Later/Tomorrow would auto-fire showGuestStreakUpsell after 400ms,
+    // creating a confusing flow where every PD button led to upsell.
+    // Per Daryl's design: PD modal buttons should route directly to their
+    // intended destinations. Welcome screen has the upsell baked in for Guests.
   }, []);
   const [showRepeatPerfect, setShowRepeatPerfect] = useState(false);
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
+  // v91: full-screen pirate+leprechaun dance celebration that plays BEFORE the Perfect Day
+  // stats modal. Triggered the first time perfectDayAchieved flips true (see effect below).
+  const [showPirateDance, setShowPirateDance] = useState(false);
+  const pirateDancePlayedRef = useRef(false);
+  // v91: when a Perfect Day is achieved (first time this session), play the pirate dance
+  // celebration overlay, then auto-dismiss it (~5.2s) leaving the stats modal underneath.
+  useEffect(() => {
+    if (perfectDayAchieved && !pirateDancePlayedRef.current) {
+      pirateDancePlayedRef.current = true;
+      setShowPirateDance(true);
+      const t = setTimeout(() => setShowPirateDance(false), 5200);
+      return () => clearTimeout(t);
+    }
+    if (!perfectDayAchieved) pirateDancePlayedRef.current = false;
+  }, [perfectDayAchieved]);
+  // v76 (item 15): near-miss — completed all 5 levels cleanly (PD-eligible) but didn't
+  // find the Word of the Day, so no Perfect Day. Shows an encouraging explanatory modal.
+  const [showWotdMissedPD, setShowWotdMissedPD] = useState(false);
   const [levelTime, setLevelTime] = useState(ss?.levelTime || 0);
   const [totalTime, setTotalTime] = useState(ss?.totalTime || 0);
   const [selectedLevelView, setSelectedLevelView] = useState(1);
@@ -2358,6 +2815,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [pulseTime, setPulseTime] = useState(false);
   const [newBestTime, setNewBestTime] = useState(ss?.newBestTime || false);
   const [shareCopied, setShareCopied] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  // v72: which text-builder the share menu should use — "perfect" (Perfect Day) or
+  // "results" (non-Perfect-Day day's results). Set when opening the menu.
+  const [shareMode, setShareMode] = useState("perfect");
   const [shareLLCopied, setShareLLCopied] = useState(false);
   const [showIntro, setShowIntro] = useState(() => {
     try {
@@ -2393,6 +2854,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [perfectDayStreakBonus, setPerfectDayStreakBonus] = useState(0);
   const [showStreakBonus, setShowStreakBonus] = useState(false);
+  // v57: New popup shown to Guests after PD modal — Guests don't accumulate
+  // streak bonuses, so we tell them what they're missing and offer a sign-up.
+  const [showGuestStreakUpsell, setShowGuestStreakUpsell] = useState(false);
   const [streakBonusCount, setStreakBonusCount] = useState(1);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
   const [showReadyScreen, setShowReadyScreen] = useState(false);
@@ -2424,13 +2888,135 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   useEffect(() => {
     if (!initialTab) return;
     if (initialTab === "play_now") {
-      // Special sentinel from Farewell screen — trigger a fresh game start
+      // Special sentinel from Farewell screen — trigger a fresh game start.
+      // CRITICAL: also set tab to "play" so the gameplay UI actually renders.
+      // (Bug fix May 24, 2026: tab was initialized to "play_now" which matches
+      // no conditional render branch, causing a blank screen.)
+      setTab("play");
       handleFullReset({skipWelcome: true});
+    } else if (initialTab === "guest-upsell") {
+      // v59: Guest tapped Leaderboard from Farewell — open Guest Upsell modal
+      // on top of the play screen instead of routing to Leaderboard.
+      setTab("play");
+      setShowGuestUpsell(true);
     } else {
       setTab(initialTab);
     }
     onTabConsumed?.();
   }, [initialTab]);
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🛠 DEBUG ACTION HANDLER (only fires when DEBUG_MODE is true and user
+  // taps an action button in the Debug Menu). Processes the action then
+  // calls onDebugConsumed() to clear it.
+  // ═══════════════════════════════════════════════════════════════
+  useEffect(() => {
+    if (!DEBUG_MODE || !debugAction) return;
+    try {
+      // Level jumps — fresh game starting at chosen level
+      if (debugAction.startsWith("jump-L")) {
+        const targetLevel = parseInt(debugAction.replace("jump-L", ""), 10);
+        if (targetLevel >= 1 && targetLevel <= 5) {
+          setShowIntro(false);
+          setTab("play");
+          // Reset to L1, then advance to target level via handleNextLevel
+          handleFullReset({skipWelcome: true});
+          // Advance levels via timer to let React state settle
+          let i = 1;
+          const advance = () => {
+            if (i >= targetLevel) return;
+            handleNextLevel(false);
+            i++;
+            setTimeout(advance, 50);
+          };
+          setTimeout(advance, 100);
+        }
+      }
+      // Modal triggers
+      else if (debugAction === "modal-perfect-day") {
+        setShowIntro(false);
+        setTab("play");
+        setPerfectDayAchieved(true);
+      }
+      else if (debugAction === "modal-streak") {
+        setShowIntro(false);
+        setTab("play");
+        setPerfectDayStreakBonus(15000);
+        setStreakBonusCount(14);
+        setShowStreakBonus(true);
+      }
+      else if (debugAction === "modal-repeat-pd") {
+        setShowIntro(false);
+        setTab("play");
+        setShowRepeatPerfect(true);
+      }
+      else if (debugAction === "modal-farewell") {
+        // FarewellScreen is rendered at the App level, so we trigger via onFarewell prop
+        onFarewell?.({
+          totalScore: 12345,
+          longestWord: "PERFORMER",
+          longestWordScore: 51,
+          perfectDayCount: 0,
+          history: dailyHistory
+        });
+      }
+      else if (debugAction === "modal-stuck") {
+        setShowIntro(false);
+        setTab("play");
+        setShowStuckModal(true);
+      }
+      else if (debugAction === "modal-buy-level") {
+        setShowIntro(false);
+        setTab("play");
+        setShowBuyModal(true);
+      }
+      else if (debugAction === "modal-guest-upsell") {
+        setShowIntro(false);
+        setTab("play");
+        setShowGuestUpsell(true);
+      }
+      // State helpers
+      else if (debugAction === "fresh-game") {
+        handleFullReset({skipWelcome: false});
+      }
+      else if (debugAction === "near-end") {
+        // Start a fresh L1 game first (ensures tiles state is clean and populated),
+        // then mark most tiles as used so player is "near end" with just a few left.
+        // Need setTimeout chain to let React state settle between operations.
+        setShowIntro(false);
+        setTab("play");
+        handleFullReset({skipWelcome: true});
+        setTimeout(() => {
+          setTiles(prev => {
+            if (!prev || prev.length <= 3) return prev;
+            // Leave 3 random tiles unused (varied for testing different scenarios)
+            const keepUnused = new Set();
+            while (keepUnused.size < 3) {
+              keepUnused.add(Math.floor(Math.random() * prev.length));
+            }
+            return prev.map((tile, idx) => keepUnused.has(idx) ? tile : { ...tile, used: true });
+          });
+          // Also dismiss the Ready screen so player lands directly on the near-end board
+          setShowReadyScreen(false);
+        }, 300);
+      }
+      else if (debugAction === "go-welcome") {
+        // Return to Welcome / Intro screen
+        setShowIntro(true);
+        setTab("play");
+        setPerfectDayAchieved(false);
+        setShowRepeatPerfect(false);
+        setShowStreakBonus(false);
+        setShowStuckModal(false);
+        setShowBuyModal(false);
+        setShowGuestUpsell(false);
+      }
+    } catch (e) {
+      // Silent — debug action errors shouldn't crash gameplay
+      console.error("Debug action error:", e);
+    }
+    onDebugConsumed?.();
+  }, [debugAction]);
 
   // GLOBAL GUARD: If user lands on the play tab with a completed game (or empty L5+ board),
   // force-show the Play Again screen instead of a dead board. Catches all entry paths
@@ -2455,7 +3041,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       // BUG FIX (May 2026): Only show the showRepeatPerfect modal if the player actually
       // achieved a Perfect Day. Otherwise it briefly flashes "PERFECT DAY!" before the
       // farewell screen takes over — confusing and incorrect.
-      if (boardEmpty && perfectDayRef.current === true) {
+      if (boardEmpty && perfectDayRef.current === true && wotdFoundRef.current === true) {
         if (!completedToday) {
           try { localStorage.setItem("ll_completed_today", getTodayKey()); } catch {}
         }
@@ -2510,6 +3096,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
   useEffect(() => {
     const init = async () => {
+      // v81: track whether the restored session is already on a completed level, so we
+      // don't arm the first-tap gate over a level that's awaiting Next-Level advance.
+      let restoredComplete = false;
       if (!isGuest && user) {
         setCloudSyncing(true);
         const [gameState, dailySession] = await Promise.all([loadGameState(user.id), loadDailySession(user.id, getTodayKey())]);
@@ -2573,7 +3162,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             setLongestWordToday(dailySession.longest_word_today || "");
             levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
             setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
-            if (dailySession.level_complete) setLevelComplete(true);
+            if (dailySession.level_complete) { setLevelComplete(true); restoredComplete = true; }
             if (dailySession.undo_used) setUndoUsed(true);
           }
         }
@@ -2587,6 +3176,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setPlayerName(savedName); playerNameRef.current = savedName;
       }
       justResetRef.current = false;
+      // v81 FIX: after restoring a saved session (cloud or local), the resumed level must
+      // wait for the player's first tap before the clock runs — same rule as a fresh level.
+      // The restore branches above load saved levelTime/tiles but never armed the gate, so
+      // on app-reopen the timer started immediately on the restored level (the "Let's Go →
+      // restored L2 → clock running before any tile" bug). Arm the gate + stop the timer here
+      // (covers every restore path) UNLESS the level is already complete (awaiting Next-Level
+      // advance, which arms its own gate). The gate clears on first tile tap.
+      const alreadyComplete = restoredComplete || ss?.levelComplete === true;
+      if (!alreadyComplete) {
+        stopTimer();
+        setAwaitingFirstTap(true); awaitingFirstTapRef.current = true;
+      }
       if (!localStorage.getItem("ll_tour_done")) setShowTour(true);
       if (typeof Notification !== "undefined" && Notification.permission === "granted") scheduleNotifications();
     };
@@ -2607,7 +3208,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const gameIsComplete = (() => {
       try { return localStorage.getItem("ll_completed_today") === todayKey; } catch { return false; }
     })();
-    const cloudPerfectDay = gameIsComplete && perfectDayRef.current === true;
+    const cloudPerfectDay = gameIsComplete && perfectDayRef.current === true && wotdFoundRef.current === true;
     await Promise.all([
       saveDailySession(user.id, todayKey, {
         level, totalScore: totalRef.current, levelScore: levelScoreRef.current,
@@ -2665,12 +3266,56 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   }, [level, tiles, badgeStore, streak, longestWordToday, levelComplete, newBestTime, undoUsed]);
 
   const startTimer = useCallback(() => {
+    // v77 DURABLE GUARD: never start the clock while we're waiting for the player's
+    // first tap of a level. This makes the freeze robust regardless of which path
+    // calls startTimer() — fixing the recurrent "timer moving before any taps" leak
+    // at its root instead of patching individual callers. The tile-tap handler clears
+    // awaitingFirstTap, after which startTimer() (via the fair-timer effect) runs.
+    if (awaitingFirstTapRef.current) return;
     if (timerRef.current) return;
     timerRef.current = setInterval(() => { levelTimeRef.current += 1; totalTimeRef.current += 1; setLevelTime(levelTimeRef.current); setTotalTime(totalTimeRef.current); }, 1000);
   }, []);
   const stopTimer = useCallback(() => { clearInterval(timerRef.current); timerRef.current = null; }, []);
-  const resetLevelTimer = useCallback(() => { levelTimeRef.current = 0; setLevelTime(0); }, []);
+  // v79 CENTRAL FIX: resetLevelTimer now also stops the clock AND arms the first-tap
+  // gate. Every level-entry/reset path calls resetLevelTimer(), so doing the freeze
+  // here guarantees the timer stays at 0 until the player's first tap — regardless of
+  // which path (handleNextLevel, doLevelReset, buy, fresh game) triggered the new level.
+  // This replaces the fragile per-caller gate-arming that kept leaking.
+  const resetLevelTimer = useCallback(() => {
+    levelTimeRef.current = 0; setLevelTime(0);
+    stopTimer();
+    setAwaitingFirstTap(true); awaitingFirstTapRef.current = true;
+  }, [stopTimer]);
   useEffect(() => { stopTimer(); return () => stopTimer(); }, []); // timer starts on Lets Go
+
+  // ── Fair-timer effect (May 23, 2026) ────────────────────────────────────
+  // Pause the game timer (level + total) any time a celebration or end-of-level
+  // modal is showing. The player cannot act during these screens, so it would
+  // be unfair to keep their time running. Also covers Stuck (game-detected, not
+  // user-initiated) and the WoD reminder. User-initiated modals (Buy, Reset,
+  // Undo, NewGame) are intentionally excluded — the player is actively deciding
+  // and the time spent is part of their gameplay.
+  // Note: WoD and Loot celebrations also call stopTimer() directly in their
+  // setters — this effect is harmless redundancy for those (stopTimer is
+  // idempotent) and ensures full coverage for the others.
+  useEffect(() => {
+    // v80: STOP-ONLY. This effect pauses the timer whenever a blocking modal/screen is
+    // showing, but NEVER auto-starts it. Starting the clock happens ONLY from an actual
+    // tile tap (first tap of a level) or an explicit mid-play resume (un-pause, badge
+    // dismiss, post-validation, fresh-tiles). This permanently removes the recurrent leak
+    // where a modal DISMISS (WoD reminder, celebration, intro) auto-resumed the clock
+    // before the player's first tap. The startTimer() guard (awaitingFirstTapRef) is a
+    // second layer of protection.
+    const blocking = levelComplete || perfectDayAchieved || showRepeatPerfect ||
+                     showStreakBonus || wotdCelebration || lootCelebration ||
+                     showWotdReminder || showStuckModal ||
+                     showIntro || showReadyScreen || awaitingFirstTap;
+    if (blocking) {
+      stopTimer();
+    }
+  }, [levelComplete, perfectDayAchieved, showRepeatPerfect, showStreakBonus,
+      wotdCelebration, lootCelebration, showWotdReminder, showStuckModal,
+      showIntro, showReadyScreen, awaitingFirstTap, tab, startTimer, stopTimer]);
 
   const handlePause = () => {
     if (paused) { setPaused(false); startTimer(); if (musicOn) startMusic(); }
@@ -2711,8 +3356,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         // Brief pause between badges so player can register each one
         setTimeout(() => processBadgeQueue(), 400);
       } else {
-        // Queue empty — restart timer if still in active gameplay
-        if (!pausedRef.current && !levelComplete) startTimer();
+        // Queue empty — restart timer ONLY if still in active gameplay.
+        // v81 FIX: use levelCompleteRef.current (always current) + awaitingFirstTapRef,
+        // NOT the stale `levelComplete` closure value. On level completion, badges are
+        // awarded and this dismiss fires AFTER setLevelComplete(true) — but the closure
+        // captured levelComplete=false, so it wrongly restarted the clock on the
+        // "Level Complete!" screen. The startTimer() guard also blocks if awaiting first tap.
+        if (!pausedRef.current && !levelCompleteRef.current && !awaitingFirstTapRef.current) startTimer();
       }
     }, 5000);
   }, [stopTimer, startTimer, levelComplete]);
@@ -2774,6 +3424,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setTimeout(() => setNewRecord(null), 2500);
   }, []);
 
+  // v100 (item #2c): Perfect Day is a one-clean-shot-per-day challenge. Forfeiting eligibility
+  // (level reset/re-do or buying a level — NOT UNDO, which is PD-safe) stamps a per-day flag so
+  // that "Start New Game" (handleFullReset) can NOT restore PD eligibility for the rest of today.
+  // Replays remain fully playable; they just can't yield today's Perfect Day. The flag is keyed on
+  // today's date, so it goes stale automatically at the next day rollover — no cleanup needed.
+  // UNDO (handleUndo) never calls this, so it never forfeits PD.
+  const forfeitPerfectDay = useCallback(() => {
+    setPerfectDaySync(false);
+    try { localStorage.setItem("ll_pd_forfeited_today", getTodayKey()); } catch {}
+  }, [setPerfectDaySync]);
+
   const handleFullReset = useCallback((opts = {}) => {
     const skipWelcome = opts.skipWelcome === true;
     const rng = seededRandom(getDailySeed());
@@ -2786,7 +3447,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setStreak(0); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
     setShowResetConfirm(false); setShowNewGameConfirm(false); setShowStuckModal(false); setPaused(false);
-    setPerfectDaySync(true); setPerfectDayAchieved(false); setLongestWordToday("");
+    // v100 (item #2c): only restore Perfect Day eligibility if it has NOT already been forfeited
+    // today. Once a player has reset a level / re-done / bought a level today, "Start New Game"
+    // starts non-PD-eligible for the rest of the day — you get one clean shot at Perfect Day.
+    const pdForfeitedToday = (() => { try { return localStorage.getItem("ll_pd_forfeited_today") === getTodayKey(); } catch { return false; } })();
+    setPerfectDaySync(!pdForfeitedToday); setPerfectDayAchieved(false); setLongestWordToday("");
     setShowRepeatPerfect(false); setNewBestTime(false);
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
@@ -2811,7 +3476,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       }
     } catch {}
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
-    setLevelTime(0); setTotalTime(0); startTimer();
+    setLevelTime(0); setTotalTime(0);
+    // v77 FIX: do NOT startTimer() here — this fresh-game reset routes to the Welcome/
+    // Ready screen and the clock must stay frozen until the player's first tap. Arming
+    // awaitingFirstTap keeps the fair-timer effect from running the clock. (This stray
+    // startTimer() was the recurrent "timer moving before any taps" leak.)
+    setAwaitingFirstTap(true); awaitingFirstTapRef.current = true;
     gameIndexRef.current += 1;
     clearLocalSession();
     justResetRef.current = true;
@@ -2830,20 +3500,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (ENABLE_BONUS_LEVELS && isBonusLevel(level)) {
       if (bonusRetryUsed) return; // no more retries on bonus levels
       setBonusRetryUsed(true);
-      setPerfectDaySync(false);
+      forfeitPerfectDay();
     } else if (level === 5) {
       if (totalRef.current < 1000) return;
       totalRef.current -= 1000; setTotalScore(totalRef.current);
-      setPerfectDaySync(false);
+      forfeitPerfectDay();
     } else {
       // Any retry on levels 1-4 forfeits Perfect Day
-      setPerfectDaySync(false);
+      forfeitPerfectDay();
     }
     levelResetCount.current += 1;
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
-    setSelected([]); resetLevelTimer(); setNewBestTime(false);
+    // v79 FIX: a level reset/replay must also freeze the clock until the first tap.
+    // Previously this only called resetLevelTimer() (zeroed the clock) but left the
+    // timer running and the gate unarmed — a source of the pre-tap timer leak.
+    setSelected([]); resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
     setShowResetConfirm(false); setShowStuckModal(false);
-  }, [resetLevelTimer, level, setPerfectDaySync]);
+  }, [resetLevelTimer, stopTimer, level, forfeitPerfectDay]);
 
   const handleUndo = useCallback(() => {
     if (undoUsed || !lastValidEntry || totalRef.current < 1000) return;
@@ -2879,11 +3552,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (!isGuest && user) await updatePlayerName(user.id, playerName);
   };
 
-  const triggerFarewell = useCallback(() => {
-    const bestEntry = submittedRef.current.filter(s => s.valid).reduce((best, s) => !best || s.score > best.score ? s : best, null);
-    onFarewell({ totalScore: totalRef.current, bestWord: bestEntry?.word || "", bestWordScore: bestEntry?.score || 0 });
-  }, [onFarewell]);
-
   const getPerfectDayShareText = useCallback(() => {
     const allValid = submittedRef.current.filter(s => s.valid);
     // CRITICAL: exclude loot words from share — score/length would expose the loot letter
@@ -2897,6 +3565,133 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
     return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — ${getShareUrlLabel()}\n${getShareUrl()}\n🌈🏆`;
   }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
+
+  // Non-Perfect-Day "day's results" share (item 6, added v72). Mirrors the Perfect Day
+  // builder but without the Perfect Day framing — for players who want to share their
+  // progress even when they didn't get a Perfect Day. Includes levels reached, score,
+  // total time, WoD status, best-scoring word, longest word. Keeps the loot-word
+  // exclusion so the daily Loot Letter isn't leaked.
+  const getDayResultsShareText = useCallback(() => {
+    const allValid = submittedRef.current.filter(s => s.valid);
+    const shareableWords = allValid.filter(s => !s.loot);
+    const bestWord = shareableWords.reduce((b, s) => !b || s.score > b.score ? s : b, null);
+    const longestW = shareableWords.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
+    const sharer = playerName ? `${playerName} played LetterLoot today!` : "My LetterLoot results today!";
+    const levelsLine = `\n🎮 Levels Reached: ${Math.min(level, 5)} of 5`;
+    const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
+    const wotdLine = wotdFoundDetails
+      ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts`
+      : `\n🎯 Word of the Day: not found today`;
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCan you beat me? — ${getShareUrlLabel()}\n${getShareUrl()}`;
+  }, [playerName, level, wotd, wotdFoundDetails]);
+
+  // v74 (Option A): triggerFarewell passes the precomputed day-results share text up to
+  // the App-level Farewell screen, so it can offer Text/Email/Copy without needing
+  // GameScreen's share machinery in scope. Placed AFTER getDayResultsShareText to avoid
+  // a temporal-dead-zone reference in the useCallback dependency array.
+  const triggerFarewell = useCallback(() => {
+    const bestEntry = submittedRef.current.filter(s => s.valid).reduce((best, s) => !best || s.score > best.score ? s : best, null);
+    onFarewell({ totalScore: totalRef.current, bestWord: bestEntry?.word || "", bestWordScore: bestEntry?.score || 0, shareText: getDayResultsShareText() });
+  }, [onFarewell, getDayResultsShareText]);
+
+  // Unified share helper (added May 25, 2026): opens the iOS native Share Sheet
+  // via the Capacitor Share plugin (iMessage, Mail, Twitter/X, Notes, Copy, etc.).
+  // Falls back to web Share API, then to clipboard if neither is available.
+  // navigator.clipboard.writeText() previously failed silently inside the
+  // Capacitor WebView because the capacitor:// scheme isn't a "secure context"
+  // for the Clipboard API — that's why "Share Perfect Day" was doing nothing.
+  // Custom Share Menu approach (v54 May 25, 2026): instead of Capacitor's
+  // native iOS share sheet (which on simulator showed only Reminders/Copy/Save
+  // to Files and on real devices is a moving target depending on what apps
+  // the user has installed), present a custom 3-button menu with reliable
+  // channel-specific actions: Text Message (sms:), Email (mailto:), Copy
+  // (Capacitor Clipboard plugin). The Clipboard plugin is used because
+  // navigator.clipboard.writeText silently fails in the Capacitor WebView
+  // (capacitor:// scheme isn't a "secure context" for Web Clipboard API).
+  const sharePerfectDay = useCallback(() => {
+    setShareMode("perfect");
+    setShowShareMenu(true);
+  }, []);
+
+  // v72: open the share menu for a non-Perfect-Day day's-results share (item 6).
+  const shareDayResults = useCallback(() => {
+    setShareMode("results");
+    setShowShareMenu(true);
+  }, []);
+
+  // Pick the active text-builder based on which share was opened.
+  const getActiveShareText = useCallback(() => {
+    return shareMode === "results" ? getDayResultsShareText() : getPerfectDayShareText();
+  }, [shareMode, getDayResultsShareText, getPerfectDayShareText]);
+
+  // Share menu handlers — each does one thing reliably.
+  const shareViaTextMessage = useCallback(() => {
+    const text = getActiveShareText();
+    // sms: URL with body. iOS Messages opens with body pre-filled, user picks recipient.
+    // Note: spec says use &body= (after the SMS number) but iOS also accepts ?body= for no-recipient.
+    const url = `sms:&body=${encodeURIComponent(text)}`;
+    window.location.href = url;
+    setShowShareMenu(false);
+  }, [getActiveShareText]);
+
+  const shareViaEmail = useCallback(() => {
+    const text = getActiveShareText();
+    const subject = shareMode === "results" ? "My LetterLoot results today" : "My Perfect Day on LetterLoot";
+    const url = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(text)}`;
+    window.location.href = url;
+    setShowShareMenu(false);
+  }, [getActiveShareText, shareMode]);
+
+  const shareViaCopy = useCallback(async () => {
+    const text = getActiveShareText();
+    try {
+      // Capacitor Clipboard plugin — reliable in WebView, unlike navigator.clipboard.
+      await Clipboard.write({ string: text });
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 4000);
+    } catch (e) {
+      // Fallback to navigator.clipboard (probably won't work in Capacitor WebView,
+      // but might work if someone runs the app in browser for testing).
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(text);
+          setShareCopied(true);
+          setTimeout(() => setShareCopied(false), 4000);
+        }
+      } catch (e2) {
+        alert("Copy failed. Please try Text Message or Email instead.");
+      }
+    }
+    setShowShareMenu(false);
+  }, [getActiveShareText]);
+
+  // v72: shared render for the Text/Email/Copy share menu, used by both the in-game
+  // Perfect Day flow and the Farewell-screen "Share My Results" flow. Title adapts to shareMode.
+  const renderShareMenu = () => {
+    const title = shareMode === "results" ? "Share Your Results" : "Share Your Perfect Day";
+    const subtitle = shareMode === "results" ? "Choose how to share your day" : "Choose how to share your accomplishment";
+    return (
+      <div style={{position:"fixed",inset:0,zIndex:99999,background:"rgba(0,0,0,0.78)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setShowShareMenu(false)}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:`${ipadTour(24)}px ${ipadTour(20)}px`,border:"2px solid rgba(246,211,101,0.5)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:ipadTour(340),width:"100%",textAlign:"center"}}>
+          <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f6d365",marginBottom:6,letterSpacing:1}}>{title}</div>
+          <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.65)",marginBottom:ipadTour(20)}}>{subtitle}</div>
+          <button onClick={shareViaTextMessage} style={{width:"100%",padding:`${ipadTour(14)}px ${ipadTour(16)}px`,marginBottom:ipadTour(10),borderRadius:12,background:"linear-gradient(135deg,#34d399,#10b981)",color:"#003322",fontSize:ipadTour(15),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            💬 Text Message
+          </button>
+          <button onClick={shareViaEmail} style={{width:"100%",padding:`${ipadTour(14)}px ${ipadTour(16)}px`,marginBottom:ipadTour(10),borderRadius:12,background:"linear-gradient(135deg,#60a5fa,#3b82f6)",color:"#fff",fontSize:ipadTour(15),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            ✉️ Email
+          </button>
+          <button onClick={shareViaCopy} style={{width:"100%",padding:`${ipadTour(14)}px ${ipadTour(16)}px`,marginBottom:ipadTour(14),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(15),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+            📋 Copy
+          </button>
+          <div style={{fontSize:ipadTour(10),color:"rgba(255,255,255,0.45)",marginBottom:ipadTour(14),fontStyle:"italic"}}>Copy works for Twitter, Facebook, Notes, and anywhere else you want to paste.</div>
+          <button onClick={()=>setShowShareMenu(false)} style={{width:"100%",padding:`${ipadTour(10)}px ${ipadTour(14)}px`,borderRadius:11,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.85)",fontSize:ipadTour(13),fontFamily:"Georgia,serif",cursor:"pointer"}}>
+            ← Cancel
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   const fetchLeaderboard = async () => {
     try {
@@ -2917,7 +3712,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,wotd_found&wotd_found=eq.true&limit=2000`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,longest_word_today,top_word,top_word_score&limit=2000`),
       ]);
-      const gs = gsRes.ok ? await gsRes.json() : [];
+      const gsRaw = gsRes.ok ? await gsRes.json() : [];
+      // v59: Filter out Guest entries from the leaderboard. Per spec, Guest
+      // players never appear in rankings. Belt-and-suspenders: syncToCloud
+      // already returns early for Guests so no NEW Guest data writes, but
+      // leftover cloud rows with name="Guest" from before this guard or
+      // from old development data need to be filtered client-side too.
+      const gs = gsRaw.filter(g => {
+        const name = (g.player_name || "").trim().toLowerCase();
+        return name !== "guest" && name !== "";
+      });
       const todaySessions = todayRes.ok ? await todayRes.json() : [];
       // Filter weekSessions client-side using numeric date comparison
       const weekAgoNum = (() => { const d = new Date(Date.now() - 7*86400000); return d.getFullYear()*10000 + (d.getMonth()+1)*100 + d.getDate(); })();
@@ -2929,20 +3733,31 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     } catch { return null; }
   };
 
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const dataUrl = ev.target.result;
+  const handlePhotoChange = async () => {
+    try {
+      const photo = await Camera.getPhoto({
+        quality: 80,
+        width: 400,
+        height: 400,
+        allowEditing: false,
+        resultType: CameraResultType.DataUrl,
+        source: CameraSource.Prompt,
+        promptLabelHeader: 'Profile Photo',
+        promptLabelPhoto: 'Choose from Library',
+        promptLabelPicture: 'Take Photo',
+      });
+      const dataUrl = photo.dataUrl;
+      if (!dataUrl) return;
       setProfilePhoto(dataUrl);
       localStorage.setItem('ll_photo', dataUrl);
       // Sync to Supabase if signed in
       if (!isGuest && user) savePlayerPhoto(user.id, dataUrl);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      // User cancelled or denied permission — silent fail, no crash
+      return;
+    }
   };
-  const handleNicknameSave = (val) => {
+  const handleNicknameSave = async (val) => {
     if (containsProfanity(val)) {
       setNameError("Please choose a different nickname.");
       // Revert to last clean value from localStorage
@@ -2952,8 +3767,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       return false;
     }
     setNameError("");
-    setProfileNickname(val);
-    localStorage.setItem("ll_nickname", val);
+    const clean = (val || "").trim();
+    setProfileNickname(clean);
+    localStorage.setItem("ll_nickname", clean);
+    // v70: the nickname IS the public leaderboard display name. For signed-in
+    // users, push it to the cloud player_name (used by the leaderboard) and update
+    // the local refs so subsequent syncs carry it. Guests have no cloud row to update.
+    if (!isGuest && user && clean) {
+      playerNameRef.current = clean;
+      setPlayerName(clean);
+      try { await updatePlayerName(user.id, clean); } catch {}
+      try { await syncToCloud(); } catch {}
+    }
     return true;
   };
 
@@ -3021,10 +3846,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // AND must not have been used previously in this game (lootUsed flag persists across replays)
     const usedLootTile = valid ? tiles.find(t => selected.includes(t.id) && t.isLoot && !t.used && !t.lootUsed) : null;
     const isLootWord = !!usedLootTile;
-    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false, loot: isLootWord };
+    // v88 (item 17): flag the Word of the Day in History so it gets its own badge,
+    // parallel to the Loot Letter. Only the FIRST time the WoD is found counts (matches
+    // the wotdFound award gate below), so re-submitting the same word later isn't re-badged.
+    const isWotdWord = !!(valid && wotd && !wotdFound && currentWord.toUpperCase() === wotd.toUpperCase());
+    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false, loot: isLootWord, wotd: isWotdWord };
     const newSubmitted = [...submittedRef.current, newEntry];
     submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
-    appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current, isLootWord);
+    appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current, isLootWord, isWotdWord);
     setDailyHistory(getDailyHistory());
     // Track guest games — fire once per session (when first word is submitted)
     if (isGuest && submittedRef.current.length === 1) {
@@ -3054,7 +3883,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setWotdCelebration(true);
         setTimeout(() => {
           setWotdCelebration(false);
-          if (!pausedRef.current && !levelComplete) startTimer();
+          // v80 (stop-only model): the fair-timer effect no longer auto-resumes. Resume
+          // explicitly here for the normal mid-play case (player found the WoD while
+          // playing). The startTimer() guard + these checks keep it FROZEN if the level
+          // was completed during the celebration or we're awaiting the next level's first tap.
+          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) {
+            stopTimer();
+          } else {
+            startTimer();
+          }
         }, 5000);
       }
       const newTiles = tiles.map(t => {
@@ -3091,10 +3928,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             playTone(1046.50, 0.24, 0.3); // C6 (held)
           }
         } catch {}
-        // Auto-dismiss after 5s and resume timer
+        // Auto-dismiss after 5s; the fair-timer useEffect handles restart.
         setTimeout(() => {
           setLootCelebration(null);
-          if (!pausedRef.current && !levelComplete) startTimer();
+          // v80 (stop-only model): resume explicitly for the normal mid-play case;
+          // stay frozen if level just completed / awaiting first tap / paused.
+          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) {
+            stopTimer();
+          } else {
+            startTimer();
+          }
         }, 5000);
       }
       setTiles(newTiles);
@@ -3169,7 +4012,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           awardBadge("level_5"); // Diamond Looter — completed Level 5
           if (totalRef.current >= 2000) awardBadge("daily_500"); // Loot Master
           if (totalRef.current >= 3000) awardBadge("daily_1000"); // Treasure Chest
-          if (perfectDayRef.current) {
+          if (perfectDayRef.current && wotdFoundRef.current) {
             // Force-clear any stuck validation/scanning overlays
             setValidating(false); setCheckingStuck(false);
             awardBadge("perfect_day");
@@ -3180,32 +4023,38 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             if (pdSec > 0 && pdSec < 720)  awardBadge("pd_velocirap");    // < 12 min
             if (pdSec > 0 && pdSec < 600)  awardBadge("pd_flux");         // < 10 min
               // ── Streak bonus: First PD = 2,000 pts, each consecutive PD adds 1,000 ──
-              // Read FRESH stats from localStorage (statsData state may be stale)
-              const freshStats = getLocalStats();
-              const yKey = getYesterdayKey();
-              const wasPDYesterday = freshStats.lastPerfectDate === yKey;
-              const alreadyPDToday = freshStats.lastPerfectDate === getTodayKey();
-              // If already PD today (replay): keep existing streak. Else if yesterday: increment. Else: reset to 1.
-              const newStreakCount = alreadyPDToday
-                ? (freshStats.consecutivePerfectDays || 1)
-                : (wasPDYesterday ? (freshStats.consecutivePerfectDays || 0) + 1 : 1);
-              const perfStreak = newStreakCount;
-              const streakBonus = 1000 + (perfStreak * 1000);
-              setPerfectDayStreakBonus(streakBonus);
-              setStreakBonusCount(perfStreak);
-              totalRef.current += streakBonus; setTotalScore(totalRef.current);
-              lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
-              if (isGuest) saveLifetimeData(lifetimeRef.current);
-              // Show streak bonus first — PD screen shows when player taps Continue
-              triggerHaptic("heavy");
-              setTimeout(() => setShowStreakBonus(true), 1200);
-              // ── Check bonus level unlock ──
-              if (ENABLE_BONUS_LEVELS) {
-                const newConsecutive = getConsecutivePerfectDays({...statsData, perfectDaysAllTime: (statsData.perfectDaysAllTime||0)+1});
-                if (newConsecutive >= BONUS_CONSECUTIVE_REQUIRED && !bonusLevelUnlocked) {
-                  setBonusLevelUnlocked(true);
-                  awardBadge("vault_streak");
-                  setTimeout(() => setShowBonusUnlock(true), 3000);
+              // v57: Guests do NOT accumulate streak bonuses. They see the +2000
+              // PD bonus on the regular PD modal, but no streak tracking, no
+              // streak modal, no point pile-up. Sign-in is required for streaks.
+              // (Guests see a one-time upsell popup explaining this — see
+              // markPDAcknowledged at line ~2647.)
+              if (!isGuest) {
+                // Read FRESH stats from localStorage (statsData state may be stale)
+                const freshStats = getLocalStats();
+                const yKey = getYesterdayKey();
+                const wasPDYesterday = freshStats.lastPerfectDate === yKey;
+                const alreadyPDToday = freshStats.lastPerfectDate === getTodayKey();
+                // If already PD today (replay): keep existing streak. Else if yesterday: increment. Else: reset to 1.
+                const newStreakCount = alreadyPDToday
+                  ? (freshStats.consecutivePerfectDays || 1)
+                  : (wasPDYesterday ? (freshStats.consecutivePerfectDays || 0) + 1 : 1);
+                const perfStreak = newStreakCount;
+                const streakBonus = 1000 + (perfStreak * 1000);
+                setPerfectDayStreakBonus(streakBonus);
+                setStreakBonusCount(perfStreak);
+                totalRef.current += streakBonus; setTotalScore(totalRef.current);
+                lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
+                // Show streak bonus first — PD screen shows when player taps Continue
+                triggerHaptic("heavy");
+                setTimeout(() => setShowStreakBonus(true), 1200);
+                // ── Check bonus level unlock ──
+                if (ENABLE_BONUS_LEVELS) {
+                  const newConsecutive = getConsecutivePerfectDays({...statsData, perfectDaysAllTime: (statsData.perfectDaysAllTime||0)+1});
+                  if (newConsecutive >= BONUS_CONSECUTIVE_REQUIRED && !bonusLevelUnlocked) {
+                    setBonusLevelUnlocked(true);
+                    awardBadge("vault_streak");
+                    setTimeout(() => setShowBonusUnlock(true), 3000);
+                  }
                 }
               }
               setRainbowConfetti(true); setTimeout(() => setRainbowConfetti(false), 6000);
@@ -3216,7 +4065,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             // Level 5 complete WITHOUT Perfect Day — game over, show farewell instead of "Play Level 6"
             setValidating(false); setCheckingStuck(false);
             const perfStats = updateLocalStats({ perfectDay: false }); setStatsData(perfStats);
-            setTimeout(() => triggerFarewell(), 1500);
+            // v76 (item 15): near-miss — the run was otherwise clean (PD-eligible) but the
+            // Word of the Day wasn't found, which is now required for a Perfect Day. Show an
+            // encouraging note explaining why, then proceed to the Farewell summary.
+            if (perfectDayRef.current && !wotdFoundRef.current) {
+              setTimeout(() => setShowWotdMissedPD(true), 1200);
+            } else {
+              setTimeout(() => triggerFarewell(), 1500);
+            }
           }
         }
         if (!isGuest && user) await syncToCloud();
@@ -3256,44 +4112,52 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   };
 
   const handleNextLevel = (bought = false) => {
-    if (bought) setPerfectDaySync(false);
+    if (bought) forfeitPerfectDay();
     // Hard cap: cannot go beyond Level 5 unless bonus levels are enabled
     if (!ENABLE_BONUS_LEVELS && level >= 5) return;
     const newLevel = level + 1;
     setLevel(newLevel); setLevelComplete(false); setShowBuyModal(false);
     levelScoreRef.current = 0; setLevelScore(0);
     const rng = seededRandom(getDailySeed() + newLevel * 999);
-    const count = 42 + (newLevel - 1) * 6;
+    const count = 42 + (newLevel - 1) * 7;
     const bp = getBonusPositions(count, getBonusCount(newLevel), rng);
     const newTiles = generateLevelTiles(newLevel, tileCountRef.current, rng, bp);
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
-    levelResetCount.current = 0; resetLevelTimer(); startTimer(); setNewBestTime(false);
+    levelResetCount.current = 0; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
     if (wotd && !wotdFound) showWotdReminderWithPause();
     if (newLevel === 5) awardBadge("level_5");
   };
 
-  // WoD reminder helpers — pause timer, show 5s, then resume
+  // WoD reminder helpers — pause timer, show 5s, fair-timer effect resumes
   const showWotdReminderWithPause = () => {
     if (!wotd || wotdFound) return;
     stopTimer();
     setShowWotdReminder(true);
     setTimeout(() => {
       setShowWotdReminder(false);
-      if (!pausedRef.current && !levelComplete) startTimer();
+      // v80: resume explicitly, but the startTimer() guard keeps it frozen if we're
+      // still awaiting the first tap of the level (the common case — reminder shows on
+      // level entry). Only resumes if the player was already mid-play.
+      if (!pausedRef.current) startTimer();
     }, 5000);
   };
   const dismissWotdReminder = () => {
     setShowWotdReminder(false);
-    if (!pausedRef.current && !levelComplete) startTimer();
+    // v80: same as above — guard-protected resume; stays frozen until first tap.
+    if (!pausedRef.current) startTimer();
   };
 
   // Smart return-to-game routing — if game is complete (Level 5 done),
   // bring back the appropriate "Play Again?" screen. Otherwise just go to play tab.
   const returnToGame = () => {
     setTab("play");
-    // Priority 1: If they had a Perfect Day this session and aren't seeing the modal, restore it
-    if (perfectDayRef.current && !perfectDayAchieved) {
+    // Priority 1: If they had a Perfect Day this session and aren't seeing the modal, restore it.
+    // BUG FIX (May 24, 2026): Only re-show the modal if today's game is actually complete.
+    // perfectDayRef defaults to true for fresh games (eligibility), so without the completion
+    // gate this would incorrectly fire on Return-to-Game from History/Leaderboard mid-game.
+    const completedToday = (()=>{ try { return localStorage.getItem("ll_completed_today") === getTodayKey(); } catch { return false; } })();
+    if (perfectDayRef.current && !perfectDayAchieved && completedToday) {
       setPerfectDayAchieved(true);
       return;
     }
@@ -3337,7 +4201,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     totalRef.current -= 5000; setTotalScore(totalRef.current);
     // Does NOT forfeit Perfect Day — fresh tiles, not a retry
     const rng = seededRandom(getDailySeed() + level * 999 + Date.now());
-    const count = 42 + (level - 1) * 6;
+    const count = 42 + (level - 1) * 7;
     const bp = getBonusPositions(count, getBonusCount(level), rng);
     setTiles(generateLevelTiles(level, tileCountRef.current, rng, bp));
     tileCountRef.current += count; setSelected([]); setShowStuckModal(false); startTimer();
@@ -3354,7 +4218,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (!isGuest && user) { await updatePlayerName(user.id, playerName); await syncToCloud(); }
     setShowNameInput(false); clearLocalSession();
   };
-  const handleGiveUp = () => { setShowStuckModal(false); handleFullReset(); };
+  // v72 (item 6 follow-up): "End & Save Score" / "Give Up" from the stuck modal now
+  // routes to the Farewell summary screen (which shows the day's results + Share My
+  // Results button) instead of silently resetting to Level 1. The reset happens when
+  // the player dismisses the Farewell screen. Previously handleFullReset() ran here,
+  // skipping the summary/share entirely.
+  const handleGiveUp = () => { setShowStuckModal(false); triggerFarewell(); };
   const medalFor = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
 
   const todayKey = getTodayKey();
@@ -3383,62 +4252,122 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     { emoji:"🍀", title:"Good Luck Looting!", body:"Every tile has a value. Every word is a score. Every day is a fresh board. Now go get that loot!" },
   ];
 
+  if (showIntro && editingProfile) return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 24px",position:"relative",overflow:"hidden"}}>
+      <Starfield/>
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:ipadW(360),textAlign:"center"}}>
+        {/* Back to Welcome button — always visible, top-left */}
+        <div style={{width:"100%",display:"flex",justifyContent:"flex-start",marginBottom:ipadProfile(12)}}>
+          <button onClick={()=>setEditingProfile(false)} style={{padding:`${ipadProfilePad(10)}px ${ipadProfilePad(18)}px`,borderRadius:10,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.9)",fontSize:ipadProfile(14),fontFamily:"Georgia,serif",cursor:"pointer"}}>
+            ← Back to Welcome
+          </button>
+        </div>
+        {/* Smaller logo — 50% of welcome size (160 → 80) */}
+        <PencilLogo size={ipadProfile(100)}/>
+        <div style={{marginTop:ipadProfile(14),fontSize:ipadProfile(26),fontWeight:"bold",color:"#22d3ee",letterSpacing:1}}>Setup Your Profile</div>
+        <div style={{fontSize:ipadProfile(14),color:"rgba(255,255,255,0.75)",marginTop:6,marginBottom:ipadProfile(24)}}>Add a photo and a nickname to personalize your game.</div>
+        {/* Profile editor card */}
+        <div style={{width:"100%",background:"rgba(255,255,255,0.05)",borderRadius:16,padding:`${ipadProfilePad(24)}px ${ipadProfilePad(22)}px`,border:"1px solid rgba(255,255,255,0.15)"}}>
+          {/* Photo upload */}
+          <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:ipadProfile(14),marginBottom:ipadProfile(22)}}>
+            {profilePhoto
+              ? <img src={profilePhoto} alt="profile" style={{width:ipadProfile(120),height:ipadProfile(120),borderRadius:"50%",objectFit:"cover",border:"2.5px solid rgba(34,211,238,0.7)"}}/>
+              : <div style={{width:ipadProfile(120),height:ipadProfile(120),borderRadius:"50%",background:"rgba(34,211,238,0.1)",border:"2px dashed rgba(34,211,238,0.5)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:ipadProfile(44)}}>👤</div>
+            }
+            <button onClick={handlePhotoChange} style={{padding:`${ipadProfilePad(13)}px ${ipadProfilePad(26)}px`,borderRadius:10,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.5)",color:"#22d3ee",fontSize:ipadProfile(16),fontFamily:"Georgia,serif",cursor:"pointer",fontWeight:"bold"}}>
+              📷 Choose / Take Photo
+            </button>
+            {profilePhoto && <button onClick={()=>{ setProfilePhoto(null); localStorage.removeItem("ll_photo"); }} style={{padding:`${ipadProfilePad(8)}px ${ipadProfilePad(16)}px`,borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.85)",fontSize:ipadProfile(13),fontFamily:"Georgia,serif",cursor:"pointer"}}>Remove Photo</button>}
+          </div>
+          {/* Nickname input */}
+          <div style={{marginBottom:ipadProfile(20)}}>
+            <div style={{fontSize:ipadProfile(13),color:"rgba(255,255,255,0.85)",marginBottom:8,textAlign:"left"}}>Nickname (shown on the leaderboard)</div>
+            <input
+              value={profileNickname}
+              onChange={e=>setProfileNickname(e.target.value)}
+              placeholder={playerName || "Enter a nickname…"}
+              style={{width:"100%",padding:`${ipadProfilePad(14)}px ${ipadProfilePad(16)}px`,borderRadius:10,border:"1px solid rgba(34,211,238,0.4)",background:"rgba(34,211,238,0.08)",color:"#f5f0e8",fontSize:ipadProfile(17),fontFamily:"Georgia,serif",outline:"none",textAlign:"center",boxSizing:"border-box"}}
+            />
+            {nameError && <div style={{marginTop:6,fontSize:ipadProfile(13),color:"#fca5a5",textAlign:"center"}}>{nameError}</div>}
+          </div>
+          {/* Save button */}
+          <button onClick={async ()=>{ if (await handleNicknameSave(profileNickname)) setEditingProfile(false); }} style={{width:"100%",padding:ipadProfilePad(16),borderRadius:12,background:"linear-gradient(135deg,#22d3ee,#0ea5e9)",color:"#0a0820",fontSize:ipadProfile(17),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+            ✓ Save Profile
+          </button>
+        </div>
+        {/* Show sign out option if authenticated */}
+        {!isGuest && (
+          <button onClick={onSignOut} style={{marginTop:ipadProfile(20),padding:`${ipadProfilePad(8)}px ${ipadProfilePad(18)}px`,borderRadius:10,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.85)",fontSize:ipadProfile(13),fontFamily:"Georgia,serif",cursor:"pointer"}}>
+            Sign Out
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   if (showIntro) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"24px 24px",position:"relative",overflow:"hidden"}}>
       <Starfield/>
-      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360,textAlign:"center"}}>
-        <PencilLogo size={160}/>
-        <div style={{marginTop:12,background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:14,padding:"8px 24px",boxShadow:"0 0 28px rgba(139,92,246,0.5)"}}>
-          <span style={{fontSize:28,fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:ipadW(360),textAlign:"center"}}>
+        <PencilLogo size={ipadIcon(160)}/>
+        <div style={{marginTop:ipadIntro(12),background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:14,padding:`${ipadIntroPad(8)}px ${ipadIntroPad(24)}px`,boxShadow:"0 0 28px rgba(139,92,246,0.5)"}}>
+          <span style={{fontSize:ipadIntro(28),fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
         </div>
-        <div style={{fontSize:12,color:"rgba(255,255,255,0.6)",marginTop:6,letterSpacing:1}}>Daily word puzzle · Every letter has a value</div>
+        <div style={{fontSize:ipadIntro(12),color:"rgba(255,255,255,0.6)",marginTop:6,letterSpacing:1}}>Daily word puzzle · Every letter has a value</div>
 
         {/* ── Profile section ── */}
-        <div style={{marginTop:16,width:"100%",background:"rgba(255,255,255,0.05)",borderRadius:16,padding:"16px",border:"1px solid rgba(255,255,255,0.12)"}}>
+        <div style={{marginTop:ipadIntro(16),width:"100%",background:"rgba(255,255,255,0.05)",borderRadius:16,padding:`${ipadIntroPad(16)}px`,border:"1px solid rgba(255,255,255,0.12)"}}>
           {!editingProfile ? (
-            <div style={{display:"flex",alignItems:"center",gap:14}}>
-              {/* Photo */}
-              <div style={{position:"relative",flexShrink:0}} onClick={()=>setEditingProfile(true)}>
-                {profilePhoto
-                  ? <img src={profilePhoto} alt="profile" style={{width:60,height:60,borderRadius:"50%",objectFit:"cover",border:"2.5px solid rgba(34,211,238,0.7)",cursor:"pointer"}}/>
-                  : <div style={{width:60,height:60,borderRadius:"50%",background:"rgba(34,211,238,0.1)",border:"2px dashed rgba(34,211,238,0.5)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:22}}>👤</div>
-                }
-                <div style={{position:"absolute",bottom:0,right:0,background:"rgba(34,211,238,0.9)",borderRadius:"50%",width:18,height:18,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,cursor:"pointer"}}>✏️</div>
-              </div>
-              {/* Name/nickname */}
-              <div style={{flex:1,textAlign:"left"}}>
-                <div style={{fontSize:16,fontWeight:"bold",color:"#22d3ee"}}>
-                  {profileNickname || playerName || "Guest"}
+            <div>
+              {/* Top: photo + name */}
+              <div style={{display:"flex",alignItems:"center",gap:ipadIntro(14),marginBottom:ipadIntro(12)}}>
+                {/* Photo */}
+                <div style={{position:"relative",flexShrink:0}} onClick={()=>setEditingProfile(true)}>
+                  {profilePhoto
+                    ? <img src={profilePhoto} alt="profile" style={{width:ipadIntro(60),height:ipadIntro(60),borderRadius:"50%",objectFit:"cover",border:"2.5px solid rgba(34,211,238,0.7)",cursor:"pointer"}}/>
+                    : <div style={{width:ipadIntro(60),height:ipadIntro(60),borderRadius:"50%",background:"rgba(34,211,238,0.1)",border:"2px dashed rgba(34,211,238,0.5)",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:ipadIntro(22)}}>👤</div>
+                  }
+                  <div style={{position:"absolute",bottom:0,right:0,background:"rgba(34,211,238,0.9)",borderRadius:"50%",width:ipadIntro(18),height:ipadIntro(18),display:"flex",alignItems:"center",justifyContent:"center",fontSize:ipadIntro(10),cursor:"pointer"}}>✏️</div>
                 </div>
-                {profileNickname && playerName && profileNickname !== playerName &&
-                  <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:2}}>{playerName}</div>
-                }
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",marginTop:4,cursor:"pointer"}} onClick={()=>setEditingProfile(true)}>
-                  Tap to edit profile ✏️
-                </div>
-                {/* Show sign in prompt if not authenticated */}
-                {isGuest && (
-                  <button onClick={onSignOut} style={{marginTop:6,padding:"4px 12px",borderRadius:10,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:10,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
-  🔑 Sign In to sync across devices
-                  </button>
-                )}
-                {!isGuest && (
-                  <button onClick={()=>{ setShowIntro(false); setShowReadyScreen(false); setTab("leaderboard"); }} style={{marginTop:8,padding:"7px 14px",borderRadius:11,background:"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.18))",border:"1.5px solid rgba(246,211,101,0.6)",color:"#f6d365",fontSize:11,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",letterSpacing:0.5,boxShadow:"0 0 12px rgba(246,211,101,0.2)"}}>
-                    🏆 View Leaderboard →
-                  </button>
-                )}
-                {isGuest && (
-                  <div style={{marginTop:4,fontSize:9,color:"rgba(255,255,255,0.4)",textAlign:"center"}}>
-                    🏆 Create an account to join the Leaderboard
+                {/* Name/nickname */}
+                <div style={{flex:1,textAlign:"left"}}>
+                  <div style={{fontSize:ipadIntro(16),fontWeight:"bold",color:"#22d3ee"}}>
+                    {profileNickname || playerName || "Guest"}
                   </div>
-                )}
-                {/* Show sign out option if authenticated */}
-                {!isGuest && (
-                  <button onClick={onSignOut} style={{marginTop:6,padding:"3px 10px",borderRadius:10,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.4)",fontSize:9,fontFamily:"Georgia,serif",cursor:"pointer"}}>
+                  {profileNickname && playerName && profileNickname !== playerName &&
+                    <div style={{fontSize:ipadIntro(11),color:"rgba(255,255,255,0.7)",marginTop:2}}>{playerName}</div>
+                  }
+                </div>
+              </div>
+              {/* Bottom: side-by-side action buttons */}
+              <div style={{display:"flex",gap:ipadIntro(8)}}>
+                <button onClick={()=>setEditingProfile(true)} style={{flex:1,padding:`${ipadIntroPad(10)}px ${ipadIntroPad(12)}px`,borderRadius:10,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.6)",color:"#22d3ee",fontSize:ipadIntro(12),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>
+                  ✏️ Edit Profile
+                </button>
+                {isGuest ? (
+                  <button onClick={onSignOut} style={{flex:1,padding:`${ipadIntroPad(10)}px ${ipadIntroPad(12)}px`,borderRadius:10,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadIntro(12),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+                    🔑 Sign In
+                  </button>
+                ) : (
+                  <button onClick={onSignOut} style={{flex:1,padding:`${ipadIntroPad(10)}px ${ipadIntroPad(12)}px`,borderRadius:10,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.9)",fontSize:ipadIntro(12),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>
                     Sign Out
                   </button>
                 )}
               </div>
+              {isGuest && (
+                <div style={{marginTop:ipadIntro(8),fontSize:ipadIntro(10),color:"rgba(255,255,255,0.7)",textAlign:"center"}}>
+                  🏆 Create an account to join the Leaderboard
+                </div>
+              )}
+              {/* v76 (item 7): subtle Delete Account link for signed-in users on the Welcome
+                  screen. Opens the SAME two-step (type DELETE) confirmation modal used in-game. */}
+              {!isGuest && (
+                <div style={{textAlign:"center",marginTop:ipadIntro(10)}}>
+                  <button onClick={()=>setShowDeleteAccount(true)} style={{background:"transparent",border:"none",color:"rgba(248,113,113,0.65)",fontSize:ipadIntro(11),fontFamily:"Georgia,serif",cursor:"pointer",textDecoration:"underline",padding:4}}>
+                    Delete Account
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
@@ -3451,8 +4380,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                   }
                 </div>
                 <div style={{display:"flex",flexDirection:"column",gap:6,flex:1}}>
-                  <input ref={photoInputRef} type="file" accept="image/*" onChange={handlePhotoChange} style={{display:"none"}}/>
-                  <button onClick={()=>photoInputRef.current?.click()} style={{padding:"6px 10px",borderRadius:10,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.5)",color:"#22d3ee",fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",fontWeight:"bold"}}>
+                  <button onClick={handlePhotoChange} style={{padding:"6px 10px",borderRadius:10,background:"rgba(34,211,238,0.15)",border:"1px solid rgba(34,211,238,0.5)",color:"#22d3ee",fontSize:11,fontFamily:"Georgia,serif",cursor:"pointer",fontWeight:"bold"}}>
                     📷 Choose / Take Photo
                   </button>
                   {profilePhoto && <button onClick={()=>{ setProfilePhoto(null); localStorage.removeItem("ll_photo"); }} style={{padding:"4px 10px",borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.4)",fontSize:10,fontFamily:"Georgia,serif",cursor:"pointer"}}>Remove Photo</button>}
@@ -3460,7 +4388,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               </div>
               {/* Nickname input */}
               <div>
-                <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:4,textAlign:"left"}}>Nickname (shown on welcome screen)</div>
+                <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginBottom:4,textAlign:"left"}}>Nickname (shown on the leaderboard)</div>
                 <input
                   value={profileNickname}
                   onChange={e=>setProfileNickname(e.target.value)}
@@ -3469,7 +4397,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 />
                 {nameError && <div style={{marginTop:6,fontSize:11,color:"#fca5a5",textAlign:"center"}}>{nameError}</div>}
               </div>
-              <button onClick={()=>{ if (handleNicknameSave(profileNickname)) setEditingProfile(false); }} style={{padding:"8px",borderRadius:10,background:"linear-gradient(135deg,#22d3ee,#0ea5e9)",color:"#0a0820",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+              <button onClick={async ()=>{ if (await handleNicknameSave(profileNickname)) setEditingProfile(false); }} style={{padding:"8px",borderRadius:10,background:"linear-gradient(135deg,#22d3ee,#0ea5e9)",color:"#0a0820",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
                 ✓ Save Profile
               </button>
             </div>
@@ -3477,7 +4405,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
 
         {/* Welcome message */}
-        <div style={{marginTop:12,fontSize:17,fontWeight:"bold",color:"#22d3ee"}}>
+        <div style={{marginTop:ipadIntro(12),fontSize:ipadIntro(17),fontWeight:"bold",color:"#22d3ee"}}>
           {(profileNickname||playerName) ? `Welcome back, ${profileNickname||playerName}! 👋` : "Welcome! 👋"}
         </div>
 
@@ -3497,10 +4425,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             setTotalScore(0); totalRef.current = 0;
             setLevelScore(0); levelScoreRef.current = 0;
             setStreak(0); setLevelComplete(false);
-            setPerfectDaySync(true); setLongestWordToday("");
+            // v100 (item #2c): respect the per-day PD forfeit flag here too — starting another
+            // game today via PLAY NOW must not re-open a Perfect Day shot once forfeited.
+            const pdForfeitedToday2 = (() => { try { return localStorage.getItem("ll_pd_forfeited_today") === getTodayKey(); } catch { return false; } })();
+            setPerfectDaySync(!pdForfeitedToday2); setLongestWordToday("");
             setUndoUsed(false); setLastValidEntry(null);
             stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
-            setLevelTime(0); setTotalTime(0); startTimer();
+            setLevelTime(0); setTotalTime(0);
+            // v77 FIX: no startTimer() here — routes to Ready prompt; clock stays frozen
+            // until first tap. Arm the gate. (Was a source of the pre-tap timer leak.)
+            setAwaitingFirstTap(true); awaitingFirstTapRef.current = true;
             clearLocalSession();
           }
           // Show ready prompt — timer starts only when player taps Ready
@@ -3511,7 +4445,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           // No setShowReadyToPlay — the showReadyScreen ("Ready, Daryl?")
           // already handles the pre-game prompt with timer-on-tap behavior.
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
-          ✏️ PLAY NOW
+          PLAY NOW
         </button>
         {/* Word of the Day card */}
         {wotd && (
@@ -3524,29 +4458,84 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           </div>
         )}
       </div>
+      {/* v98 fix: delete-account modal duplicated into the Welcome (showIntro) branch.
+          The original modal (in the final render branch) is unreachable from the Welcome
+          screen because showIntro returns early — so the Welcome-screen Delete Account
+          button set showDeleteAccount=true but nothing rendered until navigating in-game.
+          This copy makes the confirmation modal appear on the Welcome screen itself. */}
+      {showDeleteAccount&&<div style={{position:"fixed",inset:0,zIndex:9300,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(28)}px ${ipadTour(24)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.85)",border:"2px solid rgba(239,68,68,0.5)",maxWidth:ipadTour(340),width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
+          <div style={{fontSize:ipadTour(40),marginBottom:6}}>⚠️</div>
+          <div style={{fontSize:ipadTour(18),fontWeight:"bold",color:"#fca5a5",marginBottom:10}}>Delete Your Account?</div>
+          <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.95)",lineHeight:1.6,marginBottom:14,textAlign:"left"}}>
+            This will <strong style={{color:"#fca5a5"}}>permanently delete</strong>:
+          </div>
+          <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:10,padding:`${ipadTour(10)}px ${ipadTour(14)}px`,marginBottom:14,fontSize:ipadTour(12),color:"rgba(255,255,255,0.95)",lineHeight:1.9,textAlign:"left"}}>
+            <div>✗ Your account &amp; email</div>
+            <div>✗ All game history &amp; stats</div>
+            <div>✗ Perfect Days, streaks, badges</div>
+            <div>✗ Leaderboard entries</div>
+          </div>
+          <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.9)",marginBottom:10,lineHeight:1.5}}>
+            This cannot be undone. To confirm, type <strong style={{color:"#fca5a5"}}>DELETE</strong> below:
+          </div>
+          <input
+            type="text"
+            value={deleteConfirmText}
+            onChange={(e)=>setDeleteConfirmText(e.target.value)}
+            placeholder="Type DELETE to confirm"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            style={{width:"100%",padding:`${ipadTour(10)}px ${ipadTour(12)}px`,borderRadius:10,border:"1.5px solid rgba(239,68,68,0.4)",background:"rgba(0,0,0,0.3)",color:"#fff",fontSize:ipadTour(14),fontFamily:"Georgia,serif",textAlign:"center",letterSpacing:2,marginBottom:14,boxSizing:"border-box"}}
+            disabled={deletingAccount}
+          />
+          <button
+            onClick={async ()=>{
+              if (deleteConfirmText.trim().toUpperCase() !== "DELETE") return;
+              setDeletingAccount(true);
+              try { await onDeleteAccount?.(); } catch {}
+              setDeletingAccount(false);
+              setShowDeleteAccount(false);
+              setDeleteConfirmText("");
+            }}
+            disabled={deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE"}
+            style={{width:"100%",padding:ipadTour(13),borderRadius:12,border:"none",background: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "rgba(239,68,68,0.25)" : "linear-gradient(135deg,#dc2626,#991b1b)",color:"#fff",fontSize:ipadTour(14),fontWeight:"bold",fontFamily:"Georgia,serif",cursor: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "not-allowed" : "pointer",marginBottom:8,opacity: deletingAccount ? 0.7 : 1}}
+          >
+            {deletingAccount ? "Deleting…" : "Delete My Account Permanently"}
+          </button>
+          <button
+            onClick={()=>{ setShowDeleteAccount(false); setDeleteConfirmText(""); }}
+            disabled={deletingAccount}
+            style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.95)",fontSize:ipadTour(13),fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.25)",cursor: deletingAccount ? "not-allowed" : "pointer"}}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>}
     </div>
   );
 
   if (showReadyScreen) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"30px 24px",position:"relative",overflow:"hidden"}}>
       <Starfield/>
-      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360,textAlign:"center"}}>
+      <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:ipadW(360),textAlign:"center"}}>
         {profilePhoto
-          ? <img src={profilePhoto} alt="profile" style={{width:80,height:80,borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(34,211,238,0.7)",marginBottom:16}}/>
-          : <div style={{fontSize:56,marginBottom:16}}>✏️</div>
+          ? <img src={profilePhoto} alt="profile" style={{width:ipadIcon(80),height:ipadIcon(80),borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(34,211,238,0.7)",marginBottom:ipadIntro(16)}}/>
+          : <PencilLogo size={ipadIcon(160)}/>
         }
-        <div style={{fontSize:22,fontWeight:"bold",color:"#22d3ee",marginBottom:8}}>
+        <div style={{fontSize:ipadIntro(22),fontWeight:"bold",color:"#22d3ee",marginBottom:ipadIntro(8),marginTop:ipadIntro(8)}}>
           {profileNickname||playerName ? `Ready, ${profileNickname||playerName}?` : "Ready to Play?"}
         </div>
-        <div style={{fontSize:13,color:"rgba(255,255,255,0.55)",marginBottom:24,lineHeight:1.7}}>
+        <div style={{fontSize:ipadIntro(13),color:"rgba(255,255,255,0.55)",marginBottom:ipadIntro(24),lineHeight:1.7}}>
           Your tiles are set.<br/>The clock starts when you do.
         </div>
-        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:16,padding:"16px 20px",border:"1px solid rgba(255,255,255,0.12)",marginBottom:28,width:"100%",fontSize:12,color:"rgba(255,255,255,0.6)",lineHeight:1.9}}>
+        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:16,padding:`${ipadIntroPad(16)}px ${ipadIntroPad(20)}px`,border:"1px solid rgba(255,255,255,0.12)",marginBottom:ipadIntro(28),width:"100%",fontSize:ipadIntro(12),color:"rgba(255,255,255,0.6)",lineHeight:1.9}}>
           <div>✦ Level 1 — 42 tiles ready</div>
-          <div>✦ Timer starts on <strong style={{color:"#f6d365"}}>Let's Go!</strong></div>
-          <div>✦ Clear all 5 levels for a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day 🌈🏆</span></div>
+          <div>✦ Timer starts on your <strong style={{color:"#f6d365"}}>first tap</strong></div>
+          <div>✦ Clear all 5 levels + find the Word of the Day for a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day 🌈🏆</span></div>
         </div>
-        <button onClick={()=>{ setShowReadyScreen(false); startTimer(); }} style={{width:"100%",padding:"20px",borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:20,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
+        <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
           Let's Go! 🎯
         </button>
       </div>
@@ -3554,7 +4543,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   );
 
   return (
-    <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:40, position:"relative", overflow:"hidden" }}>
+    <div style={{ minHeight:"100vh", background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)", fontFamily:"Georgia,serif", color:"#f5f0e8", display:"flex", flexDirection:"column", alignItems:"center", paddingBottom:40, position:"relative", overflowY:"auto", overflowX:"hidden" }}>
       <Starfield/>
       <style>{`
         @keyframes twinkle{from{opacity:0.08}to{opacity:0.7}}
@@ -3566,6 +4555,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes ll-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
         @keyframes rainbow{0%{color:#ff0000}16%{color:#ff8800}33%{color:#ffff00}50%{color:#00ff00}66%{color:#0088ff}83%{color:#8800ff}100%{color:#ff0000}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+        @keyframes pdPiratesRise{0%{bottom:-380px;opacity:0;transform:translateX(-50%) scale(0.85)}60%{bottom:8%;opacity:1;transform:translateX(-50%) scale(1.04)}100%{bottom:6%;opacity:1;transform:translateX(-50%) scale(1)}}
+        @keyframes pdPiratesJig{0%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}12%{bottom:6%;opacity:1;transform:translateX(-70%) rotate(-5deg) translateY(-14px)}25%{bottom:6%;opacity:1;transform:translateX(-70%) rotate(-3deg) translateY(0)}37%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(-14px)}50%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}62%{bottom:6%;opacity:1;transform:translateX(-30%) rotate(5deg) translateY(-14px)}75%{bottom:6%;opacity:1;transform:translateX(-30%) rotate(3deg) translateY(0)}87%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(-14px)}100%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}}
+        @keyframes pdPiratesOut{0%{bottom:6%;opacity:1;transform:translateX(-50%) scale(1)}100%{bottom:-380px;opacity:0;transform:translateX(-50%) scale(0.9)}}
+        @keyframes pdSparkleFloat{0%{opacity:0;transform:translateY(0) scale(0.5) rotate(0deg)}30%{opacity:1;transform:translateY(-40px) scale(1.2) rotate(40deg)}100%{opacity:0;transform:translateY(-90px) scale(0.4) rotate(120deg)}}
+        @keyframes pdFlash{0%,100%{background:rgba(0,0,0,0)}50%{background:rgba(246,211,101,0.18)}}
+        /* v94: per-level pirate level-clear entrances — each level feels different */
+        @keyframes plClearL1{0%{transform:scale(0.2) rotate(-12deg);opacity:0}55%{transform:scale(1.15) rotate(6deg);opacity:1}75%{transform:scale(0.95) rotate(-3deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}
+        @keyframes plClearL2{0%{transform:translateX(-160px) rotate(-20deg);opacity:0}60%{transform:translateX(12px) rotate(8deg);opacity:1}80%{transform:translateX(-4px) rotate(-3deg)}100%{transform:translateX(0) rotate(0deg);opacity:1}}
+        @keyframes plClearL3{0%{transform:translateY(140px) scale(0.7);opacity:0}50%{transform:translateY(-18px) scale(1.1);opacity:1}70%{transform:translateY(8px) scale(0.97)}100%{transform:translateY(0) scale(1);opacity:1}}
+        @keyframes plClearL4{0%{transform:scale(0.4);opacity:0}20%{transform:scale(1.1) rotate(-6deg);opacity:1}35%{transform:scale(1.05) rotate(6deg)}50%{transform:scale(1.08) rotate(-5deg)}65%{transform:scale(1.04) rotate(4deg)}80%{transform:scale(1.06) rotate(-2deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}
+        @keyframes plClearL5{0%{transform:translateY(160px) scale(0.5) rotate(-15deg);opacity:0}40%{transform:translateY(-22px) scale(1.2) rotate(8deg);opacity:1}55%{transform:translateY(0) scale(1.1) rotate(-5deg)}70%{transform:translateY(-10px) scale(1.12) rotate(5deg)}85%{transform:translateY(0) scale(1.05) rotate(-2deg)}100%{transform:translateY(0) scale(1) rotate(0deg);opacity:1}}
+        @keyframes plSpeechIn{0%{opacity:0;transform:translateY(8px) scale(0.9)}100%{opacity:1;transform:translateY(0) scale(1)}}
         @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         @keyframes warningPulse{0%,100%{background:rgba(220,38,38,0.2)}50%{background:rgba(220,38,38,0.4)}}
         @keyframes purseGlow{0%,100%{box-shadow:0 0 18px rgba(139,92,246,0.7)}50%{box-shadow:0 0 32px rgba(167,139,250,0.95)}}
@@ -3582,6 +4583,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         .ll-btn:active{transform:scale(0.95);}
         .bonus-double{box-shadow:0 0 12px 3px rgba(255,215,0,0.8)!important;}
         .bonus-triple{box-shadow:0 0 14px 4px rgba(255,100,255,0.9)!important;}
+        /* When a bonus tile is selected, the universal green selection glow
+           must override the gold/purple bonus glow. Use !important to beat the
+           !important above. */
+        .ll-tile.sel.bonus-double,
+        .ll-tile.sel.bonus-triple{box-shadow:0 0 12px 3px rgba(0,230,118,0.85),0 0 4px rgba(0,230,118,0.5)!important;}
         .perfect-text{animation:rainbow 2s linear infinite;}
         .replay-btn{animation:provethat 2s ease-in-out infinite;}
         .warning-box{animation:warningPulse 2s ease-in-out infinite;}
@@ -3597,23 +4603,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {cloudSyncing&&<div style={{position:"fixed",top:12,right:12,zIndex:9995,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#a78bfa"}}>☁️ Syncing…</div>}
       {savedIndicator&&<div className="saved-indicator" style={{position:"fixed",top:12,left:"50%",transform:"translateX(-50%)",zIndex:9994,background:"rgba(110,231,183,0.2)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:20,padding:"4px 12px",fontSize:10,color:"#6ee7b7",pointerEvents:"none"}}>✓ Progress saved</div>}
 
-      {newRecord&&<div style={{position:"fixed",top:"35%",left:"50%",zIndex:9998,animation:"recordFade 2.5s ease forwards",background:newRecord.type==="score"?"linear-gradient(135deg,rgba(246,211,101,0.97),rgba(253,160,133,0.97))":"linear-gradient(135deg,rgba(96,165,250,0.97),rgba(139,92,246,0.97))",borderRadius:20,padding:"16px 28px",boxShadow:"0 8px 40px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap",border:"2px solid rgba(255,255,255,0.5)"}}>
-        <div style={{fontSize:22,fontWeight:"bold",color:"#1a1a2e",letterSpacing:1}}>{newRecord.label}</div>
-        <div style={{fontSize:11,color:"rgba(0,0,0,0.55)",marginTop:4,letterSpacing:2}}>PERSONAL BEST</div>
-      </div>}
-
-      {showDecayWarning&&<div style={{position:"fixed",inset:0,zIndex:99998,background:"rgba(0,0,0,0.92)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:decayInfo.wasReset?"linear-gradient(135deg,#1a0a0a,#3d1010)":"linear-gradient(135deg,#1a0a0a,#2d1a10)",borderRadius:28,padding:"40px 32px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:`2px solid ${decayInfo.wasReset?"rgba(220,38,38,0.6)":"rgba(251,146,60,0.6)"}`,maxWidth:340,width:"90%"}}>
-          <div style={{fontSize:56}}>{decayInfo.wasReset?"😱":"⚠️"}</div>
-          <div style={{fontSize:22,fontWeight:"bold",color:decayInfo.wasReset?"#ef4444":"#fb923c",marginTop:10}}>{decayInfo.wasReset?"Points Reset to Zero!":decayInfo.missedDays===1?"You Missed 1 Day!":"You Missed 2 Days!"}</div>
-          <div style={{fontSize:14,color:"#f5f0e8",marginTop:12,lineHeight:1.7}}>
-            {decayInfo.wasReset?<>Your lifetime points have reset to <span style={{color:"#ef4444",fontWeight:"bold",fontSize:18}}>ZERO</span>.<br/>Play every day to protect your points!</>
-            :decayInfo.missedDays===1?<>You lost <span style={{color:"#fb923c",fontWeight:"bold"}}>1/3</span> of your lifetime points.<br/>Don't miss another day!</>
-            :<>You've lost <span style={{color:"#fb923c",fontWeight:"bold"}}>2/3</span> of your lifetime points.<br/>One more missed day → <span style={{color:"#ef4444",fontWeight:"bold"}}>ZERO</span>!</>}
-          </div>
-          {!decayInfo.wasReset&&<div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:8}}>Remaining: <span style={{color:"#f6d365",fontWeight:"bold"}}>{lifetimePoints.toLocaleString()} pts</span></div>}
-          <button className="ll-btn" onClick={()=>setShowDecayWarning(false)} style={{marginTop:24,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>I'll Play Every Day! 💪</button>
-        </div>
+      {newRecord&&<div style={{position:"fixed",top:"35%",left:"50%",zIndex:9998,animation:"recordFade 2.5s ease forwards",background:newRecord.type==="score"?"linear-gradient(135deg,rgba(246,211,101,0.97),rgba(253,160,133,0.97))":"linear-gradient(135deg,rgba(96,165,250,0.97),rgba(139,92,246,0.97))",borderRadius:20,padding:`${ipadTour(16)}px ${ipadTour(28)}px`,boxShadow:"0 8px 40px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap",border:"2px solid rgba(255,255,255,0.5)"}}>
+        <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#1a1a2e",letterSpacing:1}}>{newRecord.label}</div>
+        <div style={{fontSize:ipadTour(11),color:"rgba(0,0,0,0.55)",marginTop:4,letterSpacing:2}}>PERSONAL BEST</div>
       </div>}
 
       {showTour&&<VisualTour onDone={completeTour}/>}
@@ -3621,11 +4613,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* Word of the Day reminder toast — shows at level start until found */}
       {showWotdReminder && wotd && !wotdFound && (
         <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",pointerEvents:"none"}}>
-          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:"18px 22px",boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:300,width:"100%",textAlign:"center",pointerEvents:"auto"}}>
-            <div style={{fontSize:10,color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
-            <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:8}}>{wotd}</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.65)",marginBottom:12,lineHeight:1.5}}>Spell it for a <strong style={{color:"#fda085"}}>+1,000 pt bonus!</strong></div>
-            <button onClick={dismissWotdReminder} style={{padding:"8px 22px",borderRadius:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",fontFamily:"Georgia,serif",fontSize:12,fontWeight:"bold",cursor:"pointer"}}>Got it ✓</button>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:`${ipadTour(18)}px ${ipadTour(22)}px`,boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:ipadTour(300),width:"100%",textAlign:"center",pointerEvents:"auto"}}>
+            <div style={{fontSize:ipadTour(10),color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
+            <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:8}}>{wotd}</div>
+            <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.9)",marginBottom:12,lineHeight:1.5}}>Spell it for a <strong style={{color:"#fda085"}}>+1,000 pt bonus!</strong></div>
+            <button onClick={dismissWotdReminder} style={{padding:`${ipadTour(8)}px ${ipadTour(22)}px`,borderRadius:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",fontFamily:"Georgia,serif",fontSize:ipadTour(12),fontWeight:"bold",cursor:"pointer"}}>Got it ✓</button>
           </div>
         </div>
       )}
@@ -3633,11 +4625,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* Word of the Day celebration — fires when player spells the WoD */}
       {wotdCelebration && (
         <div style={{position:"fixed",inset:0,zIndex:9650,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
-          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:"24px 32px",boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:340,width:"100%"}}>
-            <div style={{fontSize:42,marginBottom:6}}>🎯✨</div>
-            <div style={{fontSize:14,color:"#f6d365",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>WORD OF THE DAY!</div>
-            <div style={{fontSize:26,fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:8}}>{wotd}</div>
-            <div style={{fontSize:18,fontWeight:"bold",color:"#6ee7b7"}}>+1,000 pts!</div>
+          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
+            <div style={{fontSize:ipadIntro(42),marginBottom:6}}>🎯✨</div>
+            <div style={{fontSize:ipadIntro(14),color:"#f6d365",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>WORD OF THE DAY!</div>
+            <div style={{fontSize:ipadIntro(26),fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:8}}>{wotd}</div>
+            <div style={{fontSize:ipadIntro(18),fontWeight:"bold",color:"#6ee7b7"}}>+1,000 pts!</div>
           </div>
         </div>
       )}
@@ -3645,108 +4637,113 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* Loot Letter celebration — fires when player uses the daily Loot Letter in a valid word */}
       {lootCelebration && (
         <div style={{position:"fixed",inset:0,zIndex:9700,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
-          <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:"24px 32px",boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:340,width:"100%"}}>
-            <div style={{fontSize:42,marginBottom:6}}>💥✨</div>
-            <div style={{fontSize:18,color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:10}}>💥 LOOT LETTER! 💥</div>
+          <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
+            <div style={{fontSize:ipadIntro(42),marginBottom:6}}>💥✨</div>
+            <div style={{fontSize:ipadIntro(18),color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:10}}>💥 LOOT LETTER! 💥</div>
             {/* Big tile-style display of today's actual Loot Letter */}
             {lootCelebration.letter && (
-              <div style={{display:"inline-block",background:"linear-gradient(135deg,#1a1a2e,#2d1b69)",border:"3px solid #00e676",borderRadius:14,padding:"12px 22px",marginBottom:12,boxShadow:"0 0 20px rgba(0,230,118,0.6),inset 0 0 12px rgba(255,255,255,0.1)"}}>
-                <div style={{fontSize:42,fontWeight:"bold",color:"#f6d365",letterSpacing:2,lineHeight:1,textShadow:"0 0 12px rgba(246,211,101,0.8)"}}>{lootCelebration.letter}</div>
+              <div style={{display:"inline-block",background:"linear-gradient(135deg,#1a1a2e,#2d1b69)",border:"3px solid #00e676",borderRadius:14,padding:`${ipadIntro(12)}px ${ipadIntro(22)}px`,marginBottom:12,boxShadow:"0 0 20px rgba(0,230,118,0.6),inset 0 0 12px rgba(255,255,255,0.1)"}}>
+                <div style={{fontSize:ipadIntro(42),fontWeight:"bold",color:"#f6d365",letterSpacing:2,lineHeight:1,textShadow:"0 0 12px rgba(246,211,101,0.8)"}}>{lootCelebration.letter}</div>
               </div>
             )}
-            <div style={{fontSize:13,color:"#2d1b00",fontWeight:"bold",marginBottom:6}}>You found the hidden Loot Letter!</div>
-            <div style={{fontSize:16,fontWeight:"bold",color:"#003300"}}>5× Letter Bonus Applied!</div>
-            <div style={{fontSize:14,fontWeight:"bold",color:"#003300",marginTop:4}}>+{lootCelebration.score} pts on this word</div>
+            <div style={{fontSize:ipadIntro(13),color:"#2d1b00",fontWeight:"bold",marginBottom:6}}>You found the hidden Loot Letter!</div>
+            <div style={{fontSize:ipadIntro(16),fontWeight:"bold",color:"#003300"}}>5× Letter Bonus Applied!</div>
+            <div style={{fontSize:ipadIntro(14),fontWeight:"bold",color:"#003300",marginTop:4}}>+{lootCelebration.score} pts on this word</div>
           </div>
         </div>
       )}
 
-      {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 5s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:"12px 26px",boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
+      {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 5s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:`${ipadTour(12)}px ${ipadTour(26)}px`,boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
         <div style={{display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
-        <div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:13}}>Badge Earned!</div>
-        <div style={{color:"#2d1b00",fontSize:12,fontWeight:"bold"}}>{b.label}{showBadgeExtra?` — ${showBadgeExtra}`:""}</div>
+        <div style={{fontWeight:"bold",color:"#1a1a2e",fontSize:ipadTour(13)}}>Badge Earned!</div>
+        <div style={{color:"#2d1b00",fontSize:ipadTour(12),fontWeight:"bold"}}>{b.label}{showBadgeExtra?` — ${showBadgeExtra}`:""}</div>
       </div>):null; })()}
 
-      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:"14px 30px",boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}>
-        <div style={{fontSize:20,fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div>
-        <div style={{fontSize:flash.valid?16:13,color:"#fff",marginTop:4}}>{flash.valid&&flash.score>0?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}`:flash.valid?"":("Not a valid word!")}</div>
+      {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:`${ipadTour(14)}px ${ipadTour(30)}px`,boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}>
+        <div style={{fontSize:ipadTour(20),fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div>
+        <div style={{fontSize:flash.valid?ipadTour(16):ipadTour(13),color:"#fff",marginTop:4}}>{flash.valid&&flash.score>0?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}`:flash.valid?"":("Not a valid word!")}</div>
       </div>}
 
-      {rejectedWord&&<div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.78)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setRejectedWord(null)}>
-        <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:"22px 18px",border:"2px solid rgba(251,113,133,0.5)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:320,width:"100%",textAlign:"center"}}>
-          <div style={{fontSize:36,marginBottom:6}}>🤔</div>
-          <div style={{fontSize:14,color:"rgba(255,255,255,0.7)",marginBottom:6}}>Think this should be valid?</div>
-          <div style={{fontSize:22,fontWeight:"bold",color:"#fda4af",letterSpacing:3,marginBottom:14}}>{rejectedWord}</div>
-          {reportSent ? (
-            <div style={{background:"rgba(110,231,183,0.15)",border:"1px solid rgba(110,231,183,0.4)",borderRadius:12,padding:"10px 12px",marginBottom:10}}>
-              <div style={{fontSize:13,color:"#6ee7b7",fontWeight:"bold"}}>✓ Reported!</div>
-              <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.5}}>Thanks for letting us know.<br/>We'll review and add it if it's valid.</div>
-            </div>
-          ) : (
-            <>
-              <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginBottom:14,lineHeight:1.6}}>The Merriam-Webster dictionary doesn't include this word. If you think it should count, let us know and we'll review it!</div>
-              <button onClick={async()=>{
-                try {
-                  const { error } = await supabase.from("word_reports").insert({
-                    word: rejectedWord.toLowerCase(),
-                    player_name: playerName||"Guest"
-                  });
-                  if (error) console.error("Word report insert error:", error);
-                } catch(e) { console.error("Word report exception:", e); }
-                setReportSent(true);
-              }} style={{width:"100%",padding:13,borderRadius:12,border:"none",background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontFamily:"Georgia,serif",fontSize:13,fontWeight:"bold",cursor:"pointer",marginBottom:8}}>
-                📝 Report this word
-              </button>
-            </>
-          )}
-          <button onClick={()=>setRejectedWord(null)} style={{width:"100%",padding:11,borderRadius:11,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.5)",fontFamily:"Georgia,serif",fontSize:12,cursor:"pointer"}}>Close</button>
+      {showShareMenu && renderShareMenu()}
+
+      {showGuestStreakUpsell&&<div style={{position:"fixed",inset:0,zIndex:9750,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}} onClick={()=>setShowGuestStreakUpsell(false)}>
+        <div onClick={e=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:20,padding:`${ipadTour(24)}px ${ipadTour(20)}px`,border:"2px solid rgba(246,211,101,0.5)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:ipadTour(320),width:"100%",textAlign:"center"}}>
+          <div style={{fontSize:ipadTour(36),marginBottom:4}}>🌈🏆</div>
+          <div style={{fontSize:ipadTour(17),fontWeight:"bold",color:"#f6d365",marginBottom:6}}>Sign in to compete + stack points</div>
+          <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.85)",marginBottom:ipadTour(16),lineHeight:1.5,fontStyle:"italic"}}>Get on the Leaderboard. Earn streak bonuses that REALLY add up.</div>
+          <div style={{background:"rgba(246,211,101,0.1)",borderRadius:12,padding:`${ipadTour(12)}px ${ipadTour(10)}px`,marginBottom:ipadTour(16),border:"1px solid rgba(246,211,101,0.3)"}}>
+            <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.7)",marginBottom:6}}>Streak Bonus Example</div>
+            <div style={{fontSize:ipadTour(13),color:"#f6d365",fontWeight:"bold"}}>7 days = +8,000 pts</div>
+            <div style={{fontSize:ipadTour(13),color:"#f6d365",fontWeight:"bold"}}>14 days = +15,000 pts</div>
+          </div>
+          <button onClick={()=>{ setShowGuestStreakUpsell(false); onSignUpRequest?.(); }} style={{width:"100%",padding:`${ipadTour(12)}px ${ipadTour(16)}px`,marginBottom:ipadTour(8),borderRadius:12,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:ipadTour(14),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+            Create Free Account
+          </button>
+          <button onClick={()=>setShowGuestStreakUpsell(false)} style={{width:"100%",padding:`${ipadTour(10)}px ${ipadTour(14)}px`,borderRadius:11,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.85)",fontSize:ipadTour(13),fontFamily:"Georgia,serif",cursor:"pointer"}}>
+            Maybe Later
+          </button>
         </div>
       </div>}
 
-      {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:"18px 34px",zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
-        <div style={{animation:"spin 1s linear infinite",display:"inline-block",transformOrigin:"center"}}><PencilIcon size={60}/></div>
-        <div style={{fontSize:12,marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div>
+      {/* v60: removed rejectedWord modal — was dead code, live game uses showStuckModal (bug #14) */}
+
+      {(validating||checkingStuck)&&<div style={{position:"fixed",top:"40%",left:"50%",transform:"translate(-50%,-50%)",background:"rgba(10,8,30,0.97)",borderRadius:20,padding:`${ipadTour(18)}px ${ipadTour(34)}px`,zIndex:9996,boxShadow:"0 6px 30px rgba(0,0,0,0.8)",textAlign:"center",border:"1px solid rgba(255,255,255,0.2)"}}>
+        <div style={{animation:"spin 1s linear infinite",display:"inline-block",transformOrigin:"center"}}><PencilIcon size={ipadTour(60)}/></div>
+        <div style={{fontSize:ipadTour(12),marginTop:8,color:"#ccc",letterSpacing:2}}>{checkingStuck?"SCANNING TILES…":"CHECKING…"}</div>
       </div>}
 
       {showUndoConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
-          <div style={{fontSize:40}}>↩️</div>
-          <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Undo Last Word?</div>
-          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Reverse <span style={{color:"#f6d365",fontWeight:"bold"}}>{lastValidEntry?.word}</span> (+{lastValidEntry?.score} pts)<br/>Cost: <span style={{color:"#fb7185",fontWeight:"bold"}}>{isBonusLevel(level)?"10,000 pts":"1,000 pts"}</span><br/>Your balance: {totalScore} pts</div>
-          <div style={{fontSize:11,color:"#6ee7b7",marginTop:6}}>✓ Your Perfect Day stays intact</div>
-          <button className="ll-btn" onClick={handleUndo} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold"}}>↩️ Yes, Undo — 1,000 pts</button>
-          <button className="ll-btn" onClick={()=>setShowUndoConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep It</button>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:ipadTour(32),textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:ipadTour(300),width:"90%"}}>
+          <div style={{fontSize:ipadTour(40)}}>↩️</div>
+          <div style={{fontSize:ipadTour(18),fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Undo Last Word?</div>
+          <div style={{fontSize:ipadTour(13),color:"#ddd",marginTop:8,lineHeight:1.6}}>Reverse <span style={{color:"#f6d365",fontWeight:"bold"}}>{lastValidEntry?.word}</span> (+{lastValidEntry?.score} pts)<br/>Cost: <span style={{color:"#fb7185",fontWeight:"bold"}}>{isBonusLevel(level)?"10,000 pts":"1,000 pts"}</span><br/>Your balance: {totalScore} pts</div>
+          <div style={{fontSize:ipadTour(11),color:"#6ee7b7",marginTop:6}}>✓ Your Perfect Day stays intact</div>
+          <button className="ll-btn" onClick={handleUndo} style={{marginTop:16,width:"100%",padding:ipadTour(13),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(14),fontWeight:"bold"}}>↩️ Yes, Undo — 1,000 pts</button>
+          <button className="ll-btn" onClick={()=>setShowUndoConfirm(false)} style={{marginTop:8,width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.9)",fontSize:ipadTour(12)}}>Keep It</button>
         </div>
       </div>}
 
       {showNewGameConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
-          <div style={{fontSize:40}}>⚠️</div>
-          <div style={{fontSize:18,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Start a New Game?</div>
-          <div style={{fontSize:13,color:"#fb7185",marginTop:10,lineHeight:1.5,fontWeight:"bold"}}>This will end your current game in progress.</div>
-          <div style={{fontSize:12,color:"#bbb",marginTop:6,lineHeight:1.5}}>Current Level: {level} · Score: {totalScore.toLocaleString()} pts<br/>Words played: {(submittedRef.current||[]).filter(s=>s.valid).length}<br/><br/>All progress on this game will be lost.</div>
-          <button className="ll-btn" onClick={()=>{ setShowNewGameConfirm(false); handleFullReset(); }} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:14,fontWeight:"bold"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:ipadTour(32),textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:ipadTour(320),width:"90%"}}>
+          <div style={{fontSize:ipadTour(40)}}>⚠️</div>
+          <div style={{fontSize:ipadTour(18),fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Start a New Game?</div>
+          <div style={{fontSize:ipadTour(13),color:"#fb7185",marginTop:10,lineHeight:1.5,fontWeight:"bold"}}>This will end your current game in progress.</div>
+          <div style={{fontSize:ipadTour(12),color:"#ddd",marginTop:6,lineHeight:1.5}}>Current Level: {level} · Score: {totalScore.toLocaleString()} pts<br/>Words played: {(submittedRef.current||[]).filter(s=>s.valid).length}<br/><br/>All progress on this game will be lost.</div>
+          <button className="ll-btn" onClick={()=>{ setShowNewGameConfirm(false); handleFullReset(); }} style={{marginTop:16,width:"100%",padding:ipadTour(13),borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:ipadTour(14),fontWeight:"bold"}}>
             🆕 Yes, Start New Game
           </button>
-          <button className="ll-btn" onClick={()=>setShowNewGameConfirm(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.7)",fontSize:13,fontWeight:"bold"}}>Keep Playing</button>
+          <button className="ll-btn" onClick={()=>setShowNewGameConfirm(false)} style={{marginTop:8,width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.95)",fontSize:ipadTour(13),fontWeight:"bold"}}>Keep Playing</button>
+        </div>
+      </div>}
+
+      {showEndGameConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:ipadTour(32),textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:ipadTour(320),width:"90%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
+          <div style={{fontSize:ipadTour(40)}}>🏁</div>
+          <div style={{fontSize:ipadTour(18),fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>End Game &amp; Share Results?</div>
+          <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.9)",marginTop:10,lineHeight:1.5}}>This ends today's game and takes you to your results, where you can share them.</div>
+          <div style={{fontSize:ipadTour(12),color:"#ddd",marginTop:8,lineHeight:1.5}}>Level {level} · Score: {totalScore.toLocaleString()} pts · Words played: {(submittedRef.current||[]).filter(s=>s.valid).length}</div>
+          <button className="ll-btn" onClick={()=>{ setShowEndGameConfirm(false); triggerFarewell(); }} style={{marginTop:16,width:"100%",padding:ipadTour(13),borderRadius:14,background:"linear-gradient(135deg,#34d399,#10b981)",color:"#003322",fontSize:ipadTour(14),fontWeight:"bold",border:"none"}}>
+            🏁 End Game &amp; Share Results
+          </button>
+          <button className="ll-btn" onClick={()=>setShowEndGameConfirm(false)} style={{marginTop:8,width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.95)",fontSize:ipadTour(13),fontWeight:"bold"}}>Keep Playing</button>
         </div>
       </div>}
 
       {showGuestUpsell&&<div style={{position:"fixed",inset:0,zIndex:9200,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"28px 24px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.2)",maxWidth:320,width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
-          <div style={{fontSize:36,marginBottom:6}}>🏆</div>
-          <div style={{fontSize:16,fontWeight:"bold",color:"#f6d365",marginBottom:10}}>Sign up to unlock more</div>
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.6,marginBottom:14}}>Create a free account to:</div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:10,padding:"12px 14px",marginBottom:18,fontSize:12,color:"rgba(255,255,255,0.9)",lineHeight:2,textAlign:"left"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(28)}px ${ipadTour(24)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.2)",maxWidth:ipadTour(320),width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
+          <div style={{fontSize:ipadTour(36),marginBottom:6}}>🏆</div>
+          <div style={{fontSize:ipadTour(16),fontWeight:"bold",color:"#f6d365",marginBottom:10}}>Sign up to unlock more</div>
+          <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.95)",lineHeight:1.6,marginBottom:14}}>Create a free account to:</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:10,padding:`${ipadTour(12)}px ${ipadTour(14)}px`,marginBottom:18,fontSize:ipadTour(12),color:"rgba(255,255,255,0.95)",lineHeight:2,textAlign:"left"}}>
             <div>✓ Save your game progress</div>
             <div>✓ Share Perfect Day successes</div>
             <div>✓ View the Leaderboard</div>
             <div>✓ Track stats &amp; history</div>
           </div>
-          <button className="ll-btn" onClick={onSignUpRequest} style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",marginBottom:8}}>
+          <button className="ll-btn" onClick={onSignUpRequest} style={{width:"100%",padding:ipadTour(13),borderRadius:12,border:"none",background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:ipadTour(14),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",marginBottom:8}}>
             Create Free Account
           </button>
-          <button className="ll-btn" onClick={()=>setShowGuestUpsell(false)} style={{width:"100%",padding:"10px",borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.55)",fontSize:12,fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.18)",cursor:"pointer"}}>
+          <button className="ll-btn" onClick={()=>{ setShowGuestUpsell(false); setShowIntro(true); setTab("play"); setPerfectDayAchieved(false); setShowRepeatPerfect(false); }} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.9)",fontSize:ipadTour(12),fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.18)",cursor:"pointer"}}>
             Maybe Later
           </button>
         </div>
@@ -3754,19 +4751,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* Delete Account two-step confirmation (May 15, 2026) */}
       {showDeleteAccount&&<div style={{position:"fixed",inset:0,zIndex:9300,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"28px 24px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.85)",border:"2px solid rgba(239,68,68,0.5)",maxWidth:340,width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
-          <div style={{fontSize:40,marginBottom:6}}>⚠️</div>
-          <div style={{fontSize:18,fontWeight:"bold",color:"#fca5a5",marginBottom:10}}>Delete Your Account?</div>
-          <div style={{fontSize:13,color:"rgba(255,255,255,0.75)",lineHeight:1.6,marginBottom:14,textAlign:"left"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(28)}px ${ipadTour(24)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.85)",border:"2px solid rgba(239,68,68,0.5)",maxWidth:ipadTour(340),width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
+          <div style={{fontSize:ipadTour(40),marginBottom:6}}>⚠️</div>
+          <div style={{fontSize:ipadTour(18),fontWeight:"bold",color:"#fca5a5",marginBottom:10}}>Delete Your Account?</div>
+          <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.95)",lineHeight:1.6,marginBottom:14,textAlign:"left"}}>
             This will <strong style={{color:"#fca5a5"}}>permanently delete</strong>:
           </div>
-          <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:10,padding:"10px 14px",marginBottom:14,fontSize:12,color:"rgba(255,255,255,0.85)",lineHeight:1.9,textAlign:"left"}}>
+          <div style={{background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.25)",borderRadius:10,padding:`${ipadTour(10)}px ${ipadTour(14)}px`,marginBottom:14,fontSize:ipadTour(12),color:"rgba(255,255,255,0.95)",lineHeight:1.9,textAlign:"left"}}>
             <div>✗ Your account &amp; email</div>
             <div>✗ All game history &amp; stats</div>
             <div>✗ Perfect Days, streaks, badges</div>
             <div>✗ Leaderboard entries</div>
           </div>
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.55)",marginBottom:10,lineHeight:1.5}}>
+          <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.9)",marginBottom:10,lineHeight:1.5}}>
             This cannot be undone. To confirm, type <strong style={{color:"#fca5a5"}}>DELETE</strong> below:
           </div>
           <input
@@ -3777,7 +4774,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             autoCapitalize="characters"
             autoCorrect="off"
             spellCheck={false}
-            style={{width:"100%",padding:"10px 12px",borderRadius:10,border:"1.5px solid rgba(239,68,68,0.4)",background:"rgba(0,0,0,0.3)",color:"#fff",fontSize:14,fontFamily:"Georgia,serif",textAlign:"center",letterSpacing:2,marginBottom:14,boxSizing:"border-box"}}
+            style={{width:"100%",padding:`${ipadTour(10)}px ${ipadTour(12)}px`,borderRadius:10,border:"1.5px solid rgba(239,68,68,0.4)",background:"rgba(0,0,0,0.3)",color:"#fff",fontSize:ipadTour(14),fontFamily:"Georgia,serif",textAlign:"center",letterSpacing:2,marginBottom:14,boxSizing:"border-box"}}
             disabled={deletingAccount}
           />
           <button
@@ -3790,14 +4787,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               setDeleteConfirmText("");
             }}
             disabled={deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE"}
-            style={{width:"100%",padding:"13px",borderRadius:12,border:"none",background: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "rgba(239,68,68,0.25)" : "linear-gradient(135deg,#dc2626,#991b1b)",color:"#fff",fontSize:14,fontWeight:"bold",fontFamily:"Georgia,serif",cursor: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "not-allowed" : "pointer",marginBottom:8,opacity: deletingAccount ? 0.7 : 1}}
+            style={{width:"100%",padding:ipadTour(13),borderRadius:12,border:"none",background: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "rgba(239,68,68,0.25)" : "linear-gradient(135deg,#dc2626,#991b1b)",color:"#fff",fontSize:ipadTour(14),fontWeight:"bold",fontFamily:"Georgia,serif",cursor: (deletingAccount || deleteConfirmText.trim().toUpperCase() !== "DELETE") ? "not-allowed" : "pointer",marginBottom:8,opacity: deletingAccount ? 0.7 : 1}}
           >
             {deletingAccount ? "Deleting…" : "Delete My Account Permanently"}
           </button>
           <button
             onClick={()=>{ setShowDeleteAccount(false); setDeleteConfirmText(""); }}
             disabled={deletingAccount}
-            style={{width:"100%",padding:"10px",borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.7)",fontSize:13,fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.25)",cursor: deletingAccount ? "not-allowed" : "pointer"}}
+            style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"transparent",color:"rgba(255,255,255,0.95)",fontSize:ipadTour(13),fontFamily:"Georgia,serif",border:"1px solid rgba(255,255,255,0.25)",cursor: deletingAccount ? "not-allowed" : "pointer"}}
           >
             Cancel
           </button>
@@ -3820,163 +4817,212 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       </div>}
 
       {showStuckModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:320,width:"90%"}}>
-          <div style={{fontSize:52}}>😬</div>
-          <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
-          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
-          <div style={{fontSize:22,color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
-          {/* UNDO option if still available */}
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:ipadTour(32),textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:ipadTour(320),width:"90%"}}>
+          <div style={{fontSize:ipadTour(52)}}>😬</div>
+          <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
+          <div style={{fontSize:ipadTour(13),color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
+          <div style={{fontSize:ipadTour(22),color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
+          {/* UNDO option if still available — full width */}
           {!undoUsed&&lastValidEntry&&totalRef.current>=1000&&(
-            <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowUndoConfirm(true); }} style={{marginTop:14,width:"100%",padding:"12px",borderRadius:12,background:"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))",border:"1px solid rgba(251,113,133,0.9)",color:"#ffffff",fontSize:13,fontWeight:"bold"}}>
+            <button className="ll-btn" onClick={()=>{ setShowStuckModal(false); setShowUndoConfirm(true); }} style={{marginTop:14,width:"100%",padding:ipadTour(12),borderRadius:12,background:"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))",border:"1px solid rgba(251,113,133,0.9)",color:"#ffffff",fontSize:ipadTour(13),fontWeight:"bold"}}>
               ↩️ UNDO Last Word — 1,000 pts
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",fontWeight:"normal",marginTop:2}}>Reverse "{lastValidEntry?.word}" and try different tiles</div>
+              <div style={{fontSize:ipadTour(10),color:"rgba(255,255,255,0.7)",fontWeight:"normal",marginTop:2}}>Reverse "{lastValidEntry?.word}" and try different tiles</div>
             </button>
           )}
-          <button className="ll-btn" onClick={doLevelReset} disabled={level===5&&totalRef.current<1000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:level===5&&totalRef.current<1000?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#60a5fa,#3b82f6)",color:level===5&&totalRef.current<1000?"rgba(255,255,255,0.3)":"#fff",fontSize:13,fontWeight:"bold",cursor:level===5&&totalRef.current<1000?"default":"pointer"}}>
-            {level===5?`🔄 ReTry L5 — 1,000 pts${totalRef.current<1000?" (not enough)":""}`:` 🔄 Try Level ${level} Again`}
-          </button>
-          {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (not enough)":""}</button>}
-          {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<5000} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:totalRef.current>=5000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=5000?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:13,fontWeight:"bold",cursor:totalRef.current>=5000?"pointer":"default"}}>
-    🆕 Fresh Tiles — 5,000 pts{totalRef.current<5000?" (not enough)":""}
-    <div style={{fontSize:10,fontWeight:"normal",marginTop:2,opacity:0.8}}>Brand new set of Level 5 tiles · Perfect Day stays intact!</div>
-  </button>}
-          <button className="ll-btn" onClick={handleGiveUp} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>{level===5?"😬 Give Up — See Summary":"📊 End & Save Score"}</button>
+          {/* Try Again + Buy/Fresh side by side (half width each) */}
+          <div style={{display:"flex",gap:8,marginTop:8}}>
+            <button className="ll-btn" onClick={doLevelReset} disabled={level===5&&totalRef.current<1000} style={{flex:1,padding:ipadTour(12),borderRadius:12,background:level===5&&totalRef.current<1000?"rgba(255,255,255,0.08)":"linear-gradient(135deg,#60a5fa,#3b82f6)",color:level===5&&totalRef.current<1000?"rgba(255,255,255,0.6)":"#fff",fontSize:ipadTour(12),fontWeight:"bold",cursor:level===5&&totalRef.current<1000?"default":"pointer"}}>
+              {level===5?`🔄 ReTry L5 — 1,000 pts${totalRef.current<1000?" (too few pts)":""}`:`🔄 Try Level ${level} Again`}
+            </button>
+            {level<5&&<button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{flex:1,padding:ipadTour(12),borderRadius:12,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.6)",fontSize:ipadTour(12),fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>🔓 Buy Level {level+1} — {buyCost} pts{!canBuy?" (too few pts)":""}</button>}
+            {level===5&&<button className="ll-btn" onClick={handleExtendLevel5} disabled={totalRef.current<5000} style={{flex:1,padding:ipadTour(12),borderRadius:12,background:totalRef.current>=5000?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:totalRef.current>=5000?"#1a1a2e":"rgba(255,255,255,0.6)",fontSize:ipadTour(12),fontWeight:"bold",cursor:totalRef.current>=5000?"pointer":"default"}}>
+              🆕 Fresh Tiles — 5,000 pts{totalRef.current<5000?" (too few pts)":""}
+            </button>}
+          </div>
+          {/* End Day & Share Results — full width, brightened/prominent */}
+          <button className="ll-btn" onClick={handleGiveUp} style={{marginTop:8,width:"100%",padding:ipadTour(13),borderRadius:12,background:"linear-gradient(135deg,#34d399,#10b981)",border:"none",color:"#003322",fontSize:ipadTour(14),fontWeight:"bold",cursor:"pointer",boxShadow:"0 0 18px rgba(52,211,153,0.4)"}}>📤 End Day &amp; Share Results</button>
         </div>
       </div>}
 
       {showBuyModal&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:300,width:"90%"}}>
-          <div style={{fontSize:44}}>🔓</div>
-          <div style={{fontSize:20,fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
-          <div style={{fontSize:13,color:"#bbb",marginTop:8,lineHeight:1.6}}>Spend points to unlock the next level.</div>
-          <div style={{fontSize:24,color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
-          <div style={{fontSize:12,color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
-          <div style={{fontSize:11,color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits Perfect Day and time records</div>
-          <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:"13px",borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:14,fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
-          <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:12}}>Keep Playing</button>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:ipadTour(32),textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:ipadTour(300),width:"90%"}}>
+          <div style={{fontSize:ipadTour(44)}}>🔓</div>
+          <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Buy Level {level+1}?</div>
+          <div style={{fontSize:ipadTour(13),color:"#bbb",marginTop:8,lineHeight:1.6}}>Spend points to unlock the next level.</div>
+          <div style={{fontSize:ipadTour(24),color:"#f6d365",fontWeight:"bold",marginTop:12}}>{buyCost} pts</div>
+          <div style={{fontSize:ipadTour(12),color:totalScore>=buyCost?"#6ee7b7":"#fb7185",marginTop:4}}>You have: {totalScore} pts · {totalScore>=buyCost?"✓ Enough":"✗ Not enough"}</div>
+          <div style={{fontSize:ipadTour(11),color:"#f093fb",marginTop:6}}>⚠️ Buying forfeits Perfect Day and time records</div>
+          <button className="ll-btn" onClick={handleBuyLevel} disabled={!canBuy} style={{marginTop:16,width:"100%",padding:ipadTour(13),borderRadius:14,background:canBuy?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.1)",color:canBuy?"#1a1a2e":"rgba(255,255,255,0.3)",fontSize:ipadTour(14),fontWeight:"bold",cursor:canBuy?"pointer":"default"}}>{canBuy?`Unlock Level ${level+1} — ${buyCost} pts`:"Not enough points"}</button>
+          <button className="ll-btn" onClick={()=>setShowBuyModal(false)} style={{marginTop:8,width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.5)",fontSize:ipadTour(12)}}>Keep Playing</button>
         </div>
       </div>}
 
       {showStreakBonus&&<div style={{position:"fixed",inset:0,zIndex:9998,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
-        <div style={{background:"linear-gradient(135deg,#1a0a40,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 0 60px rgba(246,211,101,0.4)",border:"2px solid rgba(246,211,101,0.6)",maxWidth:340,width:"100%",position:"relative"}}>
+        <div style={{background:"linear-gradient(135deg,#1a0a40,#2d1b69)",borderRadius:28,padding:`${ipadTour(32)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 0 60px rgba(246,211,101,0.4)",border:"2px solid rgba(246,211,101,0.6)",maxWidth:ipadTour(340),width:"100%",position:"relative"}}>
           <ConfettiCanvas active={true} rainbow={true}/>
-          <div style={{fontSize:52,marginBottom:8}}>🌈🏆</div>
-          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginBottom:6,lineHeight:1.3}}>
+          <div style={{fontSize:ipadTour(52),marginBottom:8}}>🌈🏆</div>
+          <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginBottom:6,lineHeight:1.3}}>
             {streakBonusCount === 1 ? "Perfect Day Bonus!" : `${streakBonusCount} Consecutive Perfect Days!`}
           </div>
 
-          <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.6)",borderRadius:16,padding:"16px",marginBottom:20}}>
-            <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginBottom:4}}>Rainbow's End Bonus</div>
-            <div style={{fontSize:36,fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()}</div>
-            <div style={{fontSize:13,color:"rgba(255,255,255,0.5)"}}>pts added to your score</div>
-            {streakBonusCount > 1 && <div style={{fontSize:11,color:"rgba(255,255,255,0.4)",marginTop:4}}>2,000 + {streakBonusCount-1} × 1,000 pts streak bonus</div>}
+          <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.6)",borderRadius:16,padding:ipadTour(16),marginBottom:20}}>
+            <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.6)",marginBottom:4}}>Rainbow's End Bonus</div>
+            <div style={{fontSize:ipadTour(36),fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()}</div>
+            <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.5)"}}>pts added to your score</div>
+            {streakBonusCount > 1 && <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.4)",marginTop:4}}>2,000 + {streakBonusCount-1} × 1,000 pts streak bonus</div>}
           </div>
-          <button className="ll-btn" onClick={()=>{ setShowStreakBonus(false); setTimeout(()=>setPerfectDayAchieved(true), 200); }} style={{width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold",border:"none",cursor:"pointer"}}>
+          <button className="ll-btn" onClick={()=>{ setShowStreakBonus(false); setTimeout(()=>setPerfectDayAchieved(true), 200); }} style={{width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(15),fontWeight:"bold",border:"none",cursor:"pointer"}}>
             🎉 Awesome! Continue →
           </button>
         </div>
       </div>}
 
-      {perfectDayAchieved&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%",margin:"20px auto"}}>
-          <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={130}/></div>
-          <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
-          <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
-          <div style={{marginTop:12,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>🏆 {playerName||"You"}<br/>{getShortDate()}<br/>Score: {totalScore} pts<br/>💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+      {showWotdMissedPD&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(28)}px ${ipadTour(24)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.85)",border:"2px solid rgba(246,211,101,0.5)",maxWidth:ipadTour(340),width:"100%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
+          <div style={{fontSize:ipadTour(46),marginBottom:8}}>🎯</div>
+          <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f6d365",marginBottom:10}}>Wow! So close!</div>
+          <div style={{fontSize:ipadTour(14),color:"rgba(255,255,255,0.95)",lineHeight:1.6,marginBottom:20}}>
+            Remember, finding the Word of the Day is part of accomplishing a LetterLoot Perfect Day.
+          </div>
+          <button className="ll-btn" onClick={()=>{ setShowWotdMissedPD(false); triggerFarewell(); }} style={{width:"100%",padding:ipadTour(13),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(14),fontWeight:"bold",border:"none",cursor:"pointer"}}>
+            See My Results →
+          </button>
+        </div>
+      </div>}
+
+      {/* v91: Perfect Day pirate+leprechaun DANCE celebration — full-screen overlay that
+          plays first (rise → dance → sparkles), auto-dismisses after ~5.2s, revealing the
+          stats modal beneath. zIndex above the PD modal (9500). */}
+      {showPirateDance&&<div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(10,8,30,0.92)",overflow:"hidden",animation:"pdFlash 1.4s ease"}}>
+        {/* sparkles scattered around the dancers */}
+        {Array.from({length:18}).map((_,i)=>(
+          <div key={i} style={{position:"absolute",left:`${8+Math.random()*84}%`,bottom:`${20+Math.random()*55}%`,fontSize:`${20+Math.random()*18}px`,opacity:0,animation:`pdSparkleFloat ${1.1+Math.random()*0.8}s ease ${0.3+Math.random()*3.5}s forwards`,pointerEvents:"none"}}>{["✨","⭐","💫","🌟","🎉"][i%5]}</div>
+        ))}
+        <div style={{position:"absolute",top:"16%",left:0,right:0,textAlign:"center",fontSize:ipadTour(26),fontWeight:"bold",letterSpacing:1}} className="perfect-text">PERFECT DAY! 🌈</div>
+        <img src="/perfect-day-pirates.png" alt="" style={{position:"absolute",left:"50%",bottom:"-380px",transform:"translateX(-50%)",width:ipadTour(280),height:"auto",pointerEvents:"none",filter:"drop-shadow(0 8px 16px rgba(0,0,0,0.6))",animation:"pdPiratesRise 0.7s cubic-bezier(.34,1.56,.64,1) 0.1s forwards, pdPiratesJig 1.0s ease 1.0s 3 forwards, pdPiratesOut 0.6s ease-in 4.4s forwards"}}/>
+      </div>}
+
+      {perfectDayAchieved&&!showPirateDance&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(32)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(340),width:"90%",margin:"20px auto"}}>
+          {/* Title row: PERFECT DAY! 🌈 + PotOfGold inline */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:6,flexWrap:"nowrap"}}>
+            <div style={{fontSize:ipadTour(22),fontWeight:"bold",whiteSpace:"nowrap"}} className="perfect-text">PERFECT DAY! 🌈</div>
+            <PotOfGold size={ipadTour(48)}/>
+          </div>
+          {/* Bonus inline accent under title — hidden for Guests since they
+              do not receive the +2,000 PD bonus or streak bonuses. The
+              upsell popup after Now/Later/Tomorrow tells them about it. */}
+          {!isGuest&&<div style={{fontSize:ipadTour(14),color:"#fda085",fontWeight:"bold",marginBottom:10}}>Bonus: +2,000 pts</div>}
+          {/* Tagline - shrunk font size so the 10 rotating taglines fit 1-2 lines naturally */}
+          <div style={{fontSize:ipadTour(12),color:"#f5f0e8",marginBottom:14,lineHeight:1.5,fontStyle:"italic"}}>"{congratsMsg}"</div>
+          {/* Stats - 2 rows (was 4) with dot separators */}
+          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:`${ipadTour(10)}px ${ipadTour(12)}px`,fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.6,marginBottom:ipadTour(10)}}>
+            <div>🏆 {playerName||"You"} · {getShortDate()}</div>
+            <div style={{color:"rgba(255,255,255,0.85)"}}>Score: {totalScore} pts · 💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
+          </div>
           {wotdFoundDetails && (
-            <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:12,color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
-              <span style={{fontSize:11,color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
+            <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
+              <span style={{fontSize:ipadTour(11),color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
               <strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
             </div>
           )}
-          <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
-            🏆 Check Leaderboard
-          </button>
-          <button className="ll-btn" onClick={()=>{
-            if (isGuest) { setShowGuestUpsell(true); return; }
-            navigator.clipboard?.writeText(getPerfectDayShareText());
-            setShareCopied(true); setTimeout(() => setShareCopied(false), 4000);
-          }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
-            {shareCopied?"✓ Copied!":"📋 Save & Share!"}
-          </button>
-          {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
-          {!playAgainChoice&&(
-            <div style={{marginTop:14}}>
-              <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginBottom:8}}>Want to play again?</div>
-              <div style={{display:"flex",gap:6}}>
-                <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPlayAgainChoice("now"); setTimeout(()=>{ setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset({skipWelcome:true}); },2000); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:11,fontWeight:"bold",border:"none"}}>✏️ Now</button>
-                <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPlayAgainChoice("later"); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:11,fontWeight:"bold"}}>🌅 Later</button>
-                <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPlayAgainChoice("tomorrow"); }} style={{flex:1,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:11,fontWeight:"bold"}}>🌙 Tomorrow</button>
-              </div>
+          {/* Tracking note - brightened, no bold */}
+          <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.9)",lineHeight:1.5,marginTop:12,marginBottom:14}}>Perfect Days are tracked daily toward your total — but every one is worth celebrating!</div>
+          {/* Action buttons - Leaderboard + Share Perfect Day side by side
+              v59: Leaderboard button is LOCKED for Guests. Dimmed colors,
+              🔒 icon, tap → Guest Upsell modal. Visible reminder of what
+              they're missing. */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+            <button className="ll-btn" onClick={()=>{
+              if (isGuest) { setPerfectDayAchieved(false); setShowGuestUpsell(true); return; }
+              markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard');
+            }} style={{padding:`${ipadTour(11)}px ${ipadTour(6)}px`,borderRadius:12,background:isGuest?"rgba(255,255,255,0.04)":"rgba(246,211,101,0.18)",border:isGuest?"1px solid rgba(255,255,255,0.15)":"1px solid rgba(246,211,101,0.6)",color:isGuest?"rgba(255,255,255,0.5)":"#fef3c7",fontSize:ipadTour(12),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>
+              {isGuest?<span><span style={{filter:"grayscale(0.6)",opacity:0.55}}>🏆</span> Leaderboard <span style={{color:"rgba(167,139,250,0.85)"}}>🔒</span></span>:"🏆 Leaderboard"}
+            </button>
+            <button className="ll-btn" onClick={()=>{
+              sharePerfectDay();
+            }} style={{padding:`${ipadTour(11)}px ${ipadTour(6)}px`,borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(12),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+              {shareCopied?"✓ Copied!":"📋 Share Perfect Day"}
+            </button>
+          </div>
+          {shareCopied&&<div style={{fontSize:ipadTour(11),color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
+          {/* v64 (May 26): Simplified — Now + Later only.
+              Now → dismiss PD + start new game at L1 (skipWelcome).
+              Later → dismiss PD + return to Welcome screen.
+              Tomorrow button removed (merged into Later).
+              No intermediate playAgainChoice states — single-tap routing. */}
+          <div style={{marginTop:14}}>
+            <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.7)",marginBottom:6}}>Want to play again?</div>
+            <div style={{display:"flex",gap:6}}>
+              <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
+              <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setShowIntro(true); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#dbeafe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
             </div>
-          )}
-          {playAgainChoice==="now"&&<div style={{marginTop:14,fontSize:20,fontWeight:"bold",color:"#00e676"}}>Let's Go! 🎯</div>}
-          {playAgainChoice==="later"&&(<div style={{marginTop:14}}>
-            <div style={{fontSize:15,color:"#bfdbfe",lineHeight:1.7,fontWeight:"bold"}}>Nice work so far.<br/>See you later! 🌅</div>
-            <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset(); }} style={{marginTop:14,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:14,fontWeight:"bold",border:"none"}}>✏️ Play Now</button>
-            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setPlayAgainChoice(null); handleFullReset(); setShowIntro(false); }} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close — I'll be back later</button>
-          </div>)}
-          {playAgainChoice==="tomorrow"&&(<div style={{marginTop:14}}><div style={{fontSize:14,color:"#e9d5ff",lineHeight:1.8,fontWeight:"bold"}}>New Boards, New Words.<br/>Another Perfect Day will be waiting! 🌙</div><button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setPlayAgainChoice(null); }} style={{marginTop:12,width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.6)",fontSize:12}}>Close</button></div>)}
+          </div>
         </div>
       </div>}
 
       {showRepeatPerfect&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"32px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:340,width:"90%",margin:"20px auto"}}>
-          <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={130}/></div>
-          <div style={{fontSize:24,fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
-          <div style={{fontSize:13,color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(32)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(340),width:"90%",margin:"20px auto"}}>
+          <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={ipadTour(130)}/></div>
+          <div style={{fontSize:ipadTour(24),fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
+          <div style={{fontSize:ipadTour(13),color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
           {perfectDayStreakBonus > 0 && (
             <div style={{marginTop:10,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",borderRadius:12,padding:"10px",border:"1px solid rgba(246,211,101,0.5)",textAlign:"center"}}>
-              <div style={{fontSize:20,fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()} pts 🌈🏆</div>
+              <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()} pts 🌈🏆</div>
             </div>
           )}
-          <div style={{marginTop:10,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:12,color:"#ccc",lineHeight:1.6}}>
+          <div style={{marginTop:10,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#ccc",lineHeight:1.6}}>
             🏆 {playerName||"You"}<br/>{getShortDate()}<br/>
             Score: {totalRef.current} pts<br/>
             💰 Lifetime: {lifetimePoints.toLocaleString()} pts
           </div>
           {wotdFoundDetails && (
-            <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:12,color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
-              <span style={{fontSize:11,color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
+            <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
+              <span style={{fontSize:ipadTour(11),color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
               <strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
             </div>
           )}
-          <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
+          <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
             Perfect Days are tracked daily toward your total — but every one is worth celebrating!
           </div>
-          <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setTab('leaderboard'); }} style={{marginTop:12,width:"100%",padding:"11px",borderRadius:14,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:13,fontWeight:"bold"}}>
-            🏆 Check Leaderboard
+          <button className="ll-btn" onClick={()=>{
+            if (isGuest) { setShowRepeatPerfect(false); setShowGuestUpsell(true); return; }
+            markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setTab('leaderboard');
+          }} style={{marginTop:12,width:"100%",padding:ipadTour(11),borderRadius:14,background:isGuest?"rgba(255,255,255,0.04)":"rgba(246,211,101,0.15)",border:isGuest?"1px solid rgba(255,255,255,0.15)":"1px solid rgba(246,211,101,0.5)",color:isGuest?"rgba(255,255,255,0.5)":"#f6d365",fontSize:ipadTour(13),fontWeight:"bold"}}>
+            {isGuest?<span><span style={{filter:"grayscale(0.6)",opacity:0.55}}>🏆</span> Check Leaderboard <span style={{color:"rgba(167,139,250,0.85)"}}>🔒</span></span>:"🏆 Check Leaderboard"}
           </button>
           <button className="ll-btn" onClick={()=>{
-            if (isGuest) { setShowGuestUpsell(true); return; }
-            navigator.clipboard?.writeText(getPerfectDayShareText());
-            setShareCopied(true); setTimeout(()=>setShareCopied(false),4000);
-          }} style={{marginTop:8,width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold"}}>
+            sharePerfectDay();
+          }} style={{marginTop:8,width:"100%",padding:ipadTour(12),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(13),fontWeight:"bold"}}>
             {shareCopied?"✓ Copied!":"📋 Save & Share!"}
           </button>
-          {shareCopied&&<div style={{fontSize:11,color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
-          <div style={{fontSize:12,color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
+          {shareCopied&&<div style={{fontSize:ipadTour(11),color:"#6ee7b7",marginTop:4}}>Copied! Paste into a text or email to share.</div>}
+          <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
+          {/* v64 (May 26): Simplified — Now + Later only. Tomorrow removed. */}
           <div style={{display:"flex",flexDirection:"row",gap:6}}>
-            <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:12,fontWeight:"bold",border:"none"}}>✏️ Now</button>
-            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); handleFullReset(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:12,fontWeight:"bold"}}>🌅 Later</button>
-            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); triggerFarewell(); }} style={{flex:1,padding:"11px 4px",borderRadius:12,background:"linear-gradient(135deg,rgba(167,139,250,0.3),rgba(124,58,237,0.2))",border:"1px solid rgba(167,139,250,0.6)",color:"#e9d5ff",fontSize:12,fontWeight:"bold"}}>🌙 Tomorrow</button>
+            <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
+            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); setShowIntro(true); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
           </div>
         </div>
       </div>}
 
       {levelComplete&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:"36px 32px",textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:320,width:"90%"}}>
-          <div style={{fontSize:52}}>🎉</div>
-          <div style={{fontSize:26,fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
-          <div style={{fontSize:13,color:"#ccc",marginTop:8}}>You used every tile!</div>
-          <div style={{fontSize:22,color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
-          <div style={{fontSize:13,color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
-          {newBestTime&&<div style={{fontSize:12,color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
-          {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:11,color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
-          {level < 5 && <div style={{fontSize:12,color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*6} tiles · {getBonusCount(level+1)} bonus tiles</div>}
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(36)}px ${ipadTour(32)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(320),width:"90%"}}>
+          {/* v94: celebrating pirate with a per-level entrance animation + level-specific saying */}
+          <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
+            <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{width:ipadTour(120),height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
+          </div>
+          <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#f6d365",fontFamily:"Georgia,serif",lineHeight:1.4,marginBottom:4,animation:"plSpeechIn 0.4s ease 0.5s both"}}>{PIRATE_CLEAR_SAYINGS[level]||PIRATE_CLEAR_SAYINGS[1]}</div>
+          <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
+          <div style={{fontSize:ipadTour(13),color:"#ccc",marginTop:8}}>You used every tile!</div>
+          <div style={{fontSize:ipadTour(22),color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
+          <div style={{fontSize:ipadTour(13),color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
+          {newBestTime&&<div style={{fontSize:ipadTour(12),color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
+          {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:ipadTour(11),color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
+          {level < 5 && <div style={{fontSize:ipadTour(12),color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*7} tiles · {getBonusCount(level+1)} bonus tiles</div>}
           {level < 5
-            ? <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:15,fontWeight:"bold"}}>Play Level {level+1} →</button>
-            : <button className="ll-btn" onClick={()=>{ setLevelComplete(false); triggerFarewell(); }} style={{marginTop:20,width:"100%",padding:"14px",borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:15,fontWeight:"bold"}}>📊 See Today's Summary</button>
+            ? <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(15),fontWeight:"bold"}}>Play Level {level+1} →</button>
+            : <button className="ll-btn" onClick={()=>{ setLevelComplete(false); triggerFarewell(); }} style={{marginTop:20,width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:ipadTour(15),fontWeight:"bold"}}>📊 See Today's Summary</button>
           }
         </div>
       </div>}
@@ -4000,13 +5046,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       </div>}
 
       {/* ── HEADER ── */}
-      <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"calc(var(--ll-safe-top, 0px) + 8px) 10px 0",minHeight:0}}>
+      <div style={{zIndex:1,width:"100%",maxWidth:ipadBoardW()||ipadW(480),padding:"calc(var(--ll-safe-top, 0px) + 8px) 10px 0",minHeight:0}}>
 
         {/* ROW 1: Name · Date · Tour */}
-        <div style={{display:"flex",alignItems:"center",gap:3,marginBottom:3}}>
-          <span style={{fontSize:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:"1px 7px",background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
-          <span style={{flex:1,fontSize:11,color:"rgba(255,255,255,0.85)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
-          {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.15)",border:"1px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"3px 10px",cursor:"pointer",fontSize:10,color:"#c4b5fd",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
+        <div style={{display:"flex",alignItems:"center",gap:ipadChrome(3),marginBottom:ipadChrome(3)}}>
+          <span style={{fontSize:isIpadWidth()?21:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:`${ipadChrome(1)}px ${ipadChrome(7)}px`,background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
+          <span style={{flex:1,fontSize:isIpadWidth()?21:11,color:"rgba(255,255,255,0.95)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
+          {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.25)",border:"1.5px solid rgba(167,139,250,0.7)",borderRadius:12,padding:`${ipadChrome(3)}px ${ipadChrome(10)}px`,cursor:"pointer",fontSize:isIpadWidth()?21:10,color:"#e0d4ff",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
         </div>
 
         {/* ROW 2: Start New Game · Replay L# · Buy L#+1 — only on play tab */}
@@ -4017,45 +5063,45 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             const hasProgress = (submittedRef.current||[]).some(s=>s.valid) || level>1 || totalRef.current>0;
             if (hasProgress) setShowNewGameConfirm(true);
             else handleFullReset();
-          }} style={{flex:1,padding:"7px 4px",borderRadius:9,background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",color:"#fca5a5",fontSize:10,fontFamily:"Georgia,serif",fontWeight:"bold",textAlign:"center"}}>🆕 Start New Game</button>
-          <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:"7px 4px",borderRadius:9,fontSize:10,background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>{level===5?"🔄 Replay L5":"🔄 Replay L"+level}</button>
-          {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:"7px 4px",borderRadius:9,fontSize:10,background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>🔓 Buy L{level+1} — {buyCost} pts</button>}
+          }} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",color:"#fca5a5",fontSize:ipadChrome(10),fontFamily:"Georgia,serif",fontWeight:"bold",textAlign:"center"}}>🆕 Start New Game</button>
+          <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>{level===5?"🔄 Replay L5":"🔄 Replay L"+level}</button>
+          {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>🔓 Buy L{level+1} — {buyCost} pts</button>}
         </div>
         )}
 
         {/* ROW 3: L5 · TIME · Level 00:00 · Total 00:00 · Pause — only on play tab */}
-        {tab==="play" && (
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.07)",borderRadius:7,padding:"3px 8px",marginBottom:3,border:"1px solid rgba(255,255,255,0.18)",gap:4}}>
-          <span style={{padding:"2px 8px",borderRadius:10,fontSize:9,fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
-          <span style={{fontSize:9,color:"rgba(255,255,255,0.7)",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
-          <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Level</span>
-          <span className={pulseTime?"pulse-big":""} style={{fontSize:12,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
-          <span style={{fontSize:8,color:"rgba(255,255,255,0.5)",flexShrink:0}}>Total</span>
-          <span style={{fontSize:12,fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace",flexShrink:0}}>{formatTime(totalTime)}</span>
-          <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:"2px 8px",fontSize:9,color:paused?"#003300":"#ffffff",fontWeight:"bold",flexShrink:0}}>
+        {tab==="play" && (<>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.07)",borderRadius:7,padding:`${ipadChrome(3)}px ${ipadChrome(8)}px`,marginBottom:3,border:"1px solid rgba(255,255,255,0.18)",gap:4}}>
+          <span style={{padding:`${ipadChrome(2)}px ${ipadChrome(8)}px`,borderRadius:10,fontSize:ipadChrome(9),fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
+          <span style={{fontSize:ipadChrome(9),color:"rgba(255,255,255,0.7)",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
+          <span style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.5)",flexShrink:0}}>Level</span>
+          <span className={pulseTime?"pulse-big":""} style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
+          <span style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.5)",flexShrink:0}}>Total</span>
+          <span style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace",flexShrink:0}}>{formatTime(totalTime)}</span>
+          <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:`${ipadChrome(2)}px ${ipadChrome(8)}px`,fontSize:ipadChrome(9),color:paused?"#003300":"#ffffff",fontWeight:"bold",flexShrink:0}}>
             {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
         </div>
-        )}
+        </>)}
 
         {/* ROW 4: Remaining · Vowels · Consonants · UNDO — only on play tab */}
         {tab==="play" && (
         <div style={{display:"flex",gap:4,marginBottom:3}}>
-          <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
-            <div style={{fontSize:12,fontWeight:"bold",color:"#60a5fa"}}>{availableTiles.length}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>REMAINING</div>
+          <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:8,padding:`${ipadChrome(3)}px ${ipadChrome(3)}px`,textAlign:"center"}}>
+            <div style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#60a5fa"}}>{availableTiles.length}</div>
+            <div style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5}}>{isIpadWidth()?"REMAINING LETTERS":"REMAINING"}</div>
           </div>
-          <div style={{flex:1,background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
-            <div style={{fontSize:12,fontWeight:"bold",color:"#6ee7b7"}}>{vowelsRemaining}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>VOWELS</div>
+          <div style={{flex:1,background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:8,padding:`${ipadChrome(3)}px ${ipadChrome(3)}px`,textAlign:"center"}}>
+            <div style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#6ee7b7"}}>{vowelsRemaining}</div>
+            <div style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5}}>VOWELS</div>
           </div>
-          <div style={{flex:1,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:8,padding:"3px 3px",textAlign:"center"}}>
-            <div style={{fontSize:12,fontWeight:"bold",color:"#a78bfa"}}>{consonantsRemaining}</div>
-            <div style={{fontSize:6,color:"rgba(255,255,255,0.75)"}}>CONSON.</div>
+          <div style={{flex:1,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:8,padding:`${ipadChrome(3)}px ${ipadChrome(3)}px`,textAlign:"center"}}>
+            <div style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#a78bfa"}}>{consonantsRemaining}</div>
+            <div style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5}}>CONSON.</div>
           </div>
           <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
             disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
-            style={{flex:2,padding:"3px 4px",borderRadius:8,fontSize:9,background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif",lineHeight:1.2}}>
+            style={{flex:2,padding:`${ipadChrome(3)}px ${ipadChrome(4)}px`,borderRadius:8,fontSize:ipadChrome(9),background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif",lineHeight:1.2}}>
             {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO — 1,000 pts`:<span>↩️ UNDO at <span style={{color:"#fda085"}}>1,000 pts</span></span>)}
           </button>
         </div>
@@ -4066,58 +5112,68 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* ── MENU HUB TAB ── (new, May 2026) — replaces the old top-row tab pills.
           Players tap 📋 Menu from the Play screen to reach this hub of secondary destinations. */}
       {tab==="menu"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 14px 14px",animation:"slideUp 0.3s ease"}}>
-          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadW(480),padding:"0 14px 14px",animation:"slideUp 0.3s ease"}}>
+          <button className="ll-btn" onClick={()=>setTab("play")} style={{width:"100%",padding:ipadMenu(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(13),fontWeight:"bold",border:"none",marginBottom:14,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             ✏️ Back to Game
           </button>
 
-          <div style={{fontSize:11,color:"#f6d365",letterSpacing:3,fontWeight:"bold",textAlign:"center",marginBottom:14}}>📋 MENU</div>
+          <div style={{fontSize:ipadMenu(11),color:"#f6d365",letterSpacing:3,fontWeight:"bold",textAlign:"center",marginBottom:14}}>📋 MENU</div>
 
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-            <button className="ll-btn" onClick={()=>setTab("history")} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
-              <div style={{fontSize:28,marginBottom:6}}>📜</div>
-              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>History</div>
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Every word you've played — including rejected words you can submit for review</div>
+          <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:8}}>
+            <button className="ll-btn" onClick={()=>setTab("history")} style={{padding:`${ipadMenu(14)}px ${ipadMenu(14)}px`,borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:ipadMenu(14),width:"100%"}}>
+              <div style={{fontSize:ipadMenu(28),flexShrink:0,lineHeight:1}}>📜</div>
+              <div style={{flex:1,textAlign:"left"}}>
+                <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f5f0e8",marginBottom:2}}>History</div>
+                <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)",lineHeight:1.4}}>Every word you've played — including rejected words you can submit for review</div>
+              </div>
             </button>
 
+            <button className="ll-btn" onClick={()=>setTab("stats")} style={{padding:`${ipadMenu(14)}px ${ipadMenu(14)}px`,borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:ipadMenu(14),width:"100%"}}>
+              <div style={{fontSize:ipadMenu(28),flexShrink:0,lineHeight:1}}>📊</div>
+              <div style={{flex:1,textAlign:"left"}}>
+                <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f5f0e8",marginBottom:2}}>Stats</div>
+                <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)",lineHeight:1.4}}>Your scores, streaks, Perfect Days &amp; records</div>
+              </div>
+            </button>
+
+            <button className="ll-btn" onClick={()=>setTab("badges")} style={{padding:`${ipadMenu(14)}px ${ipadMenu(14)}px`,borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:ipadMenu(14),width:"100%"}}>
+              <div style={{fontSize:ipadMenu(28),flexShrink:0,lineHeight:1}}>🏅</div>
+              <div style={{flex:1,textAlign:"left"}}>
+                <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f5f0e8",marginBottom:2}}>Badges</div>
+                <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)",lineHeight:1.4}}>Achievements you've earned</div>
+              </div>
+            </button>
+
+            {/* Leaderboard — LOCKED for Guests (v57 spec).
+                Guests see: dimmed colors, 🔒 lock icon, "Sign in to access" hint.
+                Tap → opens Guest Upsell modal. */}
             <button className="ll-btn" onClick={()=>{
-              // Guests get an upsell modal when tapping Stats
-              if (isGuest) { setShowGuestUpsell(true); return; }
-              setTab("stats");
-            }} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
-              <div style={{fontSize:28,marginBottom:6}}>📊</div>
-              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Stats</div>
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Your scores, streaks, Perfect Days &amp; records</div>
-            </button>
-
-            <button className="ll-btn" onClick={()=>setTab("badges")} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
-              <div style={{fontSize:28,marginBottom:6}}>🏅</div>
-              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Badges</div>
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Achievements you've earned</div>
-            </button>
-
-            <button className="ll-btn" onClick={()=>{
-              // Guests get an upsell modal when tapping Leaders
               if (isGuest) { setShowGuestUpsell(true); return; }
               setTab("leaderboard");
-            }} style={{padding:"18px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
-              <div style={{fontSize:28,marginBottom:6}}>🏆</div>
-              <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Leaders</div>
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Top scores, longest words, Perfect Days</div>
+            }} style={{padding:`${ipadMenu(14)}px ${ipadMenu(14)}px`,borderRadius:14,background:isGuest?"rgba(255,255,255,0.03)":"rgba(255,255,255,0.06)",border:isGuest?"1px solid rgba(255,255,255,0.12)":"1px solid rgba(255,255,255,0.22)",color:isGuest?"rgba(255,255,255,0.45)":"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:ipadMenu(14),width:"100%"}}>
+              <div style={{fontSize:ipadMenu(28),flexShrink:0,lineHeight:1,filter:isGuest?"grayscale(0.6)":"none",opacity:isGuest?0.55:1}}>🏆</div>
+              <div style={{flex:1,textAlign:"left"}}>
+                <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:isGuest?"rgba(255,255,255,0.55)":"#f5f0e8",marginBottom:2,display:"flex",alignItems:"center",gap:6}}>
+                  Leaders {isGuest&&<span style={{fontSize:ipadMenu(12),color:"rgba(167,139,250,0.85)"}}>🔒</span>}
+                </div>
+                <div style={{fontSize:ipadMenu(10),color:isGuest?"rgba(167,139,250,0.75)":"rgba(255,255,255,0.9)",lineHeight:1.4,fontStyle:isGuest?"italic":"normal"}}>{isGuest?"Sign in to access":"Top scores, longest words, Perfect Days"}</div>
+              </div>
             </button>
           </div>
 
-          {/* Tips spans full width */}
-          <button className="ll-btn" onClick={()=>setTab("info")} style={{width:"100%",padding:"16px 10px",borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"center",cursor:"pointer"}}>
-            <div style={{fontSize:24,marginBottom:4}}>ℹ️</div>
-            <div style={{fontSize:13,fontWeight:"bold",color:"#f5f0e8"}}>Tips &amp; How to Play</div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:3,lineHeight:1.4}}>Rules, scoring, strategy</div>
+          {/* Tips — also as horizontal row for consistency */}
+          <button className="ll-btn" onClick={()=>setTab("info")} style={{width:"100%",padding:`${ipadMenu(14)}px ${ipadMenu(14)}px`,borderRadius:14,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.22)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:ipadMenu(14)}}>
+            <div style={{fontSize:ipadMenu(24),flexShrink:0,lineHeight:1}}>ℹ️</div>
+            <div style={{flex:1,textAlign:"left"}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f5f0e8",marginBottom:2}}>Tips &amp; How to Play</div>
+              <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)",lineHeight:1.4}}>Rules, scoring, strategy</div>
+            </div>
           </button>
 
           {/* Settings — music toggle */}
-          <div style={{marginTop:12,padding:"10px 14px",background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontSize:12,color:"#f5f0e8",fontFamily:"Georgia,serif"}}>♫ Background Music</span>
-            <button onClick={()=>setMusicOn(m=>!m)} style={{background:musicOn?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.08)",border:`1px solid ${musicOn?"rgba(0,230,118,0.7)":"rgba(255,255,255,0.3)"}`,borderRadius:14,padding:"4px 14px",cursor:"pointer",fontSize:11,color:musicOn?"#003300":"rgba(255,255,255,0.65)",fontFamily:"Georgia,serif",fontWeight:"bold"}}>
+          <div style={{marginTop:12,padding:`${ipadMenu(10)}px ${ipadMenu(14)}px`,background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:12,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontSize:ipadMenu(12),color:"#f5f0e8",fontFamily:"Georgia,serif"}}>♫ Background Music</span>
+            <button onClick={()=>setMusicOn(m=>!m)} style={{background:musicOn?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.08)",border:`1px solid ${musicOn?"rgba(0,230,118,0.7)":"rgba(255,255,255,0.3)"}`,borderRadius:14,padding:`${ipadMenu(4)}px ${ipadMenu(14)}px`,cursor:"pointer",fontSize:ipadMenu(11),color:musicOn?"#003300":"rgba(255,255,255,0.85)",fontFamily:"Georgia,serif",fontWeight:"bold"}}>
               {musicOn?"ON":"OFF"}
             </button>
           </div>
@@ -4125,14 +5181,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {/* Account section — only for signed-in (non-guest) users */}
           {!isGuest && (
             <div style={{marginTop:18,paddingTop:14,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",letterSpacing:2,fontWeight:"bold",textAlign:"center",marginBottom:8}}>ACCOUNT</div>
-              <button onClick={onSignOut} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.2)",color:"rgba(255,255,255,0.7)",fontSize:12,fontFamily:"Georgia,serif",fontWeight:"bold",cursor:"pointer",marginBottom:8}}>
+              <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.85)",letterSpacing:2,fontWeight:"bold",textAlign:"center",marginBottom:8}}>ACCOUNT</div>
+              <button onClick={onSignOut} style={{width:"100%",padding:ipadMenu(10),borderRadius:12,background:"rgba(255,255,255,0.05)",border:"1px solid rgba(255,255,255,0.3)",color:"rgba(255,255,255,0.95)",fontSize:ipadMenu(12),fontFamily:"Georgia,serif",fontWeight:"bold",cursor:"pointer",marginBottom:8}}>
                 Sign Out
               </button>
-              <button onClick={()=>setShowDeleteAccount(true)} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",color:"#fca5a5",fontSize:12,fontFamily:"Georgia,serif",fontWeight:"bold",cursor:"pointer"}}>
+              <button onClick={()=>setShowDeleteAccount(true)} style={{width:"100%",padding:ipadMenu(10),borderRadius:12,background:"rgba(239,68,68,0.08)",border:"1px solid rgba(239,68,68,0.4)",color:"#fca5a5",fontSize:ipadMenu(12),fontFamily:"Georgia,serif",fontWeight:"bold",cursor:"pointer"}}>
                 Delete Account
               </button>
-              <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",textAlign:"center",marginTop:6,lineHeight:1.5}}>
+              <div style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.7)",textAlign:"center",marginTop:6,lineHeight:1.5}}>
                 Deleting your account permanently removes all your data and cannot be undone.
               </div>
             </div>
@@ -4142,33 +5198,33 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* ── PLAY TAB ── */}
       {tab==="play"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 10px 6px",animation:"slideUp 0.3s ease"}}>
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadBoardW()||ipadW(480),padding:isIpadWidth()?"0 0 6px":"0 10px 6px",animation:"slideUp 0.3s ease"}}>
 
           {/* ROW 5: Submit Word · SCORE · Clear · Menu — Replay/Buy moved to Row 2 above tile board, UNDO moved to Row 4 */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>
-            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:3,padding:"9px 4px",borderRadius:9,fontSize:11,fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
-            <div style={{flex:1.5,padding:"4px 4px",borderRadius:9,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",border:"1.5px solid rgba(246,211,101,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",lineHeight:1.1}}>
-              <div style={{fontSize:7,color:"rgba(246,211,101,0.9)",fontWeight:"bold",letterSpacing:1}}>SCORE</div>
-              <div style={{fontSize:13,color:"#f6d365",fontWeight:"bold",fontFamily:"Georgia,serif"}}>{totalScore.toLocaleString()}</div>
+            <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:3,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(11),fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
+            <div style={{flex:1.5,padding:`${ipadChrome(4)}px ${ipadChrome(4)}px`,borderRadius:9,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",border:"1.5px solid rgba(246,211,101,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",lineHeight:1.1}}>
+              <div style={{fontSize:ipadChrome(7),color:"rgba(246,211,101,0.9)",fontWeight:"bold",letterSpacing:1}}>SCORE</div>
+              <div style={{fontSize:ipadChrome(13),color:"#f6d365",fontWeight:"bold",fontFamily:"Georgia,serif"}}>{totalScore.toLocaleString()}</div>
             </div>
-            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:10,fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
-            <button className="ll-btn" onClick={()=>setTab("menu")} style={{flex:1,padding:"9px 4px",borderRadius:9,fontSize:11,background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.6)",color:"#f6d365",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif"}}>📋 Menu</button>
+            <button className="ll-btn" onClick={()=>!validating&&!paused&&setSelected([])} style={{flex:1,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),fontWeight:"bold",background:"rgba(192,132,252,0.25)",border:"2px solid rgba(216,180,254,0.95)",color:"#ede9fe",textAlign:"center"}}>✕ Clear</button>
+            <button className="ll-btn" onClick={()=>setTab("menu")} style={{flex:1,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(11),background:"rgba(246,211,101,0.15)",border:"1px solid rgba(246,211,101,0.6)",color:"#f6d365",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif"}}>📋 Menu</button>
           </div>
 
           {/* ROW 7: Tap tiles to build a word */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"4px 8px",marginBottom:3,border:"1.5px solid rgba(255,255,255,0.8)",minHeight:30,animation:shake?"shake 0.4s ease":"none"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:8,padding:`${ipadWord(4)}px ${ipadWord(8)}px`,marginBottom:3,border:"1.5px solid rgba(255,255,255,0.8)",minHeight:ipadWord(30),animation:shake?"shake 0.4s ease":"none"}}>
             <div style={{display:"flex",gap:3,alignItems:"center",flex:1,flexWrap:"wrap"}}>
               {selected.length===0
-                ?<div style={{color:"rgba(255,255,255,0.3)",fontSize:10,fontStyle:"italic"}}>Tap tiles to build a word…</div>
+                ?<div style={{color:"rgba(255,255,255,0.6)",fontSize:ipadWord(10),fontStyle:"italic"}}>Tap tiles to build a word…</div>
                 :selected.map(id=>{ const tile=tiles.find(t=>t.id===id); return(
-                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:5,padding:"3px 6px",fontSize:14,fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>{tile?.letter}</div>
+                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:5,padding:`${ipadWord(3)}px ${ipadWord(6)}px`,fontSize:ipadWord(14),fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>{tile?.letter}</div>
                 );})
               }
             </div>
             {currentWord.length>0&&(
               <div style={{textAlign:"right",marginLeft:6,flexShrink:0}}>
-                <div style={{fontSize:11,color:"#f6d365",fontWeight:"bold"}}>+{currentScore}{getLongWordBonus(currentWord.length)>0&&<span style={{color:"#6ee7b7",fontSize:9}}> +{getLongWordBonus(currentWord.length)}!</span>}</div>
-                <div style={{fontSize:7,color:"rgba(255,255,255,0.4)"}}>{currentWord.length} ltrs</div>
+                <div style={{fontSize:ipadWord(11),color:"#f6d365",fontWeight:"bold"}}>+{currentScore}{getLongWordBonus(currentWord.length)>0&&<span style={{color:"#6ee7b7",fontSize:ipadWord(9)}}> +{getLongWordBonus(currentWord.length)}!</span>}</div>
+                <div style={{fontSize:ipadWord(7),color:"rgba(255,255,255,0.4)"}}>{currentWord.length} ltrs</div>
               </div>
             )}
           </div>
@@ -4180,27 +5236,35 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               <button className="ll-btn" onClick={handlePause} style={{marginTop:18,padding:"12px 32px",borderRadius:14,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:15,fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 20px rgba(0,200,83,0.5)"}}>▶️ Resume</button>
             </div>}
             {tileRows.map((row,ri)=>(
-              <div key={ri} style={{display:"flex",justifyContent:"center",gap:3,marginBottom:3}}>
+              <div key={ri} style={{display:"flex",justifyContent:"center",gap:ipadTile(3,level),marginBottom:ipadTile(3,level)}}>
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; const isLootUsed=tile.lootUsed; return(
-                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${isLootUsed?" loot-used":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&(triggerHaptic("light"),setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id]))} style={{width:38,height:44,background:isLootUsed?"linear-gradient(135deg,#f6d365,#fda085)":tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isLootUsed?"2px solid #00e676":isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)",boxShadow:isLootUsed?"0 0 12px rgba(246,211,101,0.6),0 0 4px rgba(0,230,118,0.5)":"none",position:"relative"}}>
-                    <div style={{fontSize:17,fontWeight:"bold",lineHeight:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
-                    <div style={{fontSize:7,fontWeight:"bold",marginTop:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isLootUsed?"5×":isTriple?"3×":isDouble?"2×":tile.value}</div>
-                    {isLootUsed&&<div style={{position:"absolute",top:-4,right:-4,fontSize:10}}>✨</div>}
+                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${isLootUsed?" loot-used":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&(awaitingFirstTapRef.current&&(awaitingFirstTapRef.current=false,setAwaitingFirstTap(false)),triggerHaptic("light"),setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id]))} style={{width:ipadTileW(38,level),height:ipadTile(44,level),background:isLootUsed?"linear-gradient(135deg,#f6d365,#fda085)":tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isLootUsed?"2px solid #00e676":isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)",boxShadow:isLootUsed?"0 0 12px rgba(246,211,101,0.6),0 0 4px rgba(0,230,118,0.5)":isSel?`0 0 ${ipadTile(12,level)}px ${ipadTile(3,level)}px rgba(0,230,118,0.85), 0 0 ${ipadTile(4,level)}px rgba(0,230,118,0.5)`:"none",position:"relative"}}>
+                    <div style={{fontSize:ipadTile(17,level),fontWeight:"bold",lineHeight:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
+                    <div style={{fontSize:ipadTile(7,level),fontWeight:"bold",marginTop:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isLootUsed?"5×":isTriple?"3×":isDouble?"2×":tile.value}</div>
+                    {isLootUsed&&<div style={{position:"absolute",top:-4,right:-4,fontSize:ipadTile(10,level)}}>✨</div>}
                   </div>
                 );})}
               </div>
             ))}
           </div>
 
-          {isGuest&&<div style={{marginTop:4,textAlign:"center"}}><button className="ll-btn" onClick={onSignOut} style={{padding:"4px 12px",borderRadius:10,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:9}}>☁️ Create Account to Save Progress</button></div>}
+          {/* v83 (item 18): "End Game & Share Results" at the true BASE of the tile board.
+              Understated; requires confirmation; routes to the Farewell summary + share. */}
+          <div style={{marginTop:ipadChrome(8)}}>
+            <button className="ll-btn" onClick={()=>setShowEndGameConfirm(true)} style={{width:"100%",padding:`${ipadChrome(8)}px ${ipadChrome(8)}px`,borderRadius:10,background:"rgba(255,255,255,0.05)",border:"1.5px solid rgba(239,68,68,0.85)",color:"#f6d365",fontSize:ipadChrome(14),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer",letterSpacing:0.5}}>
+              🏁 End Game &amp; Share Results
+            </button>
+          </div>
+
+          {isGuest&&<div style={{marginTop:ipadChrome(8),textAlign:"center"}}><button className="ll-btn" onClick={onSignOut} style={{padding:`${ipadChrome(9)}px ${ipadChrome(20)}px`,borderRadius:12,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:ipadChrome(13),fontWeight:"bold",border:"1px solid rgba(255,255,255,0.25)",boxShadow:"0 2px 8px rgba(124,58,237,0.5)"}}>☁️ Create Account to Save Progress</button></div>}
         </div>
       )}
 
       {/* ── BADGES TAB ── */}
       {tab==="badges"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            ✏️ Return to Game
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadW(480),padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          <button className="ll-btn" onClick={()=>setTab("menu")} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ← Back to Menu
           </button>
 
           {[["core","⚡ Core Badges"],["level","📈 Level Badges"],["word","📝 Word Badges"],["alltime","🐉 All-Time Badges"]].map(([cat,title])=>(
@@ -4227,19 +5291,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* ── HISTORY TAB ── */}
       {tab==="history"&&(()=>{
         const history = getDailyHistory();
-        const returnButton = (<button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>✏️ Return to Game</button>);
+        const returnButton = (<button className="ll-btn" onClick={()=>setTab("menu")} style={{width:"100%",padding:ipadMenu(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(13),fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>← Back to Menu</button>);
         const allGames = history.games || [];
         const hasAny = allGames.some(g => g && g.length > 0);
         const grandTotal = allGames.flat().filter(s=>s&&s.valid).reduce((a,s)=>a+s.score,0);
         return (
-          <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          <div style={{zIndex:1,width:"100%",maxWidth:ipadW(480),padding:"0 11px",animation:"slideUp 0.3s ease"}}>
             {!hasAny
-              ?<div>{returnButton}<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:12,fontStyle:"italic"}}>No words yet — go loot some letters!</div></div>
+              ?<div>{returnButton}<div style={{textAlign:"center",color:"rgba(255,255,255,0.35)",marginTop:40,fontSize:ipadMenu(12),fontStyle:"italic"}}>No words yet — go loot some letters!</div></div>
               :<div style={{display:"flex",flexDirection:"column",gap:5}}>{returnButton}
                 {allGames.map((game, gi) => game && game.length > 0 ? (
                   <div key={gi}>
                     {allGames.filter(g=>g&&g.length>0).length > 1 && (
-                      <div style={{textAlign:"center",fontSize:9,color:"rgba(255,255,255,0.35)",letterSpacing:2,padding:"6px 0",marginBottom:2}}>— Game {gi+1} —</div>
+                      <div style={{textAlign:"center",fontSize:ipadMenu(9),color:"rgba(255,255,255,0.35)",letterSpacing:2,padding:"6px 0",marginBottom:2}}>— Game {gi+1} —</div>
                     )}
                     {[...game].sort((a,b)=>(b.score||0)-(a.score||0)).map((s,i)=>{
                       // Track which words have been reported (so button can show "Reported")
@@ -4249,10 +5313,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                       // Allow reporting of ANY invalid word (3+ letters) — admin reviews
                       const canReport = !s.valid && s.word.length >= 3 && !isReported;
                       return (
-                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.loot?"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))":s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1.5px solid ${s.loot?"rgba(0,230,118,0.7)":(s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)")}`,borderRadius:10,padding:"8px 12px",marginBottom:4,boxShadow:s.loot?"0 0 12px rgba(246,211,101,0.4)":"none"}}>
+                      <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:s.loot?"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))":s.wotd?"linear-gradient(135deg,rgba(167,139,250,0.2),rgba(124,58,237,0.15))":s.valid?(s.medical?"rgba(0,150,200,0.1)":"rgba(80,220,100,0.1)"):"rgba(220,80,80,0.1)",border:`1.5px solid ${s.loot?"rgba(0,230,118,0.7)":s.wotd?"rgba(167,139,250,0.7)":(s.valid?(s.medical?"rgba(0,150,200,0.3)":"rgba(80,220,100,0.3)"):"rgba(220,80,80,0.25)")}`,borderRadius:10,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,marginBottom:4,boxShadow:s.loot?"0 0 12px rgba(246,211,101,0.4)":s.wotd?"0 0 12px rgba(167,139,250,0.35)":"none"}}>
                         <div style={{flex:1}}>
-                          <div style={{fontSize:14,fontWeight:"bold",letterSpacing:3,color:s.loot?"#f6d365":"#f5f0e8"}}>{s.loot?"💥 ":""}{s.word}{s.loot?" ✨":""}</div>
-                          <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",marginTop:1}}>{s.loot?<span style={{color:"#f6d365",fontWeight:"bold"}}>💥 LOOT LETTER! 5× bonus</span>:s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
+                          <div style={{fontSize:ipadMenu(14),fontWeight:"bold",letterSpacing:3,color:s.loot?"#f6d365":s.wotd?"#c4b5fd":"#f5f0e8"}}>{s.loot?"💥 ":s.wotd?"🎯 ":""}{s.word}{s.loot?" ✨":s.wotd?" ⭐":""}</div>
+                          <div style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.9)",marginTop:1}}>{s.loot?<span style={{color:"#f6d365",fontWeight:"bold"}}>💥 LOOT LETTER! 5× bonus{s.wotd?" · 🎯 WORD OF THE DAY!":""}</span>:s.wotd?<span style={{color:"#c4b5fd",fontWeight:"bold"}}>🎯 WORD OF THE DAY!</span>:s.valid?(s.medical?<span style={{color:"#60a5fa"}}>🩺 Medical</span>:<span style={{color:"#6ee7b7"}}>📖 Collegiate</span>):<span>Invalid ✗</span>}</div>
                           {!s.valid && (canReport ? (
                             <button onClick={async (e)=>{
                               e.stopPropagation();
@@ -4280,23 +5344,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                                 console.error("Word report exception:", err);
                                 alert("Report failed: " + (err.message || "network error"));
                               }
-                            }} style={{marginTop:6,padding:"4px 10px",borderRadius:8,background:"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.18))",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:10,fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>📝 Report for review</button>
+                            }} style={{marginTop:6,padding:`${ipadMenu(4)}px ${ipadMenu(10)}px`,borderRadius:8,background:"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.18))",border:"1px solid rgba(246,211,101,0.5)",color:"#f6d365",fontSize:ipadMenu(10),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>📝 Report for review</button>
                           ) : isReported ? (
-                            <div style={{marginTop:6,fontSize:10,color:"#6ee7b7"}}>✓ Reported — thanks!</div>
+                            <div style={{marginTop:6,fontSize:ipadMenu(10),color:"#6ee7b7"}}>✓ Reported — thanks!</div>
                           ) : null)}
                         </div>
                         <div style={{textAlign:"right",marginLeft:8}}>
-                          <div style={{fontSize:17,fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
-                          {s.valid&&<div style={{fontSize:9,color:"rgba(255,255,255,0.45)"}}>pts</div>}
+                          <div style={{fontSize:ipadMenu(17),fontWeight:"bold",color:s.valid?"#6ee7b7":"rgba(255,255,255,0.25)"}}>{s.valid?`+${s.score}`:"—"}</div>
+                          {s.valid&&<div style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.85)"}}>pts</div>}
                         </div>
                       </div>
                       );
                     })}
                   </div>
                 ) : null)}
-                <div style={{textAlign:"center",padding:"10px",background:"rgba(255,255,255,0.07)",borderRadius:10,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>
-                  <div style={{fontSize:10,color:"rgba(255,255,255,0.6)"}}>TODAY'S TOTAL ({allGames.filter(g=>g&&g.length>0).length} game{allGames.filter(g=>g&&g.length>0).length!==1?"s":""})</div>
-                  <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365"}}>{grandTotal}</div>
+                <div style={{textAlign:"center",padding:ipadMenu(10),background:"rgba(255,255,255,0.07)",borderRadius:10,marginTop:2,border:"1px solid rgba(255,255,255,0.15)"}}>
+                  <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)"}}>TODAY'S TOTAL ({allGames.filter(g=>g&&g.length>0).length} game{allGames.filter(g=>g&&g.length>0).length!==1?"s":""})</div>
+                  <div style={{fontSize:ipadMenu(24),fontWeight:"bold",color:"#f6d365"}}>{grandTotal}</div>
                 </div>
               </div>
             }
@@ -4306,157 +5370,154 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* ── STATS TAB ── */}
       {tab==="stats"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
-          <button className="ll-btn" onClick={()=>setTab("badges")} style={{width:"100%",padding:"13px",borderRadius:14,background:"linear-gradient(135deg,rgba(240,147,251,0.25),rgba(167,139,250,0.2))",border:"2px solid rgba(240,147,251,0.6)",color:"#f093fb",fontSize:14,fontWeight:"bold",marginBottom:8,letterSpacing:1}}>🏅 View My Badges — {lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length} Earned</button>
-          <button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            ✏️ Return to Game
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadW(480),padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          <button className="ll-btn" onClick={()=>setTab("badges")} style={{width:"100%",padding:ipadDense(13),borderRadius:14,background:"linear-gradient(135deg,rgba(240,147,251,0.25),rgba(167,139,250,0.2))",border:"2px solid rgba(240,147,251,0.6)",color:"#f093fb",fontSize:ipadDense(14),fontWeight:"bold",marginBottom:8,letterSpacing:1}}>🏅 View My Badges — {lifetimeBadgeIds.length}/{BADGE_DEFS.filter(b=>b.scope==="lifetime"||b.scope==="all").length} Earned</button>
+          <button className="ll-btn" onClick={()=>setTab("menu")} style={{width:"100%",padding:ipadDense(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadDense(13),fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ← Back to Menu
           </button>
 
-          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
-            <div style={{fontSize:44,fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:3}}>Accumulates every day you play</div>
-            <div style={{marginTop:6,background:"rgba(220,38,38,0.12)",borderRadius:8,padding:"6px 10px",border:"1px solid rgba(220,38,38,0.25)"}}>
-              <div style={{fontSize:10,color:"#ef4444",fontWeight:"bold"}}>⚠️ Lose 1/3 per missed day — Zero after 3 missed days</div>
-            </div>
-            {!isGuest&&<div style={{marginTop:6,fontSize:10,color:"#a78bfa"}}>☁️ Saved to your account</div>}
+          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:ipadDense(16),marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:5}}>💰 LIFETIME POINTS</div>
+            <div style={{fontSize:ipadDense(44),fontWeight:"bold",color:"#f6d365"}}>{lifetimePoints.toLocaleString()}</div>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",marginTop:3}}>Lifetime points</div>
+            {!isGuest&&<div style={{marginTop:6,fontSize:ipadDense(10),color:"#a78bfa"}}>☁️ Saved to your account</div>}
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📅 DAYS & STREAKS</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>📅 DAYS & STREAKS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Total Days</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Total Days</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Current Streak</div>{statsData.currentStreak>0&&statsData.currentStreak===statsData.longestStreak&&<div style={{fontSize:8,color:"#6ee7b7"}}>Personal Best!</div>}</div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Current Streak</div>{statsData.currentStreak>0&&statsData.currentStreak===statsData.longestStreak&&<div style={{fontSize:ipadDense(8),color:"#6ee7b7"}}>Personal Best!</div>}</div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>🏆 {statsData.longestStreak}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Longest Streak</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#f6d365"}}>🏆 {statsData.longestStreak}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Longest Streak</div></div>
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🌈🏆 PERFECT DAYS</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>🌈🏆 PERFECT DAYS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#6ee7b7"}}>{weekPerfectCount}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:26,fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>All Time</div></div>
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📈 DAILY SCORES</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>📈 DAILY SCORES</div>
             <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Week Best</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Week Best</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Best Ever</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#f6d365"}}>{statsData.highScoreAllTime||"—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Best Ever</div></div>
             </div>
             <div style={{display:"flex",justifyContent:"space-around",paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Daily Avg</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#a78bfa"}}>{avgDaily.toLocaleString()}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Daily Avg</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#6ee7b7"}}>{allTimeTotal.toLocaleString()}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All-Time Total</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#6ee7b7"}}>{allTimeTotal.toLocaleString()}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>All-Time Total</div></div>
             </div>
-            <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginTop:10,marginBottom:5,textAlign:"center",letterSpacing:1}}>LAST 7 DAYS</div>
-            <div style={{display:"flex",gap:3,alignItems:"flex-end",height:44,justifyContent:"space-around"}}>
+            <div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.85)",marginTop:10,marginBottom:5,textAlign:"center",letterSpacing:1}}>LAST 7 DAYS</div>
+            <div style={{display:"flex",gap:3,alignItems:"flex-end",height:ipadDense(44),justifyContent:"space-around"}}>
               {last7Days.map((d,i)=>(
                 <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                  <div style={{width:"100%",background:d.score>0?"linear-gradient(180deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",borderRadius:"3px 3px 0 0",height:d.score>0?`${Math.max(4,(d.score/maxDayScore)*36)}px`:"4px",transition:"height 0.3s ease"}}/>
-                  <div style={{fontSize:7,color:"rgba(255,255,255,0.4)"}}>{d.label}</div>
+                  <div style={{width:"100%",background:d.score>0?"linear-gradient(180deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",borderRadius:"3px 3px 0 0",height:d.score>0?`${Math.max(4,(d.score/maxDayScore)*ipadDense(36))}px`:"4px",transition:"height 0.3s ease"}}/>
+                  <div style={{fontSize:ipadDense(7),color:"rgba(255,255,255,0.75)"}}>{d.label}</div>
                 </div>
               ))}
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>💎 HIGHEST WORD SCORE</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div>{statsData.highWordTodayWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordTodayWord}</div>}<div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>Today</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#f093fb"}}>{statsData.highWordToday||"—"}</div>{statsData.highWordTodayWord&&<div style={{fontSize:ipadDense(8),color:"#a78bfa",letterSpacing:1}}>{statsData.highWordTodayWord}</div>}<div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>This Week</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#f093fb"}}>{weekHighWord||"—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>This Week</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div>{statsData.highWordAllTimeWord&&<div style={{fontSize:8,color:"#a78bfa",letterSpacing:1}}>{statsData.highWordAllTimeWord}</div>}<div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>All Time</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#a78bfa"}}>{statsData.highWordAllTime||"—"}</div>{statsData.highWordAllTimeWord&&<div style={{fontSize:ipadDense(8),color:"#a78bfa",letterSpacing:1}}>{statsData.highWordAllTimeWord}</div>}<div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>All Time</div></div>
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>🏆 BEST SCORE PER LEVEL</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>🏆 BEST SCORE PER LEVEL</div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
               {[1,2,3,4,5].map(lvl=>{
                 const best=statsData.bestScorePerLevel?.[String(lvl)];
-                return(<div key={lvl} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",borderRadius:9,padding:"7px 12px",border:best?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.07)"}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:11,fontWeight:"bold",color:best?"#f6d365":"rgba(255,255,255,0.3)",minWidth:28}}>L{lvl}</div>{best&&<div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{best.date}</div>}</div>
-                  <div style={{fontSize:best?17:13,fontWeight:"bold",color:best?"#fda085":"rgba(255,255,255,0.2)"}}>{best?`${best.score.toLocaleString()} pts`:"—"}</div>
+                return(<div key={lvl} style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.04)",borderRadius:9,padding:`${ipadDense(7)}px ${ipadDense(12)}px`,border:best?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.07)"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}><div style={{fontSize:ipadDense(11),fontWeight:"bold",color:best?"#f6d365":"rgba(255,255,255,0.3)",minWidth:ipadDense(28)}}>L{lvl}</div>{best&&<div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.75)"}}>{best.date}</div>}</div>
+                  <div style={{fontSize:best?ipadDense(17):ipadDense(13),fontWeight:"bold",color:best?"#fda085":"rgba(255,255,255,0.2)"}}>{best?`${best.score.toLocaleString()} pts`:"—"}</div>
                 </div>);
               })}
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>⏱️ FASTEST LEVEL TIMES</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:8}}>⏱️ FASTEST LEVEL TIMES</div>
             <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:10}}>
-              {[1,2,3,4,5].map(l=>(<button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:36,height:36,borderRadius:8,fontSize:11,fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.6)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>))}
+              {[1,2,3,4,5].map(l=>(<button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:ipadDense(36),height:ipadDense(36),borderRadius:8,fontSize:ipadDense(11),fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#1a1a2e":"rgba(255,255,255,0.9)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>))}
             </div>
-            {(()=>{ const best=statsData.fastestLevels?.[selectedLevelView]; return best?(<div style={{textAlign:"center",marginBottom:8,background:"rgba(96,165,250,0.1)",borderRadius:9,padding:"8px",border:"1px solid rgba(96,165,250,0.3)"}}><div style={{fontSize:9,color:"rgba(255,255,255,0.5)",marginBottom:2,letterSpacing:1}}>PERSONAL BEST</div><div style={{fontSize:22,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(best.seconds)}</div>{best.date&&<div style={{fontSize:9,color:"rgba(255,255,255,0.4)",marginTop:2}}>{best.date}</div>}</div>):(<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0",marginBottom:8}}>No best time yet for Level {selectedLevelView}</div>); })()}
-            {!timeLeaderboard.levels?.[selectedLevelView]?.length?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"8px 0"}}>No times yet — clear the board to record!</div>
-              :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:5}}><div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div><div style={{fontSize:15,fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
+            {(()=>{ const best=statsData.fastestLevels?.[selectedLevelView]; return best?(<div style={{textAlign:"center",marginBottom:8,background:"rgba(96,165,250,0.1)",borderRadius:9,padding:ipadDense(8),border:"1px solid rgba(96,165,250,0.3)"}}><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)",marginBottom:2,letterSpacing:1}}>PERSONAL BEST</div><div style={{fontSize:ipadDense(22),fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(best.seconds)}</div>{best.date&&<div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.75)",marginTop:2}}>{best.date}</div>}</div>):(<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:ipadDense(11),fontStyle:"italic",padding:"6px 0",marginBottom:8}}>No best time yet for Level {selectedLevelView}</div>); })()}
+            {!timeLeaderboard.levels?.[selectedLevelView]?.length?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:ipadDense(11),fontStyle:"italic",padding:"8px 0"}}>No times yet — clear the board to record!</div>
+              :timeLeaderboard.levels[selectedLevelView].map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.1)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:`${ipadDense(7)}px ${ipadDense(10)}px`,marginBottom:5}}><div style={{fontSize:ipadDense(16),minWidth:ipadDense(24),textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:ipadDense(12),fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div><div style={{fontSize:ipadDense(8),color:"rgba(255,255,255,0.75)"}}>{entry.date}</div></div><div style={{fontSize:ipadDense(15),fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
             }
             <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.07)"}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:2,marginBottom:8}}>🌈🏆 PERFECT DAY TIMES</div>
-              {!timeLeaderboard.perfect?.length?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic",padding:"6px 0"}}>No Perfect Day times yet!</div>
-                :timeLeaderboard.perfect.slice(0,5).map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.06))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:"7px 10px",marginBottom:4}}><div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:12,fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈🏆</div><div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{entry.date}</div></div><div style={{fontSize:15,fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
+              <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:2,marginBottom:8}}>🌈🏆 PERFECT DAY TIMES</div>
+              {!timeLeaderboard.perfect?.length?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:ipadDense(11),fontStyle:"italic",padding:"6px 0"}}>No Perfect Day times yet!</div>
+                :timeLeaderboard.perfect.slice(0,5).map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.06))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:`${ipadDense(7)}px ${ipadDense(10)}px`,marginBottom:4}}><div style={{fontSize:ipadDense(16),minWidth:ipadDense(24),textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:ipadDense(12),fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈🏆</div><div style={{fontSize:ipadDense(8),color:"rgba(255,255,255,0.75)"}}>{entry.date}</div></div><div style={{fontSize:ipadDense(15),fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
               }
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:10}}>📚 DICTIONARY BREAKDOWN</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>📚 DICTIONARY BREAKDOWN</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#6ee7b7"}}>{statsData.collegiateWords||0}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>📖 Collegiate</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(22),fontWeight:"bold",color:"#6ee7b7"}}>{statsData.collegiateWords||0}</div><div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)"}}>📖 Collegiate</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#60a5fa"}}>{statsData.medicalWords||0}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>🩺 Medical</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(22),fontWeight:"bold",color:"#60a5fa"}}>{statsData.medicalWords||0}</div><div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)"}}>🩺 Medical</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
-              <div style={{textAlign:"center"}}><div style={{fontSize:22,fontWeight:"bold",color:"#f6d365"}}>{(statsData.collegiateWords||0)+(statsData.medicalWords||0)}</div><div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Total Valid</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(22),fontWeight:"bold",color:"#f6d365"}}>{(statsData.collegiateWords||0)+(statsData.medicalWords||0)}</div><div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)"}}>Total Valid</div></div>
             </div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>📏 LONGEST WORDS</div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>Today's Best</div><div style={{fontSize:12,fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{statsData.longestWordToday||"—"}{statsData.longestWordToday&&<span style={{fontSize:10,color:"rgba(255,255,255,0.45)",marginLeft:6}}>({statsData.longestWordToday.length} letters)</span>}</div></div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0"}}><div style={{fontSize:11,color:"rgba(255,255,255,0.55)"}}>All-Time Best</div><div style={{fontSize:12,fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{statsData.longestWordAllTime||"—"}{statsData.longestWordAllTime&&<span style={{fontSize:10,color:"rgba(255,255,255,0.45)",marginLeft:6}}>({statsData.longestWordAllTime.length} letters)</span>}</div></div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:8}}>📏 LONGEST WORDS</div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0",borderBottom:"1px solid rgba(255,255,255,0.07)"}}><div style={{fontSize:ipadDense(11),color:"rgba(255,255,255,0.9)"}}>Today's Best</div><div style={{fontSize:ipadDense(12),fontWeight:"bold",color:"#a78bfa",letterSpacing:2}}>{statsData.longestWordToday||"—"}{statsData.longestWordToday&&<span style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.85)",marginLeft:6}}>({statsData.longestWordToday.length} letters)</span>}</div></div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 0"}}><div style={{fontSize:ipadDense(11),color:"rgba(255,255,255,0.9)"}}>All-Time Best</div><div style={{fontSize:ipadDense(12),fontWeight:"bold",color:"#f093fb",letterSpacing:2}}>{statsData.longestWordAllTime||"—"}{statsData.longestWordAllTime&&<span style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.85)",marginLeft:6}}>({statsData.longestWordAllTime.length} letters)</span>}</div></div>
           </div>
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:"12px",marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.7)",letterSpacing:3,marginBottom:8}}>🌟 LONG WORD BONUSES</div>
+          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+            <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:8}}>🌟 LONG WORD BONUSES</div>
             <div style={{display:"flex",flexWrap:"wrap",gap:5,justifyContent:"center"}}>
               {[["8","+1"],["9","+3"],["10","+6"],["11","+10"],["12","+15"],["13","+25"],["14+","+35+"]].map(([len,bonus])=>(
-                <div key={len} style={{textAlign:"center",background:"rgba(255,255,255,0.06)",borderRadius:9,padding:"6px 8px",border:"1px solid rgba(255,255,255,0.1)",minWidth:46}}>
-                  <div style={{fontSize:14,fontWeight:"bold",color:(statsData.longWordBonuses?.[len]||0)>0?"#f6d365":"rgba(255,255,255,0.2)"}}>{statsData.longWordBonuses?.[len]||0}</div>
-                  <div style={{fontSize:7,color:"rgba(255,255,255,0.45)"}}>{len} ltrs</div>
-                  <div style={{fontSize:7,color:"rgba(255,255,255,0.35)"}}>{bonus}</div>
+                <div key={len} style={{textAlign:"center",background:"rgba(255,255,255,0.06)",borderRadius:9,padding:`${ipadDense(6)}px ${ipadDense(8)}px`,border:"1px solid rgba(255,255,255,0.1)",minWidth:ipadDense(46)}}>
+                  <div style={{fontSize:ipadDense(14),fontWeight:"bold",color:(statsData.longWordBonuses?.[len]||0)>0?"#f6d365":"rgba(255,255,255,0.2)"}}>{statsData.longWordBonuses?.[len]||0}</div>
+                  <div style={{fontSize:ipadDense(7),color:"rgba(255,255,255,0.85)"}}>{len} ltrs</div>
+                  <div style={{fontSize:ipadDense(7),color:"rgba(255,255,255,0.35)"}}>{bonus}</div>
                 </div>
               ))}
             </div>
           </div>
           {/* ── Bonus Level Progress (shown when ENABLE_BONUS_LEVELS=true) ── */}
           {ENABLE_BONUS_LEVELS && (
-            <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.08))",borderRadius:14,padding:"14px",marginBottom:8,border:"2px solid rgba(246,211,101,0.3)",textAlign:"center"}}>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.65)",letterSpacing:3,marginBottom:6}}>🏛️ BONUS LEVELS</div>
+            <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.1),rgba(253,160,133,0.08))",borderRadius:14,padding:ipadDense(14),marginBottom:8,border:"2px solid rgba(246,211,101,0.3)",textAlign:"center"}}>
+              <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:6}}>🏛️ BONUS LEVELS</div>
               {bonusLevelUnlocked
-                ? <div style={{fontSize:13,color:"#f6d365",fontWeight:"bold"}}>The Vault is unlocked! 🏛️</div>
+                ? <div style={{fontSize:ipadDense(13),color:"#f6d365",fontWeight:"bold"}}>The Vault is unlocked! 🏛️</div>
                 : <>
-                    <div style={{fontSize:13,color:"#f5f0e8",marginBottom:6}}>
-                      <span style={{color:"#f6d365",fontWeight:"bold",fontSize:20}}>{consecutivePerfect}</span>
-                      <span style={{color:"rgba(255,255,255,0.5)"}}> / {BONUS_CONSECUTIVE_REQUIRED} consecutive Perfect Days</span>
+                    <div style={{fontSize:ipadDense(13),color:"#f5f0e8",marginBottom:6}}>
+                      <span style={{color:"#f6d365",fontWeight:"bold",fontSize:ipadDense(20)}}>{consecutivePerfect}</span>
+                      <span style={{color:"rgba(255,255,255,0.9)"}}> / {BONUS_CONSECUTIVE_REQUIRED} consecutive Perfect Days</span>
                     </div>
                     <div style={{background:"rgba(255,255,255,0.1)",borderRadius:6,height:8,overflow:"hidden"}}>
                       <div style={{height:"100%",width:`${Math.min(100,(consecutivePerfect/BONUS_CONSECUTIVE_REQUIRED)*100)}%`,background:"linear-gradient(90deg,#f6d365,#fda085)",borderRadius:6,transition:"width 0.5s ease"}}/>
                     </div>
-                    <div style={{fontSize:10,color:"rgba(255,255,255,0.45)",marginTop:6}}>Unlock The Vault — Level 6 with 1.5× letter values!</div>
+                    <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.85)",marginTop:6}}>Unlock The Vault — Level 6 with 1.5× letter values!</div>
                   </>
               }
             </div>
           )}
           <div style={{textAlign:"center",marginBottom:8}}>
-            <button onClick={()=>setShowTour(true)} style={{background:"rgba(139,92,246,0.15)",border:"1px solid rgba(167,139,250,0.4)",color:"#a78bfa",padding:"8px 20px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>↺ Replay Tour</button>
+            <button onClick={()=>setShowTour(true)} style={{background:"rgba(139,92,246,0.15)",border:"1px solid rgba(167,139,250,0.4)",color:"#a78bfa",padding:`${ipadDense(8)}px ${ipadDense(20)}px`,borderRadius:20,fontSize:ipadDense(11),cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>↺ Replay Tour</button>
           </div>
           <div style={{textAlign:"center",marginBottom:8}}>
             {!confirmResetStats
-              ? <button onClick={()=>setConfirmResetStats(true)} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:"5px 14px",borderRadius:20,fontSize:9,cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
-              : <div style={{background:"rgba(220,38,38,0.1)",border:"1px solid rgba(220,38,38,0.3)",borderRadius:12,padding:"10px 12px",display:"inline-flex",gap:8,alignItems:"center"}}>
-                  <span style={{fontSize:10,color:"#fca5a5"}}>Are you sure?</span>
-                  <button onClick={()=>{ const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,highWordTodayWord:"",highWordAllTimeWord:"",fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},bestScorePerLevel:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0},infinityBest:0,infinityBestDate:"",spaceBadgeDates:{}}; saveLocalStats(def); setStatsData(def); setConfirmResetStats(false); }} style={{background:"rgba(220,38,38,0.4)",border:"1px solid rgba(220,38,38,0.6)",borderRadius:8,padding:"3px 10px",fontSize:9,color:"#fff",cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>Yes, Reset</button>
-                  <button onClick={()=>setConfirmResetStats(false)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,padding:"3px 10px",fontSize:9,color:"rgba(255,255,255,0.5)",cursor:"pointer",fontFamily:"Georgia,serif"}}>Cancel</button>
+              ? <button onClick={()=>setConfirmResetStats(true)} style={{background:"none",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.3)",padding:`${ipadDense(5)}px ${ipadDense(14)}px`,borderRadius:20,fontSize:ipadDense(9),cursor:"pointer",fontFamily:"Georgia,serif"}}>Reset Stats</button>
+              : <div style={{background:"rgba(220,38,38,0.1)",border:"1px solid rgba(220,38,38,0.3)",borderRadius:12,padding:`${ipadDense(10)}px ${ipadDense(12)}px`,display:"inline-flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:ipadDense(10),color:"#fca5a5"}}>Are you sure?</span>
+                  <button onClick={()=>{ const def={daysPlayed:0,lastPlayedDate:null,currentStreak:0,longestStreak:0,lastStreakDate:null,perfectDaysAllTime:0,perfectDaysWeek:{},weekKey:"",highScoreAllTime:0,highScoreWeek:{},highScoreToday:0,highWordAllTime:0,highWordWeek:{},highWordToday:0,highWordTodayWord:"",highWordAllTimeWord:"",fastestLevels:{"1":null,"2":null,"3":null,"4":null,"5":null},bestScorePerLevel:{"1":null,"2":null,"3":null,"4":null,"5":null},dailyScores:{},collegiateWords:0,medicalWords:0,longestWordToday:"",longestWordAllTime:"",longWordBonuses:{"8":0,"9":0,"10":0,"11":0,"12":0,"13":0,"14+":0},infinityBest:0,infinityBestDate:"",spaceBadgeDates:{}}; saveLocalStats(def); setStatsData(def); setConfirmResetStats(false); }} style={{background:"rgba(220,38,38,0.4)",border:"1px solid rgba(220,38,38,0.6)",borderRadius:8,padding:`${ipadDense(3)}px ${ipadDense(10)}px`,fontSize:ipadDense(9),color:"#fff",cursor:"pointer",fontFamily:"Georgia,serif",fontWeight:"bold"}}>Yes, Reset</button>
+                  <button onClick={()=>setConfirmResetStats(false)} style={{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:8,padding:`${ipadDense(3)}px ${ipadDense(10)}px`,fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)",cursor:"pointer",fontFamily:"Georgia,serif"}}>Cancel</button>
                 </div>
             }
           </div>
@@ -4465,34 +5526,34 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* ── LEADERBOARD TAB ── */}
       {tab==="leaderboard"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadW(480),padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {/* Header */}
-          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:"12px 16px",marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
-            <div style={{fontSize:16,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:3}}>🏆 LEADERBOARD</div>
-            <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>Registered players only · Updated live</div>
-            {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.15)",borderRadius:10,padding:"8px 12px",border:"1px solid rgba(167,139,250,0.4)"}}>
-              <div style={{fontSize:11,color:"#a78bfa",fontWeight:"bold"}}>Want to appear on the leaderboard?</div>
-              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:2}}>Create a free account to save your scores and compete!</div>
-              <button className="ll-btn" onClick={onSignOut} style={{marginTop:6,padding:"5px 14px",borderRadius:10,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:10,fontWeight:"bold"}}>Create Account →</button>
+          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.15),rgba(253,160,133,0.1))",borderRadius:14,padding:`${ipadMenu(12)}px ${ipadMenu(16)}px`,marginBottom:8,border:"2px solid rgba(246,211,101,0.35)",textAlign:"center"}}>
+            <div style={{fontSize:ipadMenu(16),fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:3}}>🏆 LEADERBOARD</div>
+            <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)"}}>Registered players only · Updated live</div>
+            {isGuest&&<div style={{marginTop:8,background:"rgba(167,139,250,0.15)",borderRadius:10,padding:`${ipadMenu(8)}px ${ipadMenu(12)}px`,border:"1px solid rgba(167,139,250,0.4)"}}>
+              <div style={{fontSize:ipadMenu(11),color:"#a78bfa",fontWeight:"bold"}}>Want to appear on the leaderboard?</div>
+              <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)",marginTop:2}}>Create a free account to save your scores and compete!</div>
+              <button className="ll-btn" onClick={onSignOut} style={{marginTop:6,padding:`${ipadMenu(5)}px ${ipadMenu(14)}px`,borderRadius:10,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:ipadMenu(10),fontWeight:"bold"}}>Create Account →</button>
             </div>}
           </div>
 
           {/* Prominent return button at top — only shown when arrived from Perfect Day */}
           {leaderboardFromPerfectDay&&(
-            <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(false); setTab('play'); setPerfectDayAchieved(true); }} style={{width:"100%",padding:"12px",borderRadius:14,background:"linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,165,0,0.2))",border:"2px solid rgba(255,215,0,0.6)",color:"#f6d365",fontSize:13,fontWeight:"bold",marginBottom:8}}>
+            <button className="ll-btn" onClick={()=>{ setLeaderboardFromPerfectDay(false); setTab('play'); setPerfectDayAchieved(true); }} style={{width:"100%",padding:ipadMenu(12),borderRadius:14,background:"linear-gradient(135deg,rgba(255,215,0,0.25),rgba(255,165,0,0.2))",border:"2px solid rgba(255,215,0,0.6)",color:"#f6d365",fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:8}}>
               🌈 ← Back to Perfect Day
             </button>
           )}
 
           {/* Quick nav to History — players often want to review today's words / report rejected ones after seeing leaderboard */}
-          <button className="ll-btn" onClick={()=>setTab("history")} style={{width:"100%",padding:"10px",borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.3)",color:"#f5f0e8",fontSize:12,fontWeight:"bold",fontFamily:"Georgia,serif",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <button className="ll-btn" onClick={()=>setTab("history")} style={{width:"100%",padding:ipadMenu(10),borderRadius:12,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.3)",color:"#f5f0e8",fontSize:ipadMenu(12),fontWeight:"bold",fontFamily:"Georgia,serif",marginBottom:8,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
             📜 View Today's History & Report Words
           </button>
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
             {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Word Scores"},{id:"longest",label:"📏 Longest Words"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
-              <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:8,background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
+              <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:`${ipadMenu(4)}px ${ipadMenu(2)}px`,borderRadius:10,fontSize:ipadMenu(8),background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
             ))}
@@ -4502,15 +5563,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {leaderboardTab!=="streaks"&&(
             <div style={{display:"flex",gap:3,marginBottom:8}}>
               {[{id:"daily",label:"☀️ Today"},{id:"weekly",label:"📅 This Week"},{id:"alltime",label:"🏆 All-Time"}].map(p=>(
-                <button key={p.id} className="ll-tab" onClick={()=>setLeaderboardPeriod(p.id)} style={{flex:1,padding:"4px 2px",borderRadius:10,fontSize:9,background:leaderboardPeriod===p.id?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.06)",color:leaderboardPeriod===p.id?"#fff":"rgba(255,255,255,0.55)",fontWeight:leaderboardPeriod===p.id?"bold":"normal",border:leaderboardPeriod===p.id?"none":"1px solid rgba(255,255,255,0.15)",textAlign:"center"}}>
+                <button key={p.id} className="ll-tab" onClick={()=>setLeaderboardPeriod(p.id)} style={{flex:1,padding:`${ipadMenu(4)}px ${ipadMenu(2)}px`,borderRadius:10,fontSize:ipadMenu(9),background:leaderboardPeriod===p.id?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.06)",color:leaderboardPeriod===p.id?"#fff":"rgba(255,255,255,0.9)",fontWeight:leaderboardPeriod===p.id?"bold":"normal",border:leaderboardPeriod===p.id?"none":"1px solid rgba(255,255,255,0.15)",textAlign:"center"}}>
                   {p.label}
                 </button>
               ))}
             </div>
           )}
 
-          {leaderboardLoading&&<div style={{textAlign:"center",padding:"30px",color:"rgba(255,255,255,0.4)",fontSize:12}}>Loading leaderboard…</div>}
-          {!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:"30px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
+          {leaderboardLoading&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.4)",fontSize:ipadMenu(12)}}>Loading leaderboard…</div>}
+          {!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
 
           {!leaderboardLoading&&leaderboardData&&(()=>{
             const { gs=[], todaySessions=[], weekSessions=[], wotdAllSessions=[], allWordSessions=[] } = leaderboardData;
@@ -4520,7 +5581,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               display:"flex", alignItems:"center", gap:8,
               background: isMe(name)?"rgba(34,211,238,0.1)":i===0?"rgba(246,211,101,0.08)":"rgba(255,255,255,0.03)",
               border: isMe(name)?"1px solid rgba(34,211,238,0.4)":i===0?"1px solid rgba(246,211,101,0.25)":"1px solid rgba(255,255,255,0.06)",
-              borderRadius:10, padding:"8px 10px", marginBottom:5
+              borderRadius:10, padding:`${ipadMenu(8)}px ${ipadMenu(10)}px`, marginBottom:5
             });
 
             // Build today/week best scores per player
@@ -4568,26 +5629,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               wotdStreakById[pid] = streak;
             });
 
-            const empty = <div style={{textAlign:"center",padding:"20px",color:"rgba(255,255,255,0.3)",fontSize:11,fontStyle:"italic"}}>No data yet for this period</div>;
+            const empty = <div style={{textAlign:"center",padding:ipadMenu(20),color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic"}}>No data yet for this period</div>;
 
             // ── Helper to render a ranked list ──
             const renderRows = (rows) => (
               <div>
                 {rows.map((r,i)=>(
                   <div key={i} style={rowStyle(r.name,i)}>
-                    <div style={{fontSize:16,minWidth:24,textAlign:"center"}}>{medal(i)}</div>
+                    <div style={{fontSize:ipadMenu(16),minWidth:ipadMenu(24),textAlign:"center"}}>{medal(i)}</div>
                     <div style={{flex:1}}>
                       {r.word
-                        ? <><div style={{fontSize:13,fontWeight:"bold",color:r.wordColor||"#f093fb",letterSpacing:2}}>{r.word}</div>
-                            <div style={{fontSize:9,color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}{r.date&&<span style={{color:"rgba(255,255,255,0.35)",marginLeft:6}}>· {formatDateKey(r.date)}</span>}</div></>
-                        : <><span style={{fontSize:12,fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>
-                            {isMe(r.name)&&<span style={{fontSize:9,color:"#22d3ee",marginLeft:4}}>← you</span>}
-                            {r.sub&&<div style={{fontSize:9,color:"#fda085",marginTop:1}}>{r.sub}</div>}</>
+                        ? <><div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:r.wordColor||"#f093fb",letterSpacing:2}}>{r.word}</div>
+                            <div style={{fontSize:ipadMenu(9),color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}{r.date&&<span style={{color:"rgba(255,255,255,0.35)",marginLeft:6}}>· {formatDateKey(r.date)}</span>}</div></>
+                        : <><span style={{fontSize:ipadMenu(12),fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>
+                            {isMe(r.name)&&<span style={{fontSize:ipadMenu(9),color:"#22d3ee",marginLeft:4}}>← you</span>}
+                            {r.sub&&<div style={{fontSize:ipadMenu(9),color:"#fda085",marginTop:1}}>{r.sub}</div>}</>
                       }
                     </div>
                     <div style={{textAlign:"right"}}>
-                      <span style={{fontSize:15,fontWeight:"bold",color:r.valColor||"#f6d365"}}>{r.val}</span>
-                      {r.suffix&&<span style={{fontSize:9,color:"rgba(255,255,255,0.35)",marginLeft:2}}>{r.suffix}</span>}
+                      <span style={{fontSize:ipadMenu(15),fontWeight:"bold",color:r.valColor||"#f6d365"}}>{r.val}</span>
+                      {r.suffix&&<span style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.35)",marginLeft:2}}>{r.suffix}</span>}
                     </div>
                   </div>
                 ))}
@@ -4635,28 +5696,28 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               myPerfectDays = myWeekSessions.filter(s => s.perfect_day === true).length;
             }
             const yourBest = !isGuest && myData ? (
-              <div style={{marginTop:12,background:"rgba(167,139,250,0.1)",border:"1.5px solid rgba(167,139,250,0.4)",borderRadius:12,padding:"10px 10px"}}>
-                <div style={{fontSize:10,color:"#a78bfa",fontWeight:"bold",letterSpacing:2,textAlign:"center",marginBottom:8}}>── YOUR BEST · {periodLabel.toUpperCase()} ──</div>
+              <div style={{marginTop:12,background:"rgba(167,139,250,0.1)",border:"1.5px solid rgba(167,139,250,0.4)",borderRadius:12,padding:`${ipadMenu(10)}px ${ipadMenu(10)}px`}}>
+                <div style={{fontSize:ipadMenu(10),color:"#a78bfa",fontWeight:"bold",letterSpacing:2,textAlign:"center",marginBottom:8}}>── YOUR BEST · {periodLabel.toUpperCase()} ──</div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>🏆 Top Score</div>
-                    <div style={{fontSize:13,fontWeight:"bold",color:"#f6d365",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myBestScore.toLocaleString()}</div>
-                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{leaderboardPeriod==="alltime"?"lifetime pts":"pts"}</div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:`${ipadMenu(6)}px ${ipadMenu(8)}px`,minWidth:0}}>
+                    <div style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.85)",marginBottom:2}}>🏆 Top Score</div>
+                    <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f6d365",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myBestScore.toLocaleString()}</div>
+                    <div style={{fontSize:ipadMenu(8),color:"rgba(255,255,255,0.4)"}}>{leaderboardPeriod==="alltime"?"lifetime pts":"pts"}</div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>📏 Longest</div>
-                    <div style={{fontSize:13,fontWeight:"bold",color:"#a78bfa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myLongestWord||"—"}</div>
-                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{myLongestWord?(myLongestWord.length+" letters"):"none yet"}</div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:`${ipadMenu(6)}px ${ipadMenu(8)}px`,minWidth:0}}>
+                    <div style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.85)",marginBottom:2}}>📏 Longest</div>
+                    <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#a78bfa",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myLongestWord||"—"}</div>
+                    <div style={{fontSize:ipadMenu(8),color:"rgba(255,255,255,0.4)"}}>{myLongestWord?(myLongestWord.length+" letters"):"none yet"}</div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>💎 Best Scoring Word</div>
-                    <div style={{fontSize:13,fontWeight:"bold",color:"#f093fb",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myBestWord||"—"}</div>
-                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{myBestWordScore?(myBestWordScore+" pts"):"none yet"}</div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:`${ipadMenu(6)}px ${ipadMenu(8)}px`,minWidth:0}}>
+                    <div style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.85)",marginBottom:2}}>💎 Best Scoring Word</div>
+                    <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f093fb",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{myBestWord||"—"}</div>
+                    <div style={{fontSize:ipadMenu(8),color:"rgba(255,255,255,0.4)"}}>{myBestWordScore?(myBestWordScore+" pts"):"none yet"}</div>
                   </div>
-                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"6px 8px",minWidth:0}}>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.45)",marginBottom:2}}>🌈🏆 Perfect</div>
-                    <div style={{fontSize:13,fontWeight:"bold",color:"#6ee7b7"}}>{myPerfectDays}</div>
-                    <div style={{fontSize:8,color:"rgba(255,255,255,0.4)"}}>{leaderboardPeriod==="alltime"?"all-time":leaderboardPeriod==="weekly"?"this week":"today"}</div>
+                  <div style={{background:"rgba(255,255,255,0.05)",borderRadius:8,padding:`${ipadMenu(6)}px ${ipadMenu(8)}px`,minWidth:0}}>
+                    <div style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.85)",marginBottom:2}}>🌈🏆 Perfect</div>
+                    <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#6ee7b7"}}>{myPerfectDays}</div>
+                    <div style={{fontSize:ipadMenu(8),color:"rgba(255,255,255,0.4)"}}>{leaderboardPeriod==="alltime"?"all-time":leaderboardPeriod==="weekly"?"this week":"today"}</div>
                   </div>
                 </div>
               </div>
@@ -4788,7 +5849,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               if (!rows.length) return <div>{empty}{yourBest}</div>;
               return (
                 <div>
-                  <div style={{textAlign:"center",fontSize:10,color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:1}}>ALL-TIME LONGEST STREAKS</div>
+                  <div style={{textAlign:"center",fontSize:ipadMenu(10),color:"rgba(255,255,255,0.4)",marginBottom:8,letterSpacing:1}}>ALL-TIME LONGEST STREAKS</div>
                   {renderRows(rows)}
                   {yourBest}
                 </div>
@@ -4797,23 +5858,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           })()}
 
           <div style={{marginTop:10,display:"flex",gap:8}}>
-            <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:"7px",borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:10,fontWeight:"bold"}}>↺ Refresh</button>
-            <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); setTab("play"); } else { returnToGame(); } }} style={{flex:2,padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:12,fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"✏️ Return to Your Game"}</button>
+            <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:ipadMenu(7),borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:ipadMenu(10),fontWeight:"bold"}}>↺ Refresh</button>
+            <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); setTab("play"); } else { setTab("menu"); } }} style={{flex:2,padding:ipadMenu(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(12),fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"← Back to Menu"}</button>
           </div>
         </div>
       )}
 
             {/* ── INFO / TIPS TAB ── item 10 */}
       {tab==="info"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:480,padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadW(480),padding:"0 11px",animation:"slideUp 0.3s ease"}}>
           {/* Header card */}
-          <div style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2),rgba(96,165,250,0.15))",borderRadius:16,padding:"18px 16px",marginBottom:12,border:"2px solid rgba(167,139,250,0.45)",textAlign:"center"}}>
-            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><PencilLogo size={100}/></div>
-            <div style={{fontSize:17,fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>HINTS & TIPS</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.5)"}}>Play smarter · Loot harder</div>
+          <div style={{background:"linear-gradient(135deg,rgba(139,92,246,0.2),rgba(96,165,250,0.15))",borderRadius:16,padding:`${ipadMenu(18)}px ${ipadMenu(16)}px`,marginBottom:12,border:"2px solid rgba(167,139,250,0.45)",textAlign:"center"}}>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:8}}><PencilLogo size={ipadIcon(100)}/></div>
+            <div style={{fontSize:ipadMenu(17),fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>HINTS & TIPS</div>
+            <div style={{fontSize:ipadMenu(11),color:"rgba(255,255,255,0.9)"}}>Play smarter · Loot harder</div>
           </div>
-          <button className="ll-btn" onClick={returnToGame} style={{width:"100%",padding:"10px",borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-            ✏️ Return to Game
+          <button className="ll-btn" onClick={()=>setTab("menu")} style={{width:"100%",padding:ipadMenu(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(13),fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ← Back to Menu
           </button>
 
 
@@ -4826,23 +5887,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               border: i === TIPS.length - 1
                 ? "1px solid rgba(0,200,83,0.35)"
                 : "1px solid rgba(255,255,255,0.12)",
-              borderRadius:13, padding:"14px 16px", marginBottom:8,
+              borderRadius:13, padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`, marginBottom:8,
               display:"flex", gap:13, alignItems:"flex-start"
             }}>
-              <div style={{fontSize:26,flexShrink:0,marginTop:1,minWidth:32,textAlign:"center"}}>{tip.emoji}</div>
+              <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>{tip.emoji}</div>
               <div style={{flex:1}}>
                 <div style={{
-                  fontSize:13, fontWeight:"bold", marginBottom:5,
+                  fontSize:ipadMenu(13), fontWeight:"bold", marginBottom:5,
                   color: i === TIPS.length - 1 ? "#6ee7b7" : "#f6d365"
                 }}>{tip.title}</div>
-                <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",lineHeight:1.65}}>{tip.body}</div>
+                <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>{tip.body}</div>
               </div>
             </div>
           ))}
 
           <div style={{textAlign:"center",marginBottom:16,marginTop:4}}>
-            <button className="ll-btn" onClick={returnToGame} style={{padding:"11px 28px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:13,fontWeight:"bold",letterSpacing:1}}>
-              ✏️ Back to Playing!
+            <button className="ll-btn" onClick={()=>setTab("menu")} style={{padding:`${ipadMenu(11)}px ${ipadMenu(28)}px`,borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(13),fontWeight:"bold",letterSpacing:1}}>
+              ← Back to Menu
             </button>
           </div>
         </div>
@@ -4922,8 +5983,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {ENABLE_BONUS_LEVELS && showBonusRestart && bonusRestartChoice==="yes" && (
         <div style={{position:"fixed",inset:0,zIndex:9600,background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",display:"flex",alignItems:"center",justifyContent:"center",padding:"30px 24px"}}>
           <Starfield/>
-          <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:360,textAlign:"center"}}>
-            <PencilLogo size={160}/>
+          <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:ipadW(360),textAlign:"center"}}>
+            <PencilLogo size={ipadIcon(160)}/>
             <div style={{marginTop:14,background:"rgba(139,92,246,0.25)",border:"2.5px solid rgba(167,139,250,0.95)",borderRadius:14,padding:"8px 24px",boxShadow:"0 0 28px rgba(139,92,246,0.5)"}}>
               <span style={{fontSize:26,fontWeight:"bold",letterSpacing:4,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
             </div>
@@ -4983,14 +6044,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* ── READY TO PLAY MODAL ── */}
       {showReadyToPlay&&<div style={{position:"fixed",inset:0,zIndex:9800,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:"36px 28px",textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(246,211,101,0.5)",maxWidth:320,width:"90%"}}>
-          <div style={{fontSize:52}}>✏️</div>
-          <div style={{fontSize:22,fontWeight:"bold",color:"#f6d365",marginTop:10}}>Ready to play?</div>
-          <div style={{fontSize:13,color:"rgba(255,255,255,0.6)",marginTop:10,lineHeight:1.7}}>Your timer starts when you tap Let's Go!</div>
-          <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px",fontSize:12,color:"rgba(255,255,255,0.5)"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(36)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(246,211,101,0.5)",maxWidth:ipadTour(320),width:"90%"}}>
+          <div style={{display:"flex",justifyContent:"center"}}><PencilLogo size={ipadTour(72)}/></div>
+          <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginTop:10}}>Ready to play?</div>
+          <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.9)",marginTop:10,lineHeight:1.7}}>Your timer starts on your first tap!</div>
+          <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:ipadTour(10),fontSize:ipadTour(12),color:"rgba(255,255,255,0.9)"}}>
             Level 1 · Fresh tiles · Good luck! 🍀
           </div>
-          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); startTimer(); if (wotd && !wotdFound) showWotdReminderWithPause(); }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:16,fontWeight:"bold",border:"none"}}>
+          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; if (wotd && !wotdFound) showWotdReminderWithPause(); }} style={{marginTop:20,width:"100%",padding:ipadTour(16),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(16),fontWeight:"bold",border:"none"}}>
             Let's Go! 🎯
           </button>
         </div>

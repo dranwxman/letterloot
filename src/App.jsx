@@ -2505,7 +2505,8 @@ export default function App() {
         const keysToClear = [
           "ll_guest","ll_guest_returning","ll_stats","ll_lifetime","ll_badges_v2",
           "ll_times","ll_alltime","ll_daily_history","ll_session","ll_completed_today",
-          "ll_pd_acknowledged_today","ll_wotd","ll_name","ll_photo","ll_nickname","ll_longest"
+          "ll_pd_acknowledged_today","ll_wotd","ll_name","ll_photo","ll_nickname","ll_longest",
+          "ll_show_mascots"
         ];
         keysToClear.forEach(k => { try { localStorage.removeItem(k); } catch {} });
       } catch {}
@@ -2744,6 +2745,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [confetti, setConfetti] = useState(false);
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
   const [levelComplete, setLevelComplete] = useState(ss?.levelComplete || false);
+  // (v104) Mascot Celebrations toggle. ONE runtime preference, persisted in ll_show_mascots
+  // (defaults ON). EVERY mascot moment (Level Clear now; WoD/Great Word/Pirate Hint/Streak Bonus
+  // later — item #16) routes through the showMascotCelebrations() gate below, so there is exactly
+  // one place to reason about on/off. NOT an age-gate — cosmetic preference only. The key is added
+  // to keysToClear in handleDeleteAccount (the #2d wipe-list guard).
+  const [showMascotsPref, setShowMascotsPref] = useState(() => {
+    try { return localStorage.getItem("ll_show_mascots") !== "0"; } catch { return true; }
+  });
+  const showMascotCelebrations = () => showMascotsPref;
+  const setMascotsPref = (on) => {
+    setShowMascotsPref(on);
+    try { localStorage.setItem("ll_show_mascots", on ? "1" : "0"); } catch {}
+  };
   // TIMER FREEZE (v67): between levels, the clock must stay frozen until the
   // player's first tap of the new level. awaitingFirstTap gates the fair-timer
   // effect so it won't auto-start the timer on level entry.
@@ -2756,7 +2770,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   useEffect(() => { levelCompleteRef.current = levelComplete; }, [levelComplete]);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [showNewGameConfirm, setShowNewGameConfirm] = useState(false);
+  // (v103) showNewGameConfirm state removed — the mid-play Start New Game button and its confirm modal were deleted.
   const [showStuckModal, setShowStuckModal] = useState(false);
   // v83 (item 18): confirm dialog for the always-available "End Game & Share Results"
   // button at the base of the tile board — lets a player end their day and share their
@@ -3446,7 +3460,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setLevelScore(0); levelScoreRef.current = 0;
     setStreak(0); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
-    setShowResetConfirm(false); setShowNewGameConfirm(false); setShowStuckModal(false); setPaused(false);
+    setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
     // v100 (item #2c): only restore Perfect Day eligibility if it has NOT already been forfeited
     // today. Once a player has reset a level / re-done / bought a level today, "Start New Game"
     // starts non-PD-eligible for the rest of the day — you get one clean shot at Perfect Day.
@@ -3576,13 +3590,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const shareableWords = allValid.filter(s => !s.loot);
     const bestWord = shareableWords.reduce((b, s) => !b || s.score > b.score ? s : b, null);
     const longestW = shareableWords.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
-    const sharer = playerName ? `${playerName} played LetterLoot today!` : "My LetterLoot results today!";
-    const levelsLine = `\n🎮 Levels Reached: ${Math.min(level, 5)} of 5`;
+    const sharer = playerName ? `${playerName} had a Great Day on LetterLoot today!` : "My LetterLoot results today!";
+    const levelsLine = `\nSuccessfully completed ${Math.min(level, 5)} of 5 levels`;
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
     const wotdLine = wotdFoundDetails
       ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts`
       : `\n🎯 Word of the Day: not found today`;
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCan you beat me? — ${getShareUrlLabel()}\n${getShareUrl()}`;
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
   }, [playerName, level, wotd, wotdFoundDetails]);
 
   // v74 (Option A): triggerFarewell passes the precomputed day-results share text up to
@@ -4524,16 +4538,21 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           ? <img src={profilePhoto} alt="profile" style={{width:ipadIcon(80),height:ipadIcon(80),borderRadius:"50%",objectFit:"cover",border:"3px solid rgba(34,211,238,0.7)",marginBottom:ipadIntro(16)}}/>
           : <PencilLogo size={ipadIcon(160)}/>
         }
-        <div style={{fontSize:ipadIntro(22),fontWeight:"bold",color:"#22d3ee",marginBottom:ipadIntro(8),marginTop:ipadIntro(8)}}>
+        <div style={{fontSize:ipadIntro(22),fontWeight:"bold",color:"#22d3ee",marginBottom:ipadIntro(22),marginTop:ipadIntro(8)}}>
           {profileNickname||playerName ? `Ready, ${profileNickname||playerName}?` : "Ready to Play?"}
         </div>
-        <div style={{fontSize:ipadIntro(13),color:"rgba(255,255,255,0.55)",marginBottom:ipadIntro(24),lineHeight:1.7}}>
-          Your tiles are set.<br/>The clock starts when you do.
+        {/* v104: reworded + brightened box with visible purple border */}
+        <div style={{background:"rgba(255,255,255,0.10)",borderRadius:16,padding:`${ipadIntroPad(18)}px ${ipadIntroPad(22)}px`,border:"2px solid rgba(167,139,250,0.85)",marginBottom:ipadIntro(22),width:"100%",fontSize:ipadIntro(13),color:"rgba(255,255,255,0.92)",lineHeight:2.0}}>
+          <div style={{marginBottom:ipadIntro(6)}}>✦ Today's tiles, <strong style={{color:"#f6d365"}}>Word of the Day</strong>, and <strong style={{color:"#f6d365"}}>Loot Letters</strong> are set</div>
+          <div style={{marginBottom:ipadIntro(6)}}>✦ Game Timer begins with your <strong style={{color:"#f6d365"}}>first letter tapped</strong></div>
+          <div>✦ Clear all 5 levels + find the Word of the Day to enjoy and share a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day! 🌈🏆</span></div>
         </div>
-        <div style={{background:"rgba(255,255,255,0.06)",borderRadius:16,padding:`${ipadIntroPad(16)}px ${ipadIntroPad(20)}px`,border:"1px solid rgba(255,255,255,0.12)",marginBottom:ipadIntro(28),width:"100%",fontSize:ipadIntro(12),color:"rgba(255,255,255,0.6)",lineHeight:1.9}}>
-          <div>✦ Level 1 — 42 tiles ready</div>
-          <div>✦ Timer starts on your <strong style={{color:"#f6d365"}}>first tap</strong></div>
-          <div>✦ Clear all 5 levels + find the Word of the Day for a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day 🌈🏆</span></div>
+        {/* v104: Show Mascot Celebrations toggle — plain iOS-style switch, backed by ll_show_mascots (default ON) */}
+        <div onClick={()=>setMascotsPref(!showMascotsPref)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",boxSizing:"border-box",padding:`${ipadIntroPad(12)}px ${ipadIntroPad(16)}px`,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,marginBottom:ipadIntro(22),cursor:"pointer"}}>
+          <span style={{fontSize:ipadIntro(13),color:"rgba(255,255,255,0.85)"}}>Show Mascot Celebrations</span>
+          <div style={{width:ipadIntro(48),height:ipadIntro(28),borderRadius:ipadIntro(14),background:showMascotsPref?"#00c853":"rgba(255,255,255,0.2)",position:"relative",flexShrink:0,transition:"background 0.2s",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.15)"}}>
+            <div style={{position:"absolute",top:ipadIntro(3),left:showMascotsPref?ipadIntro(23):ipadIntro(3),width:ipadIntro(22),height:ipadIntro(22),borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+          </div>
         </div>
         <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
           Let's Go! 🎯
@@ -4703,18 +4722,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
       </div>}
 
-      {showNewGameConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:ipadTour(32),textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:ipadTour(320),width:"90%"}}>
-          <div style={{fontSize:ipadTour(40)}}>⚠️</div>
-          <div style={{fontSize:ipadTour(18),fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>Start a New Game?</div>
-          <div style={{fontSize:ipadTour(13),color:"#fb7185",marginTop:10,lineHeight:1.5,fontWeight:"bold"}}>This will end your current game in progress.</div>
-          <div style={{fontSize:ipadTour(12),color:"#ddd",marginTop:6,lineHeight:1.5}}>Current Level: {level} · Score: {totalScore.toLocaleString()} pts<br/>Words played: {(submittedRef.current||[]).filter(s=>s.valid).length}<br/><br/>All progress on this game will be lost.</div>
-          <button className="ll-btn" onClick={()=>{ setShowNewGameConfirm(false); handleFullReset(); }} style={{marginTop:16,width:"100%",padding:ipadTour(13),borderRadius:14,background:"linear-gradient(135deg,#fb7185,#e11d48)",color:"#fff",fontSize:ipadTour(14),fontWeight:"bold"}}>
-            🆕 Yes, Start New Game
-          </button>
-          <button className="ll-btn" onClick={()=>setShowNewGameConfirm(false)} style={{marginTop:8,width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.15)",color:"rgba(255,255,255,0.95)",fontSize:ipadTour(13),fontWeight:"bold"}}>Keep Playing</button>
-        </div>
-      </div>}
+      {/* (v103) "Start a New Game?" confirm modal removed along with its mid-play button. */}
 
       {showEndGameConfirm&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:ipadTour(32),textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,255,255,0.18)",maxWidth:ipadTour(320),width:"90%",fontFamily:"Georgia,serif",color:"#f5f0e8"}}>
@@ -5009,10 +5017,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {levelComplete&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(36)}px ${ipadTour(32)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(320),width:"90%"}}>
           {/* v94: celebrating pirate with a per-level entrance animation + level-specific saying */}
+          {/* v104: mascot image + saying gated behind showMascotCelebrations(); results below always show */}
+          {showMascotCelebrations() && <>
           <div style={{display:"flex",justifyContent:"center",marginBottom:4}}>
             <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{width:ipadTour(120),height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
           </div>
           <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#f6d365",fontFamily:"Georgia,serif",lineHeight:1.4,marginBottom:4,animation:"plSpeechIn 0.4s ease 0.5s both"}}>{PIRATE_CLEAR_SAYINGS[level]||PIRATE_CLEAR_SAYINGS[1]}</div>
+          </>}
           <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
           <div style={{fontSize:ipadTour(13),color:"#ccc",marginTop:8}}>You used every tile!</div>
           <div style={{fontSize:ipadTour(22),color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
@@ -5055,17 +5066,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.25)",border:"1.5px solid rgba(167,139,250,0.7)",borderRadius:12,padding:`${ipadChrome(3)}px ${ipadChrome(10)}px`,cursor:"pointer",fontSize:isIpadWidth()?21:10,color:"#e0d4ff",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
         </div>
 
-        {/* ROW 2: Start New Game · Replay L# · Buy L#+1 — only on play tab */}
+        {/* ROW 2: Replay Level# · Buy Level#+1 — only on play tab (Start New Game removed v103) */}
         {tab==="play" && (
         <div style={{display:"flex",gap:3,marginBottom:3}}>
-          <button className="ll-btn" onClick={()=>{
-            // If there's no meaningful progress, skip the confirm
-            const hasProgress = (submittedRef.current||[]).some(s=>s.valid) || level>1 || totalRef.current>0;
-            if (hasProgress) setShowNewGameConfirm(true);
-            else handleFullReset();
-          }} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,background:"rgba(239,68,68,0.15)",border:"1px solid rgba(239,68,68,0.5)",color:"#fca5a5",fontSize:ipadChrome(10),fontFamily:"Georgia,serif",fontWeight:"bold",textAlign:"center"}}>🆕 Start New Game</button>
-          <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>{level===5?"🔄 Replay L5":"🔄 Replay L"+level}</button>
-          {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>🔓 Buy L{level+1} — {buyCost} pts</button>}
+          <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>{level===5?"🔄 Replay Level 5":"🔄 Replay Level "+level}</button>
+          {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>🔓 Buy Level {level+1} — {buyCost} pts</button>}
         </div>
         )}
 

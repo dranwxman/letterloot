@@ -249,82 +249,120 @@ function getBonusPositions(count, bonusCount, rng) {
   }
   return positions;
 }
-// ── LOOT LETTER ─────────────────────────────────────────────
-// One hidden bonus tile per day, deterministic from date seed.
-// All players see the same letter at the same level/position.
-// When used in a valid word, awards 5x its base letter value.
-// One-time per game; resets on Start New Game.
-// Loot Letter must land on a meaningful letter — minimum value 6
-// Skips E(3), T(3), A(4), I(4), O(4), N(4), S(5), R(5)
-// Keeps H,L,D,C,U,M,F,P,G,W,Y,B,V,K,X,J,Q,Z as candidates
-// NOTE: This higher-value selection only applies from May 9, 2026 onward.
-// Today (May 8) keeps its original loot letter to avoid mid-day shifts.
-const LOOT_MIN_VALUE = 6;
-function shouldUseHighValueLoot() {
-  const seed = getDailySeed(); // YYYYMMDD as integer
-  return seed >= 20260509; // May 9, 2026 and later
-}
-function getLootLetterToday() {
+// ── LOOT LETTER (v105: per-level rewrite) ───────────────────
+// NEW premise (replaces the old one-hidden-tile-per-DAY system):
+//   • EVERY level (1-5) has its own Loot Letter.
+//   • The letter is ANNOUNCED at level start ("Level 3 Loot Letter = B").
+//   • The board is guaranteed to contain >= 2 of that letter, but only ONE
+//     tile is the actual loot ("only 1 tile pockets the loot") — the player
+//     gambles on which. The loot tile is NOT visually marked until used.
+//   • Any letter qualifies (no value floor).
+//   • Reward unchanged: the loot tile scores 5x its base value, one-time
+//     per game (see calcWordScore + word-submit detection — untouched).
+//   • Deterministic from the daily seed, so all players share the same 5
+//     Loot Letters each day.
+// The letter picker is a PURE function of (level, dailySeed) — it does NOT
+// consume the board-generation rng stream. This keeps the announcement text
+// and the board in sync across every generation path (initial, next-level,
+// reset, and the Date.now()-seeded Fresh-Tiles buy), because generation
+// GUARANTEES the announced letter appears >= 2 times regardless of seed.
+const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+// Per-level cap: high-value letters may appear at most twice (was effectively 1).
+const HIGH_VALUE_CAP_LETTERS = ["Q","X","J","Z"];
+const HIGH_VALUE_MAX = 2;
+
+function getLootLetterForLevel(level) {
   const seed = getDailySeed();
-  const rng = seededRandom(seed + 31337);
-  // RNG WARMUP (May 18, 2026 fix): The LCG produces correlated first outputs
-  // for sequential integer seeds (date-shaped), which previously locked the
-  // Loot Letter level to L2 for ~28 days at a stretch and made L1/L5 literally
-  // unreachable. Burning 3 outputs decorrelates the state so the level
-  // distribution becomes uniformly random across L1-L5 day-over-day.
+  // Distinct offset per level so each level draws an independent letter, plus
+  // the daily seed so it changes day-over-day and matches for all players.
+  const rng = seededRandom(seed + 31337 + level * 101);
+  // RNG WARMUP (carried from the May 18 2026 fix): the LCG produces correlated
+  // first outputs for sequential/date-shaped seeds. Burn 3 outputs to
+  // decorrelate so the letter distribution is uniform day-over-day and level-
+  // over-level (the old bug locked selection into long repeating patterns).
   rng(); rng(); rng();
-  const level = 1 + Math.floor(rng() * 5); // Level 1-5
-  // tile count for this level
-  const tileCount = 42 + (level - 1) * 7;
-  // We pick a target index; the actual final index will be resolved during tile
-  // generation by finding the nearest qualifying letter (value >= LOOT_MIN_VALUE).
-  const targetIndex = Math.floor(rng() * tileCount);
-  return { level, targetIndex };
+  return ALPHABET[Math.floor(rng() * ALPHABET.length)];
+}
+
+// Apply per-level letter caps to a letters array IN PLACE.
+//   1) Trim any HIGH_VALUE_CAP_LETTERS beyond HIGH_VALUE_MAX (replace extras
+//      with filler), and
+//   2) Enforce the Q/U pairing rule: at least as many U's as Q's (>=1 per Q;
+//      2 Q's require >= 2 U's).
+// protectIdxs is a Set of tile indices that must NOT be altered (the loot tiles,
+// so capping never removes an announced Loot Letter). Runs AFTER loot placement.
+function applyLetterCaps(arr, protectIdxs, lootLetter) {
+  const protect = protectIdxs || new Set();
+  // (1) Cap high-value letters at HIGH_VALUE_MAX each (never touch protected tiles).
+  HIGH_VALUE_CAP_LETTERS.forEach(letter => {
+    let idxs = arr.map((l, i) => l === letter ? i : -1).filter(i => i >= 0 && !protect.has(i));
+    const protectedCount = arr.filter((l, i) => l === letter && protect.has(i)).length;
+    let allowedToRemain = Math.max(0, HIGH_VALUE_MAX - protectedCount);
+    while (idxs.length > allowedToRemain) {
+      const removeAt = idxs.pop();
+      arr[removeAt] = "E";              // common filler; safe, low value
+    }
+  });
+  // (2) Q/U pairing: ensure U count >= Q count. Convert only non-vowel, non-Q,
+  //     unprotected tiles into U — AND never convert a tile of the loot letter,
+  //     so the board keeps its guaranteed >= 2 instances of the announced letter.
+  const qCount = arr.filter(l => l === "Q").length;
+  let uCount = arr.filter(l => l === "U").length;
+  let guard = 0;
+  while (uCount < qCount && guard < arr.length) {
+    const replaceIdx = arr.findIndex((l, i) => !["Q","A","E","I","O","U"].includes(l) && l !== lootLetter && !protect.has(i));
+    if (replaceIdx === -1) break;       // nothing safe left to convert
+    arr[replaceIdx] = "U";
+    uCount++;
+    guard++;
+  }
+}
+
+// Guarantee the announced Loot Letter appears >= 2 times on this board, then
+// mark exactly one of its tiles as the loot tile (MUTUALLY EXCLUSIVE with
+// double/triple bonus squares). Mutates letters in place; returns loot index.
+function placeLootLetter(letters, lootLetter, bonusSet, rng) {
+  let idxs = letters.map((l, i) => l === lootLetter ? i : -1).filter(i => i >= 0);
+  // Ensure there is at least one NON-bonus instance to be the loot tile, and at
+  // least 2 instances total. Inject by replacing filler tiles that are NOT
+  // vowels, NOT bonus squares, and NOT already the loot letter.
+  const needNonBonus = () => idxs.some(i => !bonusSet.has(i));
+  let inject = 0;
+  while ((idxs.length < 2 || !needNonBonus()) && inject < letters.length) {
+    const replaceIdx = letters.findIndex((l, i) =>
+      l !== lootLetter && !VOWELS.has(l) && !bonusSet.has(i)
+    );
+    if (replaceIdx === -1) break;       // extremely unlikely; give up gracefully
+    letters[replaceIdx] = lootLetter;
+    idxs = letters.map((l, i) => l === lootLetter ? i : -1).filter(i => i >= 0);
+    inject++;
+  }
+  // Pick the loot tile among NON-bonus instances (mutual exclusivity). Falls
+  // back to any instance only in the pathological case none are non-bonus.
+  const nonBonus = idxs.filter(i => !bonusSet.has(i));
+  const pickFrom = nonBonus.length > 0 ? nonBonus : idxs;
+  if (pickFrom.length === 0) return -1;
+  return pickFrom[Math.floor(rng() * pickFrom.length)];
 }
 
 function generateLevelTiles(level, startId, rng, bonusPositions) {
   const pool = buildPool(rng);
   const count = 42 + (level - 1) * 7;
   let letters = pool.slice(0, count);
-  if (letters.includes("Q") && !letters.includes("U")) {
-    const replaceIdx = letters.findIndex(l => !["Q","A","E","I","O","U"].includes(l));
-    if (replaceIdx !== -1) letters[replaceIdx] = "U";
-  }
-  const lootInfo = getLootLetterToday();
-  const isLootLevel = level === lootInfo.level;
-  // Resolve actual loot tile index. Today (May 8) keeps original behavior:
-  // use targetIndex as-is. From May 9 onward: find the nearest tile whose
-  // letter value meets LOOT_MIN_VALUE, searching outward in both directions.
-  let lootTileIndex = -1;
-  if (isLootLevel) {
-    const target = Math.min(lootInfo.targetIndex, count - 1);
-    if (!shouldUseHighValueLoot()) {
-      // Pre-May-9 behavior: use target index as-is
-      lootTileIndex = target;
-    } else if ((LETTER_VALUES[letters[target]] || 0) >= LOOT_MIN_VALUE) {
-      lootTileIndex = target;
-    } else {
-      // Search outward by distance
-      for (let d = 1; d < count; d++) {
-        const r = target + d, l = target - d;
-        if (r < count && (LETTER_VALUES[letters[r]] || 0) >= LOOT_MIN_VALUE) { lootTileIndex = r; break; }
-        if (l >= 0 && (LETTER_VALUES[letters[l]] || 0) >= LOOT_MIN_VALUE) { lootTileIndex = l; break; }
-      }
-      // Fallback: if literally no qualifying letter exists in this level
-      // (extremely unlikely), use the highest-valued tile available.
-      if (lootTileIndex === -1) {
-        let best = 0;
-        for (let i = 0; i < count; i++) {
-          if ((LETTER_VALUES[letters[i]] || 0) > (LETTER_VALUES[letters[best]] || 0)) best = i;
-        }
-        lootTileIndex = best;
-      }
-    }
-  }
+  const bonusSet = new Set(bonusPositions);
+  // 1) Place the per-level Loot Letter FIRST (guarantees >=2 of the announced
+  //    letter + one non-bonus instance to be the loot tile).
+  const lootLetter = getLootLetterForLevel(level);
+  const lootTileIndex = placeLootLetter(letters, lootLetter, bonusSet, rng);
+  // 2) Apply caps AFTER loot placement, protecting the loot tile so a Loot
+  //    Letter of Q/X/J/Z can't be demoted, and so a loot injection that added a
+  //    Q still gets its matching U(s) from the pairing pass.
+  const protect = lootTileIndex >= 0 ? new Set([lootTileIndex]) : new Set();
+  applyLetterCaps(letters, protect, lootLetter);
   return letters.map((l, i) => ({
     id: startId + i, letter: l, value: LETTER_VALUES[l], used: false,
     bonus: bonusPositions.includes(i) ? (Math.random() < 0.5 ? "double" : "triple") : null,
-    isLoot: isLootLevel && i === lootTileIndex,
+    isLoot: i === lootTileIndex,
   }));
 }
 function calcWordScore(tileIds, tiles) {
@@ -1109,7 +1147,7 @@ function VisualTour({ onDone }) {
             <div style={{color:'#22d3ee'}}>🌅 Fresh Tiles Daily</div>
             <div style={{color:'#f6d365'}}>💎 Every letter is worth points</div>
             <div style={{color:'#fda085'}}>⭐ Bonuses increase points</div>
-            <div style={{color:'#6ee7b7'}}>💥 Hidden "Loot Letter" daily — 5× the letter's value!</div>
+            <div style={{color:'#6ee7b7'}}>💥 Each level has a "Loot Letter" — one tile scores 5× that letter's value!</div>
             <div style={{color:'#a78bfa'}}>🌈 Clear 5 levels + find the Word of the Day for a Perfect Day! <SmallPot/></div>
           </div>
         </div>
@@ -2677,6 +2715,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [showWotdReminder, setShowWotdReminder] = useState(false);
   const [wotdCelebration, setWotdCelebration] = useState(false);
   const [lootCelebration, setLootCelebration] = useState(null); // {word, score, letter}
+  // (v106) Loot Letter announcement: a brief, self-dismissing INFORMATIONAL popup
+  // ("💥 Loot Letter · Level N · X") shown at each level open. NOT a celebration —
+  // ungated by showMascotCelebrations(). Auto-clears after 2s; no button. The
+  // persistent reminder lives in the Tap-tiles strip badge.
+  const [lootAnnounceLevel, setLootAnnounceLevel] = useState(null); // level number or null
+  const lootAnnounceTimerRef = useRef(null);
   const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
     try {
       const cached = getCachedWordOfTheDay();
@@ -4139,13 +4183,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
     levelResetCount.current = 0; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
+    fireLootAnnounce(newLevel);
     if (wotd && !wotdFound) showWotdReminderWithPause();
     if (newLevel === 5) awardBadge("level_5");
   };
 
+  // (v106) Fire the brief Loot Letter announcement for a level. Self-dismisses
+  // after 2s. Informational only — does NOT pause the timer (the level is already
+  // frozen awaiting first tap) and is NOT gated by the mascot toggle.
+  const fireLootAnnounce = (lvl) => {
+    if (lootAnnounceTimerRef.current) clearTimeout(lootAnnounceTimerRef.current);
+    setLootAnnounceLevel(lvl);
+    lootAnnounceTimerRef.current = setTimeout(() => {
+      setLootAnnounceLevel(null);
+      lootAnnounceTimerRef.current = null;
+    }, 2500);
+  };
+
   // WoD reminder helpers — pause timer, show 5s, fair-timer effect resumes
-  const showWotdReminderWithPause = () => {
-    if (!wotd || wotdFound) return;
+  const showWotdReminderWithPause = () => {    if (!wotd || wotdFound) return;
     stopTimer();
     setShowWotdReminder(true);
     setTimeout(() => {
@@ -4259,7 +4315,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     { emoji:"⚠️", title:"Beware of Q's", body:"Only one U is guaranteed when a Q is present. Use it wisely before it's gone — a stranded Q can cost you the level." },
     { emoji:"💡", title:"Think Big First", body:"Start with big, high-value words. Long words with rare letters earn serious points — and long-word bonuses stack up fast." },
     { emoji:"✨", title:"Stack Bonus Tiles", body:"Gold (2×) and purple (3×) bonus tiles multiply your letter score. Save them for your longer words to maximize your loot." },
-    { emoji:"💥", title:"Hunt the Loot Letter", body:"One hidden Loot Letter is placed on the board each day — it looks like every other tile. Use it in a valid word for a 5× letter bonus and a big celebration! Same Loot Letter all day. Replay games to keep hunting." },
+    { emoji:"💥", title:"Hunt the Loot Letter", body:"Every level has its own Loot Letter, named at the top of the screen. Two or more of that letter are on the board, but only one tile is the loot — use it in a valid word for a 5× bonus!" },
     { emoji:"⏸️", title:"Use Pause", body:"The Pause button stops your timer completely. Use it whenever you need a moment to plan your next move without the clock running." },
     { emoji:"📜", title:"History Tracks Everything", body:"The History button shows all words played — and tried but not accepted — for the entire current day across all your games." },
     { emoji:"🎯", title:"Save Your UNDO", body:"You get one UNDO per game for 1,000 pts. Save it for a strategic moment in a later level when you really need to reverse a costly mistake." },
@@ -4543,7 +4599,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
         {/* v104: reworded + brightened box with visible purple border */}
         <div style={{background:"rgba(255,255,255,0.10)",borderRadius:16,padding:`${ipadIntroPad(18)}px ${ipadIntroPad(22)}px`,border:"2px solid rgba(167,139,250,0.85)",marginBottom:ipadIntro(22),width:"100%",fontSize:ipadIntro(13),color:"rgba(255,255,255,0.92)",lineHeight:2.0}}>
-          <div style={{marginBottom:ipadIntro(6)}}>✦ Today's tiles, <strong style={{color:"#f6d365"}}>Word of the Day</strong>, and <strong style={{color:"#f6d365"}}>Loot Letters</strong> are set</div>
+          <div style={{marginBottom:ipadIntro(6)}}>✦ Each level hides one <strong style={{color:"#f6d365"}}>Loot Letter</strong> worth <strong style={{color:"#f6d365"}}>5× its value</strong> — we'll name the letter, but only 1 tile pockets the loot</div>
           <div style={{marginBottom:ipadIntro(6)}}>✦ Game Timer begins with your <strong style={{color:"#f6d365"}}>first letter tapped</strong></div>
           <div>✦ Clear all 5 levels + find the Word of the Day to enjoy and share a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day! 🌈🏆</span></div>
         </div>
@@ -4554,7 +4610,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{position:"absolute",top:ipadIntro(3),left:showMascotsPref?ipadIntro(23):ipadIntro(3),width:ipadIntro(22),height:ipadIntro(22),borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
           </div>
         </div>
-        <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
+        <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; fireLootAnnounce(1); }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
           Let's Go! 🎯
         </button>
       </div>
@@ -4586,6 +4642,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         @keyframes plClearL4{0%{transform:scale(0.4);opacity:0}20%{transform:scale(1.1) rotate(-6deg);opacity:1}35%{transform:scale(1.05) rotate(6deg)}50%{transform:scale(1.08) rotate(-5deg)}65%{transform:scale(1.04) rotate(4deg)}80%{transform:scale(1.06) rotate(-2deg)}100%{transform:scale(1) rotate(0deg);opacity:1}}
         @keyframes plClearL5{0%{transform:translateY(160px) scale(0.5) rotate(-15deg);opacity:0}40%{transform:translateY(-22px) scale(1.2) rotate(8deg);opacity:1}55%{transform:translateY(0) scale(1.1) rotate(-5deg)}70%{transform:translateY(-10px) scale(1.12) rotate(5deg)}85%{transform:translateY(0) scale(1.05) rotate(-2deg)}100%{transform:translateY(0) scale(1) rotate(0deg);opacity:1}}
         @keyframes plSpeechIn{0%{opacity:0;transform:translateY(8px) scale(0.9)}100%{opacity:1;transform:translateY(0) scale(1)}}
+        @keyframes lootAnnounce{0%{transform:scale(0.85) translateY(20px);opacity:0}12%{transform:scale(1.03) translateY(0);opacity:1}85%{transform:scale(1) translateY(0);opacity:1}100%{transform:scale(0.95) translateY(-12px);opacity:0}}
         @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         @keyframes warningPulse{0%,100%{background:rgba(220,38,38,0.2)}50%{background:rgba(220,38,38,0.4)}}
         @keyframes purseGlow{0%,100%{box-shadow:0 0 18px rgba(139,92,246,0.7)}50%{box-shadow:0 0 32px rgba(167,139,250,0.95)}}
@@ -4649,6 +4706,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:ipadIntro(14),color:"#f6d365",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>WORD OF THE DAY!</div>
             <div style={{fontSize:ipadIntro(26),fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:8}}>{wotd}</div>
             <div style={{fontSize:ipadIntro(18),fontWeight:"bold",color:"#6ee7b7"}}>+1,000 pts!</div>
+          </div>
+        </div>
+      )}
+
+      {/* (v106) Loot Letter announcement — brief informational popup at level open.
+          NOT a celebration; ungated by the mascot toggle. Auto-dismisses (2s via
+          fireLootAnnounce). Non-interactive (pointerEvents none). */}
+      {lootAnnounceLevel != null && (
+        <div style={{position:"fixed",inset:0,zIndex:9600,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadIntro(24)}px ${ipadIntro(34)}px`,textAlign:"center",border:"1.5px solid rgba(246,211,101,0.5)",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",fontFamily:"Georgia,serif",animation:"lootAnnounce 2.5s forwards"}}>
+            <div style={{fontSize:ipadIntro(13),color:"#fde68a",fontWeight:"bold",letterSpacing:1,marginBottom:2}}>💥 LOOT LETTER</div>
+            <div style={{fontSize:ipadIntro(18),color:"#f6d365",fontWeight:"bold",marginBottom:ipadIntro(16)}}>Level {lootAnnounceLevel}</div>
+            <div style={{display:"inline-flex",alignItems:"center",justifyContent:"center",width:ipadIntro(88),height:ipadIntro(88),borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadIntro(56),fontWeight:"bold",boxShadow:"0 0 28px rgba(246,211,101,0.6)"}}>{getLootLetterForLevel(lootAnnounceLevel)}</div>
           </div>
         </div>
       )}
@@ -5232,6 +5302,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 <div style={{fontSize:ipadWord(7),color:"rgba(255,255,255,0.4)"}}>{currentWord.length} ltrs</div>
               </div>
             )}
+            {/* (v106) Persistent Loot Letter reminder — Option B block pinned at the strip's right edge */}
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,marginLeft:ipadWord(6),flexShrink:0,background:"linear-gradient(135deg,rgba(246,211,101,0.16),rgba(253,160,133,0.12))",border:"1.5px solid rgba(246,211,101,0.55)",borderRadius:8,padding:`${ipadWord(3)}px ${ipadWord(7)}px`}}>
+              <span style={{fontSize:ipadWord(6),color:"#fde68a",fontWeight:"bold",letterSpacing:0.5,whiteSpace:"nowrap"}}>💥 LOOT</span>
+              <span style={{display:"inline-flex",alignItems:"center",justifyContent:"center",minWidth:ipadWord(20),height:ipadWord(20),padding:`0 ${ipadWord(3)}px`,borderRadius:5,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadWord(14),fontWeight:"bold",lineHeight:1,boxShadow:"0 0 8px rgba(246,211,101,0.5)"}}>{getLootLetterForLevel(level)}</span>
+            </div>
           </div>
 
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative"}}>

@@ -5600,7 +5600,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>📈 DAILY SCORES</div>
             <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>
-              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Today</div></div>
+              <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#fda085"}}>{statsData.highScoreToday||"—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Best Today</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#fda085"}}>{weekHighScore||"—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Week Best</div></div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>

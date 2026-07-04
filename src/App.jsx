@@ -5515,11 +5515,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.25)",border:"1.5px solid rgba(167,139,250,0.7)",borderRadius:12,padding:`${ipadChrome(3)}px ${ipadChrome(10)}px`,cursor:"pointer",fontSize:isIpadWidth()?21:10,color:"#e0d4ff",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
         </div>
 
-        {/* ROW 2: Replay Level# · Buy Level#+1 — only on play tab (Start New Game removed v103) */}
+        {/* ROW 2: Replay Level# · Buy Level#+1 · UNDO — only on play tab (Start New Game removed v103; UNDO moved here from Row 4 in v118). On L5 there is no Buy button, so Replay + UNDO fill the row. */}
         {tab==="play" && (
         <div style={{display:"flex",gap:3,marginBottom:3}}>
           <button className="ll-btn" onClick={()=>!paused&&setShowResetConfirm(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:"rgba(96,165,250,0.15)",border:"1px solid rgba(96,165,250,0.55)",color:"#bfdbfe",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>{level===5?"🔄 Replay Level 5":"🔄 Replay Level "+level}</button>
           {level<5&&<button className="ll-btn" onClick={()=>setShowBuyModal(true)} style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:canBuy?"rgba(246,211,101,0.15)":"rgba(255,255,255,0.05)",border:`1px solid ${canBuy?"rgba(246,211,101,0.55)":"rgba(255,255,255,0.12)"}`,color:canBuy?"#fef08a":"rgba(255,255,255,0.3)",textAlign:"center",fontFamily:"Georgia,serif",fontWeight:"bold"}}>🔓 Buy Level {level+1} — {buyCost} pts</button>}
+          <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
+            disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
+            style={{flex:1,padding:`${ipadChrome(7)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(10),background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif",lineHeight:1.2}}>
+            {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO — 1,000 pts`:<span>↩️ UNDO at <span style={{color:"#fda085"}}>1,000 pts</span></span>)}
+          </button>
         </div>
         )}
 
@@ -5538,26 +5543,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
         </>)}
 
-        {/* ROW 4: Remaining · Vowels · Consonants · UNDO — only on play tab */}
+        {/* ROW 4: Remaining · Vowels · Consonants — only on play tab. UNDO moved to Row 2 in v118.
+            Boxes brightened v118: 2px full-color borders + soft glow, taller padding, bigger
+            color-coded glowing numbers (blue/teal/violet), matching tinted labels — makes this
+            row read as the critical at-a-glance gauge for successful play. (v119 will add the
+            V/C-ratio danger pulse on top of this styling.) */}
         {tab==="play" && (
-        <div style={{display:"flex",gap:4,marginBottom:3}}>
-          <div style={{flex:1.4,background:"rgba(96,165,250,0.1)",border:"1px solid rgba(96,165,250,0.4)",borderRadius:8,padding:`${ipadChrome(3)}px ${ipadChrome(3)}px`,textAlign:"center"}}>
-            <div style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#60a5fa"}}>{availableTiles.length}</div>
-            <div style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5}}>{isIpadWidth()?"REMAINING LETTERS":"REMAINING"}</div>
+        <div style={{display:"flex",gap:5,marginBottom:3}}>
+          <div style={{flex:1.4,background:"rgba(96,165,250,0.16)",border:"2px solid #60a5fa",borderRadius:9,padding:`${ipadChrome(6)}px ${ipadChrome(3)}px`,textAlign:"center",boxShadow:"0 0 8px rgba(96,165,250,0.45)"}}>
+            <div style={{fontSize:ipadChrome(17),fontWeight:"bold",color:"#7cc4ff",textShadow:"0 0 8px rgba(96,165,250,0.7)"}}>{availableTiles.length}</div>
+            <div style={{fontSize:ipadChrome(9),color:"#bfdbfe",fontWeight:"bold",letterSpacing:0.5}}>{isIpadWidth()?"REMAINING LETTERS":"REMAINING"}</div>
           </div>
-          <div style={{flex:1,background:"rgba(110,231,183,0.08)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:8,padding:`${ipadChrome(3)}px ${ipadChrome(3)}px`,textAlign:"center"}}>
-            <div style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#6ee7b7"}}>{vowelsRemaining}</div>
-            <div style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5}}>VOWELS</div>
+          <div style={{flex:1,background:"rgba(52,211,153,0.16)",border:"2px solid #34d399",borderRadius:9,padding:`${ipadChrome(6)}px ${ipadChrome(3)}px`,textAlign:"center",boxShadow:"0 0 8px rgba(52,211,153,0.4)"}}>
+            <div style={{fontSize:ipadChrome(17),fontWeight:"bold",color:"#6ee7b7",textShadow:"0 0 8px rgba(52,211,153,0.7)"}}>{vowelsRemaining}</div>
+            <div style={{fontSize:ipadChrome(9),color:"#a7f3d0",fontWeight:"bold",letterSpacing:0.5}}>VOWELS</div>
           </div>
-          <div style={{flex:1,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:8,padding:`${ipadChrome(3)}px ${ipadChrome(3)}px`,textAlign:"center"}}>
-            <div style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#a78bfa"}}>{consonantsRemaining}</div>
-            <div style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5}}>CONSON.</div>
+          <div style={{flex:1,background:"rgba(167,139,250,0.16)",border:"2px solid #a78bfa",borderRadius:9,padding:`${ipadChrome(6)}px ${ipadChrome(3)}px`,textAlign:"center",boxShadow:"0 0 8px rgba(167,139,250,0.4)"}}>
+            <div style={{fontSize:ipadChrome(17),fontWeight:"bold",color:"#c4b5fd",textShadow:"0 0 8px rgba(167,139,250,0.7)"}}>{consonantsRemaining}</div>
+            <div style={{fontSize:ipadChrome(9),color:"#ddd6fe",fontWeight:"bold",letterSpacing:0.5}}>CONSON.</div>
           </div>
-          <button className="ll-btn" onClick={()=>{ if(!undoUsed&&lastValidEntry&&totalRef.current>=1000) setShowUndoConfirm(true); }}
-            disabled={undoUsed||!lastValidEntry||totalRef.current<1000||paused}
-            style={{flex:2,padding:`${ipadChrome(3)}px ${ipadChrome(4)}px`,borderRadius:8,fontSize:ipadChrome(9),background:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"linear-gradient(135deg,rgba(251,113,133,0.6),rgba(225,29,72,0.5))":"rgba(255,255,255,0.05)",border:`1px solid ${!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"rgba(251,113,133,0.9)":"rgba(255,255,255,0.25)"}`,color:!undoUsed&&lastValidEntry&&totalRef.current>=1000&&!paused?"#ffffff":"rgba(255,255,255,0.85)",textAlign:"center",fontWeight:"bold",fontFamily:"Georgia,serif",lineHeight:1.2}}>
-            {undoUsed?"↩️ UNDO Used":(totalRef.current>=1000?`↩️ UNDO — 1,000 pts`:<span>↩️ UNDO at <span style={{color:"#fda085"}}>1,000 pts</span></span>)}
-          </button>
         </div>
         )}
 
@@ -5654,7 +5658,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {tab==="play"&&(
         <div style={{zIndex:1,width:"100%",maxWidth:ipadBoardW()||ipadW(480),padding:isIpadWidth()?"0 0 6px":"0 10px 6px",animation:"slideUp 0.3s ease"}}>
 
-          {/* ROW 5: Submit Word · SCORE · Clear · Menu — Replay/Buy moved to Row 2 above tile board, UNDO moved to Row 4 */}
+          {/* ROW 5: Submit Word · SCORE · Clear · Menu — Replay/Buy/UNDO all in Row 2 above tile board (v118) */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>
             <button className="ll-btn" onClick={handleSubmit} disabled={currentWord.length<3||validating||paused||!online} style={{flex:3,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:9,fontSize:ipadChrome(11),fontWeight:"bold",background:currentWord.length>=3&&!validating&&!paused&&online?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:currentWord.length>=3&&!validating&&!paused&&online?"#1a1a2e":"rgba(255,255,255,0.3)",cursor:currentWord.length>=3&&!validating&&!paused&&online?"pointer":"default",textAlign:"center"}}>{validating?"Checking…":paused?"Paused":!online?"Offline":"Submit Word"}</button>
             <div style={{flex:1.5,padding:`${ipadChrome(4)}px ${ipadChrome(4)}px`,borderRadius:9,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",border:"1.5px solid rgba(246,211,101,0.55)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",lineHeight:1.1}}>

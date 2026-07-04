@@ -1,0 +1,18 @@
+{
+  "appId": "net.letterloot.app",
+  "appName": "LetterLoot",
+  "webDir": "dist",
+  "ios": {
+    "backgroundColor": "#0a0820"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": true,
+      "backgroundColor": "#9B6BFF",
+      "iosSplashResourceName": "Splash",
+      "splashFullScreen": true,
+      "splashImmersive": true
+    }
+  }
+}

@@ -102,6 +102,21 @@ const GREAT_WORD_SAYINGS = [
 // (PK July03e LOCKED: L1=40, L2=50, L3=60, L4=70, L5=80). Used now only to pick a
 // plausible sample score for the debug preview; v113 uses it as the real fire gate.
 const GREAT_WORD_THRESH_PREVIEW = { 1: 40, 2: 50, 3: 60, 4: 70, 5: 80 };
+// v116 (#16 full wiring): the REAL per-level Great Word fire threshold. Same values
+// as _PREVIEW; kept as its own const so the live gate reads by intent, not off the
+// debug-preview name. A single submitted word whose real (5x-inclusive) score meets
+// or exceeds this fires the Great Word moment once per level.
+const GREAT_WORD_THRESH = { 1: 40, 2: 50, 3: 60, 4: 70, 5: 80 };
+// v116: A-hybrid picker for Great Word lines — mirrors pickClearSaying exactly.
+// First call of the session = deterministic daily index (getDailySeed() % 10);
+// each later call advances +1 (wrapping). Returns the line WITH the [score] token
+// still in it; the caller interpolates the real score at fire time.
+function pickGreatWordSaying(sessionIdx) {
+  const lines = GREAT_WORD_SAYINGS;
+  const daily = getDailySeed() % 10;
+  const idx = (daily + Math.max(0, sessionIdx)) % lines.length;
+  return lines[idx];
+}
 // A-hybrid picker. `sessionIdx` is a running counter for this app session
 // (a useRef in the component, starts at -1). First call of the session uses the
 // deterministic daily index (getDailySeed() % 10); each later call advances +1
@@ -2881,6 +2896,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // Captured line to display for the current clear (set when the clear fires so
   // the counter doesn't advance on unrelated re-renders).
   const [clearSayingText, setClearSayingText] = useState("");
+  // v116 (#16): LIVE Great Word celebration — separate from greatWordPreview (debug
+  // only) so debug triggers never touch live rotation state or the per-level guard.
+  // Holds { line } (already score-interpolated) or null.
+  const [greatWordCelebration, setGreatWordCelebration] = useState(null);
+  // A-hybrid running session counter for Great Word lines — same pattern as
+  // clearSayingIdxRef. Starts at -1; advances once per genuine fire; resets on launch.
+  const greatWordIdxRef = useRef(-1);
+  // Per-level fire guard: holds the level number Great Word last fired (or was
+  // loot-suppressed) on, so it fires at most once per level. 0 = not yet fired this
+  // level. Reset to 0 on next-level / replay / fresh-game (see reset sites).
+  const greatWordFiredRef = useRef(0);
+  const greatWordTimerRef = useRef(null);
   const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
     try {
       const cached = getCachedWordOfTheDay();
@@ -3217,7 +3244,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setTimeout(() => {
           setGreatWordPreview(null);
           if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) { stopTimer(); } else { startTimer(); }
-        }, 4000);
+        }, 5000); // v117: match live Great Word dwell (5s)
       }
       else if (debugAction === "mascot-loot") {
         setShowIntro(false);
@@ -3713,6 +3740,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setSubmitted([]); submittedRef.current = [];
     setTotalScore(0); totalRef.current = 0;
     setLevelScore(0); levelScoreRef.current = 0;
+    greatWordFiredRef.current = 0; greatWordIdxRef.current = -1; // v116 (#16): fresh game re-arms + resets Great Word rotation
     setStreak(0); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
     setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
@@ -3779,6 +3807,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       forfeitPerfectDay();
     }
     levelResetCount.current += 1;
+    greatWordFiredRef.current = 0; // v116 (#16): replaying the level re-arms Great Word
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
     // v79 FIX: a level reset/replay must also freeze the clock until the first tap.
     // Previously this only called resetLevelTimer() (zeroed the clock) but left the
@@ -4170,6 +4199,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       });
       // ── Loot Letter detection (already determined above as usedLootTile) ──
       if (usedLootTile) {
+        // v116 (#16) COLLISION RULE (LOCKED July03e): a loot word that would ALSO
+        // qualify as a Great Word — Loot WINS, Great Word is suppressed AND counted
+        // as used for this level (won't re-fire later this level). Marking the guard
+        // here regardless of score is safe: it only blocks a FUTURE Great Word this
+        // level, and the loot celebration already shows the score + carries the 5x.
+        greatWordFiredRef.current = level;
         // Fire celebration: popup, haptic, sound (no confetti per spec)
         stopTimer();
         setLootCelebration({ word: currentWord, score, letter: usedLootTile.letter });
@@ -4208,6 +4243,36 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             startTimer();
           }
         }, 4000); // v113: 4s celebration standard (was 5000)
+      }
+      // ── v116 (#16): GREAT WORD moment ──────────────────────────────────────────
+      // Fires when a SINGLE submitted word's real score (currentScoreReal, 5x-inclusive)
+      // meets the per-level threshold, once per level, gated behind the mascot toggle,
+      // and NOT on a loot word (loot wins — see collision marker above, which already
+      // set the guard). Full 4.0s clock freeze with the guarded resume, same pattern
+      // as loot/WoD. currentScoreReal is in scope (declared before the flash block).
+      if (
+        !isLootWord &&
+        greatWordFiredRef.current !== level &&
+        showMascotCelebrations() &&
+        currentScoreReal >= (GREAT_WORD_THRESH[level] || 40)
+      ) {
+        greatWordFiredRef.current = level;
+        greatWordIdxRef.current = greatWordIdxRef.current + 1;
+        const gwLine = pickGreatWordSaying(greatWordIdxRef.current).replace("[score]", String(currentScoreReal));
+        stopTimer();
+        setGreatWordCelebration({ line: gwLine });
+        triggerHaptic("medium");
+        if (greatWordTimerRef.current) clearTimeout(greatWordTimerRef.current);
+        greatWordTimerRef.current = setTimeout(() => {
+          setGreatWordCelebration(null);
+          // Guarded resume — stay frozen if the level just completed / awaiting first
+          // tap / paused; otherwise resume play. Identical to loot/WoD.
+          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) {
+            stopTimer();
+          } else {
+            startTimer();
+          }
+        }, 5000); // v117: Great Word dwell 4s → 5s (Daryl: 4s too quick in real play; Loot+WoD stay 4s)
       }
       setTiles(newTiles);
       setLastValidEntry({ word: currentWord, score, tileIds: [...selected], levelScoreDelta: score });
@@ -4391,6 +4456,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const newLevel = level + 1;
     setLevel(newLevel); setLevelComplete(false); setShowBuyModal(false);
     levelScoreRef.current = 0; setLevelScore(0);
+    greatWordFiredRef.current = 0; // v116 (#16): new level → Great Word can fire again
     const rng = seededRandom(getDailySeed() + newLevel * 999);
     const count = 42 + (newLevel - 1) * 7;
     const bp = getBonusPositions(count, getBonusCount(newLevel), rng);
@@ -4715,6 +4781,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             setSubmitted([]); submittedRef.current = [];
             setTotalScore(0); totalRef.current = 0;
             setLevelScore(0); levelScoreRef.current = 0;
+            greatWordFiredRef.current = 0; greatWordIdxRef.current = -1; // v116 (#16): new game via PLAY NOW re-arms + resets rotation
             setStreak(0); setLevelComplete(false);
             // v100 (item #2c): respect the per-day PD forfeit flag here too — starting another
             // game today via PLAY NOW must not re-open a Perfect Day shot once forfeited.
@@ -4992,6 +5059,37 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                   <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
                   {/* v114: auto-shrink text to fit the fixed zone (shared with Level Clear) */}
                   <BubbleFitText text={greatWordPreview.line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(11)}/>
+                </div>
+                <img src="/great-word-pirate.png" alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL2 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* v116 (#16): Great Word popup — LIVE render (real word-submit trigger via
+          greatWordCelebration). Geometry IDENTICAL to the debug preview above; kept a
+          separate block + state so debug triggers never touch live rotation/guard. */}
+      {greatWordCelebration && (
+        <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+          {(()=>{
+            const pw = ipadTour(120);
+            const bw = pw * 1.15;
+            const cropWR = 786/1024, cropHR = 546/1024;
+            const solidBottomFrac = (1 + cropHR)/2;
+            const marginBelow = bw * (1 - solidBottomFrac);
+            const gap = pw * (10/162);
+            const bubbleTop = -bw + marginBelow - gap;
+            const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
+            const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
+            const zWidth = (81.7/100) * cropWR * 100;
+            const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115 zone (11%/66%)
+            const zHeight = (66/100) * cropHR * 100;
+            return (
+              <div style={{position:"relative",display:"inline-block"}}>
+                <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
+                  <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
+                  <BubbleFitText text={greatWordCelebration.line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(11)}/>
                 </div>
                 <img src="/great-word-pirate.png" alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL2 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
               </div>

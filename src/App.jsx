@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
-import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto } from "./supabase";
+import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto, saveBestTime } from "./supabase";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Clipboard } from "@capacitor/clipboard";
 
@@ -107,6 +107,31 @@ const GREAT_WORD_THRESH_PREVIEW = { 1: 40, 2: 50, 3: 60, 4: 70, 5: 80 };
 // debug-preview name. A single submitted word whose real (5x-inclusive) score meets
 // or exceeds this fires the Great Word moment once per level.
 const GREAT_WORD_THRESH = { 1: 40, 2: 50, 3: 60, 4: 70, 5: 80 };
+// ── v119 (#new): V/C-RATIO DANGER PULSE thresholds (LOCKED July04c) ──────────────
+// A non-blocking ambient cue: pulses the Vowels + Consonants boxes when the
+// vowel:consonant RATIO of the remaining tiles enters a danger zone, teaching the
+// player to bank/spend vowels before they strand themselves. This is a UTILITY cue,
+// NOT a mascot moment — it is ALWAYS ON, independent of the mascot toggle (Daryl,
+// July04c). Two rules, both firing the SAME 5s alternating pulse:
+//   Rule 1 (vowel starvation, the dangerous one): V ÷ C <= 30%  → alert (inclusive).
+//   Rule 2 (over-vowel / consonant compounding):  V ÷ C >= 100% AND >6 tiles left.
+// Ratio is vowels DIVIDED BY consonants (NOT vowels/total). Both boundaries inclusive.
+const VC_STARVE_RATIO = 0.30;   // Rule 1: V/C <= 0.30 fires
+const VC_OVER_RATIO   = 1.00;   // Rule 2: V/C >= 1.00 fires (tips at V=C)
+const VC_OVER_MIN_TILES = 6;    // Rule 2 guard: only when tilesRemaining > 6 (kills end-game false alarms)
+const VC_PULSE_MS = 6000;       // dwell: 3 cycles x 2.0s = 6s of alternating V<->C rise/fade (v121, was 5000)
+// Pure function of the remaining counts — identical result on board-open and
+// post-submit, so both triggers agree. Returns "starve" | "over" | null.
+//  - c === 0 (no consonants left) is NOT starvation — return null (avoids /0 and a
+//    meaningless spike when only vowels remain in the last tiles).
+//  - Rule 2's tile guard uses the total remaining (v + c).
+function vcDangerState(v, c, tilesRemaining) {
+  if (c === 0) return null;
+  const ratio = v / c;
+  if (ratio <= VC_STARVE_RATIO) return "starve";
+  if (ratio >= VC_OVER_RATIO && tilesRemaining > VC_OVER_MIN_TILES) return "over";
+  return null;
+}
 // v116: A-hybrid picker for Great Word lines — mirrors pickClearSaying exactly.
 // First call of the session = deterministic daily index (getDailySeed() % 10);
 // each later call advances +1 (wrapping). Returns the line WITH the [score] token
@@ -2704,6 +2729,10 @@ export default function App() {
         // badges, and daily history persisted locally on the device (e.g. the "Frankie V." ghost
         // best-time). ll_tour_done is intentionally NOT wiped — the tour is device-level and
         // always available to anyone. ll_photo is also removed elsewhere but kept here for safety.
+        // v122: ll_whatsnew_v11_seen is ALSO intentionally NOT wiped — same rationale as
+        // ll_tour_done: it's a device-level "seen this update once" flag, not account/progress
+        // data. Wiping it would re-show the What's New screen to a deleted-and-returning user
+        // even though nothing changed. Keep it out of this list.
         const keysToClear = [
           "ll_guest","ll_guest_returning","ll_stats","ll_lifetime","ll_badges_v2",
           "ll_times","ll_alltime","ll_daily_history","ll_session","ll_completed_today",
@@ -2908,6 +2937,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // level. Reset to 0 on next-level / replay / fresh-game (see reset sites).
   const greatWordFiredRef = useRef(0);
   const greatWordTimerRef = useRef(null);
+  // ── v119: V/C-ratio danger pulse ──────────────────────────────────────────────
+  // vcPulse drives the CSS pulse on BOTH the Vowels and Consonants boxes: null = at
+  // rest (the plain v118 glow), or "starve"/"over" while a 5s pulse is running.
+  // The rule name doesn't change which boxes pulse (both alternate for both rules,
+  // per spec — the signal is "the ratio is in a danger zone", not which side is short);
+  // it's tracked only so the effect can restart the animation cleanly on a rule change.
+  const [vcPulse, setVcPulse] = useState(null);
+  // v120: a monotonically increasing nonce, bumped on every fire. Used as a React
+  // `key` on the pulsing boxes so a fresh fire REMOUNTS them — the most reliable way
+  // to (re)start a CSS animation from React, sidestepping the v119/v120 fragility
+  // where toggling the `animation` style via state didn't reliably (re)trigger it.
+  const [vcPulseNonce, setVcPulseNonce] = useState(0);
+  // Prior danger state, for FRESH-CROSSING detection on submit: re-fire only when the
+  // ratio was SAFE (null) before a word and is dangerous after — NOT on every submit
+  // while it stays dangerous (that's the nagging version, rejected). Board-open uses
+  // its own check and seeds this. null = last-known-safe.
+  const vcDangerPrevRef = useRef(null);
+  const vcPulseTimerRef = useRef(null);
+  // v121: timestamp of the last danger-effect evaluation, for the churn debounce
+  // (rapid successive board changes from debug Jump-to-Ln shouldn't fire).
+  const vcLastEvalRef = useRef(0);
   const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
     try {
       const cached = getCachedWordOfTheDay();
@@ -2952,6 +3002,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   });
   const tileCountRef = useRef(ss?.tileCount || 42);
   const levelResetCount = useRef(0);
+  // #18b: per-level clean-clear flag for the Cloud Time Leaderboard. True while the
+  // CURRENT level has had no reset/re-do/buy (UNDO is OK — PD-safe, so time-safe too).
+  // Reset to true at each new level; set false in doLevelReset. Gates the cloud level
+  // time write so a fumbled L1 doesn't disqualify a clean L2–L5 the same day.
+  const levelCleanRef = useRef(true);
   const [selected, setSelected] = useState([]);
   const [submitted, setSubmitted] = useState(ss?.submitted || []);
   const [totalScore, setTotalScore] = useState(ss?.totalScore || 0);
@@ -3105,11 +3160,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [streakBonusCount, setStreakBonusCount] = useState(1);
   const [confirmResetStats, setConfirmResetStats] = useState(false);
   const [showReadyScreen, setShowReadyScreen] = useState(false);
+  // v122: one-time "What's New in v1.1" screen. Shows once, for EVERYONE, on the first
+  // launch after updating — gated by localStorage flag ll_whatsnew_v11_seen. Appears as
+  // a gate in front of the Ready screen; its "Got it" button sets the flag and reveals
+  // the normal Ready screen. Also re-openable later via Tour (#33). The WhatsNewScreen
+  // render is a self-contained block so #33 can reuse it as a Tour page.
+  const [showWhatsNew, setShowWhatsNew] = useState(() => {
+    try { return localStorage.getItem("ll_whatsnew_v11_seen") !== "1"; } catch { return false; }
+  });
+  const dismissWhatsNew = () => {
+    try { localStorage.setItem("ll_whatsnew_v11_seen", "1"); } catch {}
+    setShowWhatsNew(false);
+  };
   const [leaderboardFromPerfectDay, setLeaderboardFromPerfectDay] = useState(false);
   const [leaderboardData, setLeaderboardData] = useState(null);
   const [leaderboardLoading, setLeaderboardLoading] = useState(false);
   const [leaderboardTab, setLeaderboardTab] = useState('scores');
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('alltime');
+  // #18b: Cloud Time Leaderboard data (all-time; { levels:{1..5:[]}, perfect:[] }) + loading.
+  const [timeCloudData, setTimeCloudData] = useState(null);
+  const [timeCloudLoading, setTimeCloudLoading] = useState(false);
   const [profilePhoto, setProfilePhoto] = useState(() => localStorage.getItem("ll_photo") || null);
   const [profileNickname, setProfileNickname] = useState(() => localStorage.getItem("ll_nickname") || "");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -3351,6 +3421,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     }
   }, [tab]);
 
+  // #18b: lazy-load the Cloud Time Leaderboard the first time the Times sub-tab is opened
+  // (and if a prior load failed/returned null, allow a retry on re-selection).
+  useEffect(() => {
+    if (tab === 'leaderboard' && leaderboardTab === 'times' && !timeCloudData && !timeCloudLoading) {
+      setTimeCloudLoading(true);
+      const timer = setTimeout(() => { setTimeCloudLoading(false); setTimeCloudData(null); }, 10000);
+      fetchTimeLeaderboard().then(d => { clearTimeout(timer); setTimeCloudData(d); setTimeCloudLoading(false); });
+    }
+  }, [tab, leaderboardTab]);
+
   const timerRef = useRef(null);
   const justResetRef = useRef(false);
   const [showReadyToPlay, setShowReadyToPlay] = useState(false);
@@ -3369,6 +3449,39 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const availableTiles = tiles.filter(t => !t.used);
   const vowelsRemaining = availableTiles.filter(t => VOWELS.has(t.letter)).length;
   const consonantsRemaining = availableTiles.filter(t => !VOWELS.has(t.letter)).length;
+  // ── v120: UNIFIED danger-pulse trigger (keyed on `tiles`) ─────────────────────
+  // Re-runs on EVERY board change — level entry AND playing down within a level —
+  // because `tiles` is a fresh array on each setTiles (submit, next-level, buy, reset,
+  // undo, restore). This fixes the v119 miss: v119 keyed the check on [level,tab], so
+  // driving the ratio into the danger zone by PLAYING DOWN (level unchanged) never
+  // re-evaluated. Reads counts straight off `tiles` (no stale derived-value closure).
+  //
+  // FRESH-CROSSING semantics preserved: fire only when the danger state was null last
+  // check and is dangerous now (safe -> danger). If it's already dangerous and stays
+  // dangerous across submits, no re-pulse. vcDangerPrevRef holds the last state.
+  // On a genuine board OPEN (level entry) that is already dangerous, prev was null for
+  // the prior level's end state, so the transition into danger still reads as a fresh
+  // crossing and fires — covering the "board opens already starved" case.
+  useEffect(() => {
+    if (tab !== "play") return;
+    // v121: debounce rapid board churn. Legit board changes (a word submit, a single
+    // level open) are seconds apart; the debug Jump-to-Ln chains several handleNextLevel
+    // calls ~50ms apart, flashing intermediate boards that could spuriously fire. If this
+    // evaluation lands within 150ms of the previous one, treat it as churn: update the
+    // baseline silently and DON'T fire — the final settled board's own evaluation (which
+    // arrives >150ms later) is the one that pulses. Real play is never this fast, so
+    // board-open and in-play crossings are unaffected.
+    const now = Date.now();
+    const churning = (now - (vcLastEvalRef.current || 0)) < 150;
+    vcLastEvalRef.current = now;
+    const rem = tiles.filter(t => !t.used);
+    const vRem = rem.filter(t => VOWELS.has(t.letter)).length;
+    const cRem = rem.length - vRem;
+    const nextState = vcDangerState(vRem, cRem, rem.length);
+    if (!churning && nextState && vcDangerPrevRef.current !== nextState) fireVcPulse(nextState);
+    vcDangerPrevRef.current = nextState;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiles, tab]);
   const tileRows = [];
   for (let i = 0; i < tiles.length; i += 7) tileRows.push(tiles.slice(i, i + 7));
   const currentWord = selected.map(id => tiles.find(t => t.id === id)?.letter).join("");
@@ -3753,7 +3866,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
     setPerfectDayStreakBonus(0); setShowStreakBonus(false); setStreakBonusCount(1);
-    levelResetCount.current = 0; clearedLevelsRef.current = {};
+    levelResetCount.current = 0; levelCleanRef.current = true; clearedLevelsRef.current = {};
     // BUG FIX (May 2026): Clear session-significant badge tracking so new game
     // starts fresh — every qualifying achievement gets a celebration again.
     sessionBadgesShownRef.current = new Set();
@@ -3807,6 +3920,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       forfeitPerfectDay();
     }
     levelResetCount.current += 1;
+    levelCleanRef.current = false; // #18b: any reset/re-do disqualifies this level's cloud time
     greatWordFiredRef.current = 0; // v116 (#16): replaying the level re-arms Great Word
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
     // v79 FIX: a level reset/replay must also freeze the clock until the first tap.
@@ -4028,6 +4142,41 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       const wotdAllSessions = wotdAllRes.ok ? await wotdAllRes.json() : [];
       const allWordSessions = allWordSessionsRes.ok ? await allWordSessionsRes.json() : [];
       return { gs, todaySessions, weekSessions, wotdAllSessions, allWordSessions };
+    } catch { return null; }
+  };
+
+  // #18b: Cloud Time Leaderboard fetch. Pulls the whole best_times table (one row per
+  // player per slot: '1'..'5' or 'perfect'), groups by slot, sorts ascending (fastest
+  // first), and slices top-5 per level + top-10 perfect. All-time only by nature of the
+  // table (upsert-on-improve keeps a single best-ever row per player/slot). Mirrors the
+  // fetchLeaderboard REST/abort pattern. Guests never reach this (leaderboard screen is
+  // registered-only), but RLS also blocks unauthenticated reads as belt-and-suspenders.
+  const fetchTimeLeaderboard = async () => {
+    try {
+      const base = `${import.meta.env.VITE_SUPABASE_URL || "https://zcevszxmoggmcmvyxjtn.supabase.co"}/rest/v1`;
+      const hdrs = { apikey: import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM", Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM"}` };
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(`${base}/best_times?select=player_id,player_name,slot,seconds,date&limit=2000`, { headers: hdrs, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+      const rows = res.ok ? await res.json() : [];
+      // Filter out any blank/Guest names defensively (mirrors the score board's guard).
+      const clean = rows.filter(r => {
+        const n = (r.player_name || "").trim().toLowerCase();
+        return n !== "" && n !== "guest";
+      });
+      const levels = { "1": [], "2": [], "3": [], "4": [], "5": [] };
+      const perfect = [];
+      clean.forEach(r => {
+        const entry = { name: r.player_name, seconds: r.seconds, date: r.date || "" };
+        if (r.slot === "perfect") perfect.push(entry);
+        else if (levels[r.slot]) levels[r.slot].push(entry);
+      });
+      [1,2,3,4,5].forEach(l => {
+        levels[l].sort((a,b) => a.seconds - b.seconds);
+        levels[l] = levels[l].slice(0, 5);
+      });
+      perfect.sort((a,b) => a.seconds - b.seconds);
+      return { levels, perfect: perfect.slice(0, 10) };
     } catch { return null; }
   };
 
@@ -4336,6 +4485,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setStatsData(updatedStats);
         const updatedTimes = addLocalLevelTime(playerName||"You", level, clearedTime);
         setTimeLeaderboard(updatedTimes);
+        // #18b: Cloud Time Leaderboard — registered-only, clean-clear only (no reset/re-do/buy
+        // on this level; UNDO is OK). saveBestTime upserts-on-improve, so it's safe to call every
+        // clean clear. Fire-and-forget; failures never block gameplay.
+        if (!isGuest && user && levelCleanRef.current) {
+          saveBestTime(user.id, playerName || "", String(level), clearedTime).catch(() => {});
+        }
         if (isNewTimeRecord) setTimeout(() => flashNewRecord("time", clearedTime, level), 1500);
         if (level < 5) {
           // v108: advance the A-hybrid rotation once per genuine clear + capture
@@ -4399,6 +4554,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               const perfStats = updateLocalStats({ perfectDay: true }); setStatsData(perfStats);
               const updatedTimes2 = addLocalPerfectTime(playerName||"You", totalTimeRef.current);
               setTimeLeaderboard(updatedTimes2);
+              // #18b: Cloud Time Leaderboard — Perfect Day time. A Perfect Day is clean by
+              // definition (no resets/re-dos/buys all day), so no clean-flag check needed.
+              // Registered-only; upsert-on-improve; fire-and-forget.
+              if (!isGuest && user) {
+                saveBestTime(user.id, playerName || "", "perfect", totalTimeRef.current).catch(() => {});
+              }
           } else {
             // Level 5 complete WITHOUT Perfect Day — game over, show farewell instead of "Play Level 6"
             setValidating(false); setCheckingStuck(false);
@@ -4449,6 +4610,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setSelected([]); setValidating(false);
   };
 
+  // ── v119: fire the V/C danger pulse for `state` ("starve"|"over") ──────────────
+  // Sets vcPulse (which the render maps to a CSS animation on the V + C boxes) and
+  // clears it after VC_PULSE_MS. Re-firing while one is already running restarts it
+  // cleanly (clear old timer, blip to null so the CSS animation re-triggers, then set).
+  // Non-blocking: never touches the timer / pause / gameplay — pure visual.
+  const fireVcPulse = (state) => {
+    if (!state) return;
+    if (vcPulseTimerRef.current) clearTimeout(vcPulseTimerRef.current);
+    // v120: bump the nonce (remounts the boxes → animation restarts cleanly) and set
+    // the active state in the same commit. No rAF, no null-blip needed.
+    setVcPulseNonce(n => n + 1);
+    setVcPulse(state);
+    vcPulseTimerRef.current = setTimeout(() => {
+      setVcPulse(null);
+      vcPulseTimerRef.current = null;
+    }, VC_PULSE_MS);
+  };
+
   const handleNextLevel = (bought = false) => {
     if (bought) forfeitPerfectDay();
     // Hard cap: cannot go beyond Level 5 unless bonus levels are enabled
@@ -4463,7 +4642,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const newTiles = generateLevelTiles(newLevel, tileCountRef.current, rng, bp);
     tileCountRef.current += count;
     setTiles(newTiles); setSelected([]);
-    levelResetCount.current = 0; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
+    levelResetCount.current = 0; levelCleanRef.current = true; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
     fireLootAnnounce(newLevel);
     if (wotd && !wotdFound) showWotdReminderWithPause();
     if (newLevel === 5) awardBadge("level_5");
@@ -4874,6 +5053,56 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     </div>
   );
 
+  // v122: WHAT'S NEW in v1.1 — one-time gate before the Ready screen (shows once for
+  // everyone; re-openable via Tour later per #33). Content locked with Daryl July04.
+  if (showWhatsNew && showReadyScreen) return (
+    <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"40px 12px",position:"relative",overflowY:"auto",overflowX:"hidden"}}>
+      <Starfield/>
+      <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:isIpadWidth()?ipadW(440):400}}>
+        {/* Header */}
+        <div style={{textAlign:"center",marginBottom:ipadIntro(18)}}>
+          <div style={{fontSize:ipadIntro(11),letterSpacing:2,color:"#a78bfa",fontWeight:"bold",marginBottom:ipadIntro(6)}}>WHAT'S NEW</div>
+          <div style={{fontSize:ipadIntro(22),color:"#f6d365",fontWeight:"bold"}}>Fresh treasure in v1.1</div>
+          <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.75)",marginTop:ipadIntro(6),lineHeight:1.5}}>A few things have changed since you last played — here's what to look for.</div>
+        </div>
+        {/* Cards */}
+        <div style={{display:"flex",flexDirection:"column",gap:ipadIntro(12)}}>
+          {/* Loot Letters */}
+          <div style={{background:"rgba(246,211,101,0.08)",border:"1px solid rgba(246,211,101,0.3)",borderRadius:12,padding:`${ipadIntroPad(12)}px ${ipadIntroPad(14)}px`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+              <span style={{fontSize:ipadIntro(18)}}>✨</span>
+              <span style={{fontSize:ipadIntro(15),color:"#f6d365",fontWeight:"bold"}}>Loot Letters</span>
+            </div>
+            <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Each level now hides one Loot Letter worth 5× its value. We'll name the letter, just not which one! Only one tile on that board pockets the loot.</div>
+          </div>
+          {/* Pirate Celebrations */}
+          <div style={{background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:12,padding:`${ipadIntroPad(12)}px ${ipadIntroPad(14)}px`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+              <span style={{fontSize:ipadIntro(18)}}>🏴‍☠️</span>
+              <span style={{fontSize:ipadIntro(15),color:"#c4b5fd",fontWeight:"bold"}}>Pirate Celebrations</span>
+            </div>
+            <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Our pirate crew now cheers your big moments — clearing a level, a great word, a Perfect Day. Not your style? A <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> toggle lets you turn them on or off — your choice, every time you play.</div>
+            <div style={{fontSize:ipadIntro(12),color:"rgba(196,181,253,0.9)",lineHeight:1.5,marginTop:8,fontStyle:"italic"}}>You'll find the toggle on the "Ready?" screen, just before each game begins.</div>
+          </div>
+          {/* Vowel / Consonant Alert */}
+          <div style={{background:"rgba(96,165,250,0.09)",border:"1px solid rgba(96,165,250,0.3)",borderRadius:12,padding:`${ipadIntroPad(12)}px ${ipadIntroPad(14)}px`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+              <span style={{fontSize:ipadIntro(18)}}>⚠️</span>
+              <span style={{fontSize:ipadIntro(15),color:"#7cc4ff",fontWeight:"bold"}}>Vowel / Consonant Alert</span>
+            </div>
+            <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>When your remaining letters tip into a risky vowel-to-consonant balance, the Vowels and Consonants boxes gently pulse — a heads-up to adjust your strategy before you strand yourself.</div>
+          </div>
+        </div>
+        {/* Tour note */}
+        <div style={{textAlign:"center",fontSize:ipadIntro(12),color:"rgba(245,240,232,0.7)",lineHeight:1.5,marginTop:ipadIntro(16),padding:"0 4px"}}>Want to see this again? Tap <strong style={{color:"#f6d365"}}>↺ Tour</strong> anytime to review these changes.</div>
+        {/* Acknowledge button — deliberately NOT "Let's Go" so it isn't reflex-tapped */}
+        <button onClick={dismissWhatsNew} style={{width:"100%",marginTop:ipadIntro(14),marginBottom:ipadIntro(24),padding:`${ipadIntroPad(15)}px`,borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadIntro(16),fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif"}}>
+          Got it — let's play! 🎯
+        </button>
+      </div>
+    </div>
+  );
+
   if (showReadyScreen) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"30px 24px",position:"relative",overflow:"hidden"}}>
       <Starfield/>
@@ -4890,6 +5119,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{marginBottom:ipadIntro(6)}}>✦ Each level hides one <strong style={{color:"#f6d365"}}>Loot Letter</strong> worth <strong style={{color:"#f6d365"}}>5× its value</strong> — we'll name the letter, but only 1 tile pockets the loot</div>
           <div style={{marginBottom:ipadIntro(6)}}>✦ Game Timer begins with your <strong style={{color:"#f6d365"}}>first letter tapped</strong></div>
           <div>✦ Clear all 5 levels + find the Word of the Day to enjoy and share a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day! 🌈🏆</span></div>
+          <div style={{marginTop:ipadIntro(6)}}>✦ Toggle <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> below on or off anytime — your choice, every game</div>
         </div>
         {/* v104: Show Mascot Celebrations toggle — plain iOS-style switch, backed by ll_show_mascots (default ON) */}
         <div onClick={()=>setMascotsPref(!showMascotsPref)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",boxSizing:"border-box",padding:`${ipadIntroPad(12)}px ${ipadIntroPad(16)}px`,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,marginBottom:ipadIntro(22),cursor:"pointer"}}>
@@ -4936,6 +5166,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         @keyframes warningPulse{0%,100%{background:rgba(220,38,38,0.2)}50%{background:rgba(220,38,38,0.4)}}
         @keyframes purseGlow{0%,100%{box-shadow:0 0 18px rgba(139,92,246,0.7)}50%{box-shadow:0 0 32px rgba(167,139,250,0.95)}}
+        /* v119: V/C danger pulse — smooth alternating rise/fade (NOT a strobe). The V
+           box and C box run the SAME 2.5s two-beat cycle but OFFSET half a cycle, so
+           the brightness peak walks V -> C -> V -> C. 2 iterations x 2.5s = ~5s, ~5-6
+           perceived pulses across both boxes. filter+box-shadow only (no transform, no
+           layout); when it ends the box drops back to its inline v118 resting glow.
+           Smooth curve keeps it under Apple's flash/seizure guidance a hard blink would risk. */
+        @keyframes vcPulseV{0%,100%{filter:brightness(1);box-shadow:0 0 8px rgba(255,255,255,0.15)}25%{filter:brightness(2.2);box-shadow:0 0 22px 4px rgba(255,255,255,0.55)}50%{filter:brightness(1);box-shadow:0 0 8px rgba(255,255,255,0.15)}}
+        @keyframes vcPulseC{0%,50%,100%{filter:brightness(1);box-shadow:0 0 8px rgba(255,255,255,0.15)}75%{filter:brightness(2.2);box-shadow:0 0 22px 4px rgba(255,255,255,0.55)}}
         @keyframes recordFade{0%{opacity:1;transform:translateX(-50%) scale(1)}80%{opacity:1}100%{opacity:0;transform:translateX(-50%) scale(0.92)}}
         @keyframes pulseBig{0%,100%{transform:scale(1);filter:brightness(1)}40%{transform:scale(1.22);filter:brightness(1.5)}70%{transform:scale(1.1);filter:brightness(1.3)}}
         @keyframes savedFade{0%{opacity:1}80%{opacity:1}100%{opacity:0}}
@@ -5554,11 +5792,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:ipadChrome(17),fontWeight:"bold",color:"#7cc4ff",textShadow:"0 0 8px rgba(96,165,250,0.7)"}}>{availableTiles.length}</div>
             <div style={{fontSize:ipadChrome(9),color:"#bfdbfe",fontWeight:"bold",letterSpacing:0.5}}>{isIpadWidth()?"REMAINING LETTERS":"REMAINING"}</div>
           </div>
-          <div style={{flex:1,background:"rgba(52,211,153,0.16)",border:"2px solid #34d399",borderRadius:9,padding:`${ipadChrome(6)}px ${ipadChrome(3)}px`,textAlign:"center",boxShadow:"0 0 8px rgba(52,211,153,0.4)"}}>
+          <div key={`vcv-${vcPulseNonce}`} style={{flex:1,background:"rgba(52,211,153,0.16)",border:"2px solid #34d399",borderRadius:9,padding:`${ipadChrome(6)}px ${ipadChrome(3)}px`,textAlign:"center",boxShadow:"0 0 8px rgba(52,211,153,0.4)",animation:vcPulse?"vcPulseV 2s ease-in-out 3":"none"}}>
             <div style={{fontSize:ipadChrome(17),fontWeight:"bold",color:"#6ee7b7",textShadow:"0 0 8px rgba(52,211,153,0.7)"}}>{vowelsRemaining}</div>
             <div style={{fontSize:ipadChrome(9),color:"#a7f3d0",fontWeight:"bold",letterSpacing:0.5}}>VOWELS</div>
           </div>
-          <div style={{flex:1,background:"rgba(167,139,250,0.16)",border:"2px solid #a78bfa",borderRadius:9,padding:`${ipadChrome(6)}px ${ipadChrome(3)}px`,textAlign:"center",boxShadow:"0 0 8px rgba(167,139,250,0.4)"}}>
+          <div key={`vcc-${vcPulseNonce}`} style={{flex:1,background:"rgba(167,139,250,0.16)",border:"2px solid #a78bfa",borderRadius:9,padding:`${ipadChrome(6)}px ${ipadChrome(3)}px`,textAlign:"center",boxShadow:"0 0 8px rgba(167,139,250,0.4)",animation:vcPulse?"vcPulseC 2s ease-in-out 3":"none"}}>
             <div style={{fontSize:ipadChrome(17),fontWeight:"bold",color:"#c4b5fd",textShadow:"0 0 8px rgba(167,139,250,0.7)"}}>{consonantsRemaining}</div>
             <div style={{fontSize:ipadChrome(9),color:"#ddd6fe",fontWeight:"bold",letterSpacing:0.5}}>CONSON.</div>
           </div>
@@ -6015,15 +6253,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
-            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Word Scores"},{id:"longest",label:"📏 Longest Words"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Word Scores"},{id:"longest",label:"📏 Longest Words"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"times",label:"⏱️ Times"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
               <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:`${ipadMenu(4)}px ${ipadMenu(2)}px`,borderRadius:10,fontSize:ipadMenu(8),background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
             ))}
           </div>
 
-          {/* Period tabs — only show for non-streaks (streaks is lifetime-only) */}
-          {leaderboardTab!=="streaks"&&(
+          {/* Period tabs — hidden for streaks AND times (both are all-time / lifetime only) */}
+          {leaderboardTab!=="streaks"&&leaderboardTab!=="times"&&(
             <div style={{display:"flex",gap:3,marginBottom:8}}>
               {[{id:"daily",label:"☀️ Today"},{id:"weekly",label:"📅 This Week"},{id:"alltime",label:"🏆 All-Time"}].map(p=>(
                 <button key={p.id} className="ll-tab" onClick={()=>setLeaderboardPeriod(p.id)} style={{flex:1,padding:`${ipadMenu(4)}px ${ipadMenu(2)}px`,borderRadius:10,fontSize:ipadMenu(9),background:leaderboardPeriod===p.id?"linear-gradient(135deg,#a78bfa,#7c3aed)":"rgba(255,255,255,0.06)",color:leaderboardPeriod===p.id?"#fff":"rgba(255,255,255,0.9)",fontWeight:leaderboardPeriod===p.id?"bold":"normal",border:leaderboardPeriod===p.id?"none":"1px solid rgba(255,255,255,0.15)",textAlign:"center"}}>
@@ -6033,10 +6271,35 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             </div>
           )}
 
-          {leaderboardLoading&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.4)",fontSize:ipadMenu(12)}}>Loading leaderboard…</div>}
-          {!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
+          {/* ── TIMES sub-tab (#18b) — own data source (timeCloudData), all-time only, level selector ── */}
+          {leaderboardTab==="times"&&(<>
+            {timeCloudLoading&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.4)",fontSize:ipadMenu(12)}}>Loading times…</div>}
+            {!timeCloudLoading&&!timeCloudData&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic"}}>Could not load times. Check your connection.</div>}
+            {!timeCloudLoading&&timeCloudData&&(<div>
+              {/* Level selector — mirrors the Longest/Word-Scores level pattern */}
+              <div style={{display:"flex",gap:5,justifyContent:"center",marginBottom:10}}>
+                {[1,2,3,4,5].map(l=>(<button key={l} className="ll-tab" onClick={()=>setSelectedLevelView(l)} style={{width:ipadMenu(38),height:ipadMenu(34),borderRadius:8,fontSize:ipadMenu(11),fontWeight:"bold",background:selectedLevelView===l?"linear-gradient(135deg,#60a5fa,#3b82f6)":"rgba(255,255,255,0.08)",color:selectedLevelView===l?"#fff":"rgba(255,255,255,0.9)",border:selectedLevelView===l?"none":"1px solid rgba(255,255,255,0.15)"}}>L{l}</button>))}
+              </div>
+              <div style={{textAlign:"center",fontSize:ipadMenu(10),color:"rgba(255,255,255,0.5)",marginBottom:8,letterSpacing:1}}>FASTEST LEVEL {selectedLevelView} TIMES · ALL-TIME</div>
+              {!timeCloudData.levels?.[selectedLevelView]?.length
+                ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic",padding:ipadMenu(14)}}>No times recorded yet for Level {selectedLevelView}.</div>
+                :timeCloudData.levels[selectedLevelView].map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"rgba(96,165,250,0.12)":"rgba(255,255,255,0.03)",border:i===0?"1px solid rgba(96,165,250,0.35)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:`${ipadMenu(7)}px ${ipadMenu(10)}px`,marginBottom:5}}><div style={{fontSize:ipadMenu(16),minWidth:ipadMenu(24),textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:ipadMenu(12),fontWeight:"bold",color:"#f5f0e8"}}>{entry.name}</div>{entry.date&&<div style={{fontSize:ipadMenu(8),color:"rgba(255,255,255,0.75)"}}>{entry.date}</div>}</div><div style={{fontSize:ipadMenu(15),fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
+              }
+              {/* Perfect Day times — top 10, all-time */}
+              <div style={{marginTop:12,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.08)"}}>
+                <div style={{textAlign:"center",fontSize:ipadMenu(10),color:"rgba(255,255,255,0.5)",marginBottom:8,letterSpacing:1}}>🌈🏆 FASTEST PERFECT DAYS · ALL-TIME</div>
+                {!timeCloudData.perfect?.length
+                  ?<div style={{textAlign:"center",color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic",padding:ipadMenu(12)}}>No Perfect Day times recorded yet.</div>
+                  :timeCloudData.perfect.map((entry,i)=>(<div key={i} style={{display:"flex",alignItems:"center",gap:8,background:i===0?"linear-gradient(135deg,rgba(246,211,101,0.12),rgba(253,160,133,0.07))":"rgba(255,255,255,0.02)",border:i===0?"1px solid rgba(246,211,101,0.3)":"1px solid rgba(255,255,255,0.06)",borderRadius:9,padding:`${ipadMenu(7)}px ${ipadMenu(10)}px`,marginBottom:4}}><div style={{fontSize:ipadMenu(16),minWidth:ipadMenu(24),textAlign:"center"}}>{medalFor(i)}</div><div style={{flex:1}}><div style={{fontSize:ipadMenu(12),fontWeight:"bold",color:"#f5f0e8"}}>{entry.name} 🌈🏆</div>{entry.date&&<div style={{fontSize:ipadMenu(8),color:"rgba(255,255,255,0.75)"}}>{entry.date}</div>}</div><div style={{fontSize:ipadMenu(15),fontWeight:"bold",color:"#f6d365",fontFamily:"monospace"}}>{formatTime(entry.seconds)}</div></div>))
+                }
+              </div>
+            </div>)}
+          </>)}
 
-          {!leaderboardLoading&&leaderboardData&&(()=>{
+          {leaderboardTab!=="times"&&leaderboardLoading&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.4)",fontSize:ipadMenu(12)}}>Loading leaderboard…</div>}
+          {leaderboardTab!=="times"&&!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
+
+          {leaderboardTab!=="times"&&!leaderboardLoading&&leaderboardData&&(()=>{
             const { gs=[], todaySessions=[], weekSessions=[], wotdAllSessions=[], allWordSessions=[] } = leaderboardData;
             const medal = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
             const isMe = (name) => name === playerName;
@@ -6321,7 +6584,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           })()}
 
           <div style={{marginTop:10,display:"flex",gap:8}}>
-            <button className="ll-btn" onClick={()=>{ setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); }} style={{flex:1,padding:ipadMenu(7),borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:ipadMenu(10),fontWeight:"bold"}}>↺ Refresh</button>
+            <button className="ll-btn" onClick={()=>{ if(leaderboardTab==="times"){ setTimeCloudData(null); setTimeCloudLoading(true); fetchTimeLeaderboard().then(d=>{ setTimeCloudData(d); setTimeCloudLoading(false); }); } else { setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); } }} style={{flex:1,padding:ipadMenu(7),borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:ipadMenu(10),fontWeight:"bold"}}>↺ Refresh</button>
             <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); setTab("play"); } else { setTab("menu"); } }} style={{flex:2,padding:ipadMenu(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(12),fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"← Back to Menu"}</button>
           </div>
         </div>

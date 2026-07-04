@@ -175,3 +175,45 @@ export async function loadPlayerPhoto(playerId) {
   if (error || !data?.photo) return null;
   return data.photo;
 }
+// ── Best-times leaderboard (#18b — Cloud Time Leaderboard) ─────────────────
+// One row per player per slot ('1'..'5' or 'perfect'), holding their PERSONAL
+// BEST seconds for that slot. Upsert-on-improve: we only write when the new
+// time is faster than what's already stored (or no row exists yet). RLS on the
+// table guarantees a player can only ever write their own row.
+//
+// Caller is responsible for the eligibility gate (registered-only + clean-clear
+// for level slots; Perfect Day is clean by definition). This function assumes
+// the time being passed is already eligible to be recorded.
+export async function saveBestTime(playerId, playerName, slot, seconds) {
+  if (!playerId || !slot || !(seconds > 0)) return { error: "invalid-args" };
+  try {
+    // Read the player's current best for this slot (may not exist yet).
+    const { data: existing } = await supabase
+      .from("best_times")
+      .select("seconds")
+      .eq("player_id", playerId)
+      .eq("slot", String(slot))
+      .maybeSingle();
+    // Only write if this is a genuine improvement (or first-ever time for the slot).
+    if (existing && typeof existing.seconds === "number" && seconds >= existing.seconds) {
+      return { skipped: true };  // not faster — leave the standing record alone
+    }
+    const { error } = await supabase.from("best_times").upsert({
+      player_id: playerId,
+      player_name: playerName || "",
+      slot: String(slot),
+      seconds,
+      date: shortDate(),
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "player_id, slot" });
+    return { error };
+  } catch (e) {
+    return { error: e };
+  }
+}
+// Small local date stamp for display on the board, e.g. "Jul 4".
+function shortDate() {
+  try {
+    return new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  } catch { return ""; }
+}

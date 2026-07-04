@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
 import { supabase, signUp, signIn, signOut, resetPassword, getSession, loadGameState, saveGameState, loadDailySession, saveDailySession, updatePlayerName, savePlayerPhoto, loadPlayerPhoto } from "./supabase";
 import { Camera, CameraResultType, CameraSource } from "@capacitor/camera";
 import { Clipboard } from "@capacitor/clipboard";
@@ -82,6 +82,26 @@ const PIRATE_CLEAR_SAYINGS = {
     "Bow to the legend who Looted the seven! 👑",
   ],
 };
+// v113 (debug preview) / v113+ (full wiring): the 10 approved Great Word lines
+// (PK July03e, Daryl-approved). [score] is a live slot replaced with the word's
+// points at fire time. Used now only by the debug preview render; v113 adds the
+// pickGreatWordSaying() rotation + trigger logic.
+const GREAT_WORD_SAYINGS = [
+  "Mighty word, matey — that's +[score] booty! 💰",
+  "Ye Looted a whopper — +[score] proper! ⭐",
+  "Blimey, what a haul — +[score], ye got 'em all! 🪙",
+  "A word for the ages — +[score] wages! 📜",
+  "Shiver me timbers, +[score] in the till! 💎",
+  "Now that be Lootin' — +[score] high-falutin'! 🎩",
+  "Grand word, ye scallywag — +[score] in the bag! 🎒",
+  "Ye spelled it, ye sold it — +[score], ye bold-it! ⚔️",
+  "Crackin' good word — +[score] for the hoard! 🏴‍☠️",
+  "Ye word-slingin' wonder — +[score] worth o' plunder! 🌊",
+];
+// v113 (debug preview) / v113+ (full wiring): per-level Great Word score threshold
+// (PK July03e LOCKED: L1=40, L2=50, L3=60, L4=70, L5=80). Used now only to pick a
+// plausible sample score for the debug preview; v113 uses it as the real fire gate.
+const GREAT_WORD_THRESH_PREVIEW = { 1: 40, 2: 50, 3: 60, 4: 70, 5: 80 };
 // A-hybrid picker. `sessionIdx` is a running counter for this app session
 // (a useRef in the component, starts at -1). First call of the session uses the
 // deterministic daily index (getDailySeed() % 10); each later call advances +1
@@ -101,6 +121,51 @@ const PIRATE_CLEAR_IMG = {
   5: "/pirate-captain-female.png",
 };
 const PIRATE_CLEAR_ANIM = { 1:"plClearL1", 2:"plClearL2", 3:"plClearL3", 4:"plClearL4", 5:"plClearL5" };
+
+// v114/v115: GENTLE auto-shrink for the speech-bubble text zone.
+// The bubble is a raster PNG (inner area can't grow), so for a genuinely long
+// rotating line we nudge the font DOWN a little until it fits — but only a
+// LITTLE. v114 shipped with an 8px floor + a too-short zone, which let the
+// longest line shrink to a tiny size in a mostly-empty bubble (the "sledgehammer"
+// Daryl flagged). v115 fixes it two ways: (1) the callers grow the zone height so
+// 3 lines fit near full size, and (2) the floor here is capped just a few px below
+// max, so the font can only ever step down a hair. Result: short lines stay at
+// maxPx; the longest line drops ~1-3px at most, never small.
+//
+// `minGap` = the largest number of px we allow the font to drop below maxPx.
+// Effective floor = maxPx - minGap (and never below a hard 18px readability floor).
+function BubbleFitText({ text, zLeft, zTop, zWidth, zHeight, maxPx, minGap = 4 }) {
+  const boxRef = useRef(null);
+  const [fontPx, setFontPx] = useState(maxPx);
+  useLayoutEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const floor = Math.max(18, maxPx - minGap);   // gentle: only a few px of headroom
+    let size = maxPx;
+    el.style.fontSize = size + "px";
+    // A tiny tolerance (1px) avoids sub-pixel rounding causing a needless step down.
+    const fits = () => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1;
+    while (size > floor && !fits()) {
+      size -= 0.5;
+      el.style.fontSize = size + "px";
+    }
+    setFontPx(size);
+  }, [text, maxPx, minGap, zWidth, zHeight]);
+  return (
+    <div
+      ref={boxRef}
+      style={{
+        position: "absolute",
+        left: `${zLeft}%`, top: `${zTop}%`,
+        width: `${zWidth}%`, height: `${zHeight}%`,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        textAlign: "center", color: "#5a3a12", fontFamily: "Georgia,serif",
+        fontWeight: "bold", lineHeight: 1.15, fontSize: fontPx + "px",
+        overflow: "hidden", wordBreak: "break-word",
+      }}
+    >{text}</div>
+  );
+}
 
 // ── iPad responsive width helper (May 21, 2026) ──────────────
 // On iPad-sized screens (≥768px wide), bump page-container widths so the
@@ -2347,6 +2412,17 @@ function DebugMenu({ onClose, onAction, currentMode }) {
         </div>
 
         <div style={sectionStyle}>
+          <div style={headerStyle}>🎭 Trigger Mascot Popups (4s dwell)</div>
+          <div style={gridStyle}>
+            {btn("⚓ Level Clear", "mascot-level-clear", "#6ee7b7")}
+            {btn("⭐ Great Word", "mascot-great-word", "#6ee7b7")}
+            {btn("💥 Loot Letter", "mascot-loot", "#6ee7b7")}
+            {btn("🎯 Word of the Day", "mascot-wotd", "#6ee7b7")}
+          </div>
+          <div style={{ fontSize: ipadDense(10), color: "rgba(255,255,255,0.4)", marginTop: 4 }}>Previews each mascot celebration with its real art + a sample line. Great Word render is a v113 preview (trigger logic lands next). Loot/WoD/Great Word self-dismiss at 4s.</div>
+        </div>
+
+        <div style={sectionStyle}>
           <div style={headerStyle}>⚙️ State Helpers</div>
           <div style={gridStyle}>
             {btn("🆕 Start Fresh Game", "fresh-game", "#22d3ee")}
@@ -2788,6 +2864,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [showWotdReminder, setShowWotdReminder] = useState(false);
   const [wotdCelebration, setWotdCelebration] = useState(false);
   const [lootCelebration, setLootCelebration] = useState(null); // {word, score, letter}
+  // v113 (debug): preview state for the Great Word popup. Great Word's TRIGGER logic
+  // isn't wired until v113, but its RENDER block is built now (below) so the debug
+  // menu can preview the real presentation. Holds {line, score} or null.
+  const [greatWordPreview, setGreatWordPreview] = useState(null);
   // (v106) Loot Letter announcement: a brief, self-dismissing INFORMATIONAL popup
   // ("💥 Loot Letter · Level N · X") shown at each level open. NOT a celebration —
   // ungated by showMascotCelebrations(). Auto-clears after 2s; no button. The
@@ -3112,6 +3192,54 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setShowIntro(false);
         setTab("play");
         setShowGuestUpsell(true);
+      }
+      // v113: Mascot popup previews (real art + sample lines). Force mascots pref ON
+      // so the gated renders aren't suppressed. Loot/WoD/Great Word self-dismiss at 4s
+      // with a guarded timer resume, mirroring real play.
+      else if (debugAction === "mascot-level-clear") {
+        setShowIntro(false);
+        setTab("play");
+        setMascotsPref(true);
+        // Level Clear is button-dismissed (not auto), so just show it with a rotating line.
+        clearSayingIdxRef.current = clearSayingIdxRef.current + 1;
+        setClearSayingText(pickClearSaying(level, clearSayingIdxRef.current));
+        setLevelComplete(true);
+      }
+      else if (debugAction === "mascot-great-word") {
+        setShowIntro(false);
+        setTab("play");
+        setMascotsPref(true);
+        // Sample: a plausible ≥threshold score + a rotating approved line.
+        const sampleScore = (GREAT_WORD_THRESH_PREVIEW[level] || 40) + 15;
+        const raw = GREAT_WORD_SAYINGS[Math.floor(Math.random() * GREAT_WORD_SAYINGS.length)];
+        setGreatWordPreview({ line: raw.replace("[score]", String(sampleScore)), score: sampleScore });
+        stopTimer();
+        setTimeout(() => {
+          setGreatWordPreview(null);
+          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) { stopTimer(); } else { startTimer(); }
+        }, 4000);
+      }
+      else if (debugAction === "mascot-loot") {
+        setShowIntro(false);
+        setTab("play");
+        setMascotsPref(true);
+        setLootCelebration({ word: "PLUNDER", score: 45, letter: "P" });
+        stopTimer();
+        setTimeout(() => {
+          setLootCelebration(null);
+          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) { stopTimer(); } else { startTimer(); }
+        }, 4000);
+      }
+      else if (debugAction === "mascot-wotd") {
+        setShowIntro(false);
+        setTab("play");
+        setMascotsPref(true);
+        setWotdCelebration(true);
+        stopTimer();
+        setTimeout(() => {
+          setWotdCelebration(false);
+          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) { stopTimer(); } else { startTimer(); }
+        }, 4000);
       }
       // State helpers
       else if (debugAction === "fresh-game") {
@@ -4020,7 +4148,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         if (isGuest) saveLifetimeData(lifetimeRef.current);
         // Trigger celebration
         stopTimer();
-        setConfetti(true); setTimeout(() => setConfetti(false), 5000);
+        setConfetti(true); setTimeout(() => setConfetti(false), 4000); // v113: 4s celebration standard
         setWotdCelebration(true);
         setTimeout(() => {
           setWotdCelebration(false);
@@ -4033,7 +4161,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           } else {
             startTimer();
           }
-        }, 5000);
+        }, 4000); // v113: 4s celebration standard (was 5000)
       }
       const newTiles = tiles.map(t => {
         if (!selected.includes(t.id)) return t;
@@ -4069,7 +4197,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             playTone(1046.50, 0.24, 0.3); // C6 (held)
           }
         } catch {}
-        // Auto-dismiss after 5s; the fair-timer useEffect handles restart.
+        // Auto-dismiss after 4s (v113 standard); the fair-timer useEffect handles restart.
         setTimeout(() => {
           setLootCelebration(null);
           // v80 (stop-only model): resume explicitly for the normal mid-play case;
@@ -4079,7 +4207,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           } else {
             startTimer();
           }
-        }, 5000);
+        }, 4000); // v113: 4s celebration standard (was 5000)
       }
       setTiles(newTiles);
       setLastValidEntry({ word: currentWord, score, tileIds: [...selected], levelScoreDelta: score });
@@ -4796,7 +4924,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* Word of the Day celebration — fires when player spells the WoD */}
       {wotdCelebration && (
         <div style={{position:"fixed",inset:0,zIndex:9650,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
-          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
+          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 4s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
             <div style={{fontSize:ipadIntro(42),marginBottom:6}}>🎯✨</div>
             <div style={{fontSize:ipadIntro(14),color:"#f6d365",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>WORD OF THE DAY!</div>
             <div style={{fontSize:ipadIntro(26),fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:8}}>{wotd}</div>
@@ -4821,7 +4949,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* Loot Letter celebration — fires when player uses the daily Loot Letter in a valid word */}
       {lootCelebration && (
         <div style={{position:"fixed",inset:0,zIndex:9700,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
-          <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 5s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
+          <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 4s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
             <div style={{fontSize:ipadIntro(42),marginBottom:6}}>💥✨</div>
             <div style={{fontSize:ipadIntro(18),color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:10}}>💥 LOOT LETTER! 💥</div>
             {/* Big tile-style display of today's actual Loot Letter */}
@@ -4834,6 +4962,41 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:ipadIntro(16),fontWeight:"bold",color:"#003300"}}>5× Letter Bonus Applied!</div>
             <div style={{fontSize:ipadIntro(14),fontWeight:"bold",color:"#003300",marginTop:4}}>+{lootCelebration.score} pts on this word</div>
           </div>
+        </div>
+      )}
+
+      {/* v113: Great Word popup — PREVIEW render (debug-triggered via greatWordPreview).
+          Reuses the proven Level-Clear speech-bubble geometry verbatim, over
+          great-word-pirate.png. v113 will add the real trigger/rotation/collision logic;
+          this render block is the same one it will use. LAB≠LIVE: the tail-to-head gap
+          must be eyeballed against great-word-pirate.png specifically at v113 wiring —
+          this preview is exactly where to check it. */}
+      {greatWordPreview && (
+        <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+          {(()=>{
+            const pw = ipadTour(120);
+            const bw = pw * 1.15;
+            const cropWR = 786/1024, cropHR = 546/1024;
+            const solidBottomFrac = (1 + cropHR)/2;
+            const marginBelow = bw * (1 - solidBottomFrac);
+            const gap = pw * (10/162);
+            const bubbleTop = -bw + marginBelow - gap;
+            const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
+            const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
+            const zWidth = (81.7/100) * cropWR * 100;
+            const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115: 16→11 (band grew, stays centered)
+            const zHeight = (66/100) * cropHR * 100;              // v115: 54→66 uses more of the bubble interior
+            return (
+              <div style={{position:"relative",display:"inline-block"}}>
+                <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
+                  <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
+                  {/* v114: auto-shrink text to fit the fixed zone (shared with Level Clear) */}
+                  <BubbleFitText text={greatWordPreview.line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(11)}/>
+                </div>
+                <img src="/great-word-pirate.png" alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL2 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
+              </div>
+            );
+          })()}
         </div>
       )}
 
@@ -5197,15 +5360,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
             const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
             const zWidth = (81.7/100) * cropWR * 100;
-            const zTop = (cropTopFrac + (16/100)*cropHR) * 100;   // textTopPct=16
-            const zHeight = (54/100) * cropHR * 100;              // textHeightPct=54
+            const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115: textTopPct 16→11 (band grew, stays centered)
+            const zHeight = (66/100) * cropHR * 100;              // v115: textHeightPct 54→66 uses more bubble interior
             const line = clearSayingText || pickClearSaying(level, Math.max(0, clearSayingIdxRef.current));
             return (
               <div style={{position:"relative",display:"inline-block",marginBottom:4}}>
                 {/* speech bubble overlay — absolute, above head */}
                 <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
                   <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
-                  <div style={{position:"absolute",left:`${zLeft}%`,top:`${zTop}%`,width:`${zWidth}%`,height:`${zHeight}%`,display:"flex",alignItems:"center",justifyContent:"center",textAlign:"center",color:"#5a3a12",fontFamily:"Georgia,serif",fontWeight:"bold",lineHeight:1.15,fontSize:ipadTour(11),overflow:"hidden",wordBreak:"break-word"}}>{line}</div>
+                  {/* v114: auto-shrink text to fit the fixed zone (was static fontSize → clipped long lines) */}
+                  <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(11)}/>
                 </div>
                 <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
               </div>

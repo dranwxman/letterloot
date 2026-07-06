@@ -11,6 +11,7 @@ export default async function handler(req, res) {
   // Who we send from / notify. FROM must be on the verified letterloot.net domain.
   const FROM = "LetterLoot <hello@letterloot.net>";
   const ADMIN_TO = "hello@letterloot.net";
+  const APP_URL = "https://apps.apple.com/app/id6769522298";
 
   const { type, word, playerName, email, status, reportedAt } = req.body || {};
 
@@ -66,12 +67,13 @@ export default async function handler(req, res) {
           `Thanks for submitting ${W} for review \u2014 we appreciate you helping make LetterLoot better.\n\n` +
           `Good news: ${W} met our criteria and is now accepted going forward. You'll find it counts in future games.\n\n` +
           `Thanks again for the submission. We hope you keep enjoying LetterLoot \u2014 and if you do, please share it with your friends!\n\n` +
+          `${APP_URL}\n\n` +
           `\u2014 The LetterLoot Crew`,
         html:
           `<p>Ahoy ${name}!</p>` +
           `<p>Thanks for submitting <strong>${W}</strong> for review \u2014 we appreciate you helping make LetterLoot better.</p>` +
           `<p>Good news: <strong>${W}</strong> met our criteria and is now accepted going forward. You'll find it counts in future games.</p>` +
-          `<p>Thanks again for the submission. We hope you keep enjoying LetterLoot \u2014 and if you do, please share it with your friends!</p>` +
+          `<p>Thanks again for the submission. We hope you keep enjoying LetterLoot \u2014 and if you do, please <a href="${APP_URL}">share it with your friends</a>!</p>` +
           `<p>\u2014 The LetterLoot Crew</p>`,
       };
     } else {
@@ -83,12 +85,13 @@ export default async function handler(req, res) {
           `Thanks for submitting ${W} for review \u2014 we appreciate you taking the time.\n\n` +
           `After a look, ${W} didn't quite meet our criteria for inclusion this time. No worries \u2014 every submission helps us sharpen the dictionary.\n\n` +
           `Thanks again. We hope you keep enjoying LetterLoot \u2014 and if you do, please share it with your friends!\n\n` +
+          `${APP_URL}\n\n` +
           `\u2014 The LetterLoot Crew`,
         html:
           `<p>Ahoy ${name}!</p>` +
           `<p>Thanks for submitting <strong>${W}</strong> for review \u2014 we appreciate you taking the time.</p>` +
           `<p>After a look, <strong>${W}</strong> didn't quite meet our criteria for inclusion this time. No worries \u2014 every submission helps us sharpen the dictionary.</p>` +
-          `<p>Thanks again. We hope you keep enjoying LetterLoot \u2014 and if you do, please share it with your friends!</p>` +
+          `<p>Thanks again. We hope you keep enjoying LetterLoot \u2014 and if you do, please <a href="${APP_URL}">share it with your friends</a>!</p>` +
           `<p>\u2014 The LetterLoot Crew</p>`,
       };
     }

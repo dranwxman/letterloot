@@ -213,6 +213,11 @@ function BubbleFitText({ text, zLeft, zTop, zWidth, zHeight, maxPx, minGap = 4 }
 // app marooned in the middle. Modal cards keep their original widths —
 // they're meant to feel focused, not stretched.
 const isIpadWidth = () => typeof window !== "undefined" && window.innerWidth >= 768;
+// v125: large-iPad (12.9"/13") detector. 11" iPad Pro logical width ~834pt, 13" ~1032pt,
+// so >=1000 cleanly separates them. 768-999 = "standard/11" iPad" keeps the tuned-for-11"
+// values; >=1000 = 13" gets its own larger tier so it fills the bigger screen instead of
+// inheriting the smaller 11" tiles. Only the game-board tile path branches on this.
+const isLargeIpad = () => typeof window !== "undefined" && window.innerWidth >= 1000;
 const ipadW = (base) => isIpadWidth() ? Math.round(base * 1.78) : base;
 // ipadTile: per-level scaling to keep larger boards (L4-L5 = 60-66 tiles, 9-10 rows)
 // from overflowing the iPad screen. L1/L2 stay at 2.2× (perfect size). L3 nudges
@@ -225,8 +230,19 @@ const ipadW = (base) => isIpadWidth() ? Math.round(base * 1.78) : base;
 // on L4 (9×7) and 70 on L5 (10×7). The extra row at each level was tight on 11"
 // iPad — dropping L4 from 1.8→1.6 and L5 from 1.65→1.5 height, with proportional
 // width adjustments, gives the extra row breathing room.
-const IPAD_TILE_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.2, 3: 2.0, 4: 1.6, 5: 1.5 };
-const IPAD_TILE_WIDTH_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.2, 3: 2.1, 4: 2.15, 5: 2.05 }; // v60: L4 1.9→2.15, L5 1.85→2.05 (bug #13)
+// v125 STANDARD/11" HEIGHT tier: L2/L3/L5 brought into line with L4's known-good 1.6
+// tuning so 7/8/10-row boards stop clipping the last row + End Game bar on the 11" iPad
+// (reviewer's device). L1 (6 rows, fits) and L4 (9 rows, the good-fit anchor) UNCHANGED.
+// Locked values sit just under the computed 11" max-fit (2.09/1.83/1.47) for a safety margin.
+const IPAD_TILE_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.05, 3: 1.80, 4: 1.6, 5: 1.44 };
+const IPAD_TILE_WIDTH_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.2, 3: 2.1, 4: 2.15, 5: 2.05 }; // v60: L4 1.9→2.15, L5 1.85→2.05 (bug #13). 11" width unchanged — nothing overflowed sideways.
+// v125 13" (>=1000px) HEIGHT tier: the 13" has ~917px board-height budget vs the 11"'s
+// ~745px (≈1.23×), so it can run LARGER tiles at every level and fill its bigger screen
+// instead of inheriting the smaller 11" tiles. Starting candidates — dial on the 13" sim.
+const IPAD13_TILE_SCALE_BY_LEVEL = { 1: 2.7, 2: 2.5, 3: 2.2, 4: 2.0, 5: 1.8 };
+// v125 13" WIDTH tier: 11" width scaled up ~1.23× (capped) so tiles keep a natural aspect
+// ratio on the 13" instead of going tall-skinny. Dial alongside the height tier.
+const IPAD13_TILE_WIDTH_SCALE_BY_LEVEL = { 1: 2.7, 2: 2.7, 3: 2.55, 4: 2.6, 5: 2.5 };
 // iPhone per-level scaling (added May 24, 2026): L1 had only 4 rows of 7 tiles
 // on a big iPhone screen like the 17 Pro Max — tiles felt tiny with empty space
 // below. Scale UP on early levels, gradually returning closer to base by L5 where
@@ -239,6 +255,11 @@ const ipadTile = (base, level = 1) => {
     const phoneScale = IPHONE_TILE_SCALE_BY_LEVEL[level] || 1.00;
     return Math.round(base * phoneScale);
   }
+  // v125: 13" iPad gets its own larger height tier; 768-999 (11"/standard) keeps the 11" tune.
+  if (isLargeIpad()) {
+    const scale13 = IPAD13_TILE_SCALE_BY_LEVEL[level] || 1.8;
+    return Math.round(base * scale13);
+  }
   const scale = IPAD_TILE_SCALE_BY_LEVEL[level] || 1.65; // fallback for any future levels
   return Math.round(base * scale);
 };
@@ -247,6 +268,11 @@ const ipadTileW = (base, level = 1) => {
     // iPhone path: apply per-level iPhone scale (same curve as height for symmetric tiles)
     const phoneScale = IPHONE_TILE_SCALE_BY_LEVEL[level] || 1.00;
     return Math.round(base * phoneScale);
+  }
+  // v125: 13" iPad gets its own larger width tier; 768-999 (11"/standard) keeps the 11" tune.
+  if (isLargeIpad()) {
+    const scale13 = IPAD13_TILE_WIDTH_SCALE_BY_LEVEL[level] || 2.5;
+    return Math.round(base * scale13);
   }
   const scale = IPAD_TILE_WIDTH_SCALE_BY_LEVEL[level] || 2.05;
   return Math.round(base * scale);
@@ -2918,6 +2944,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // persistent reminder lives in the Tap-tiles strip badge.
   const [lootAnnounceLevel, setLootAnnounceLevel] = useState(null); // level number or null
   const lootAnnounceTimerRef = useRef(null);
+  // v128→v129: Level-start "Welcome" moment. levelAnnounceNum holds the level number (or null when
+  // hidden). In v129 this drives the full-screen TREASURE MAP Level Welcome page (map bg + "Level X /
+  // Good Luck! / Timer starts on first tap" text + accumulating coin piles at trail waypoints). The
+  // page dwells 10s auto OR the player taps the "Course is Set. Let's Sail!" button to dismiss early;
+  // EITHER path calls dismissLevelWelcome(), which then fires the Loot + WoD sequence and reveals the
+  // board. levelSeqTimerRef holds the 10s auto-dismiss timeout (cleared on manual dismiss / rapid
+  // level change so a stale timer can't fire). NOT gated by the mascot celebration toggle — always shows.
+  const [levelAnnounceNum, setLevelAnnounceNum] = useState(null);
+  // v138: gate the Level Welcome overlay so it only reveals once the map <img> has decoded —
+  // prevents a one-frame glimpse of the tile board through the overlay before the map paints.
+  const [mapReady, setMapReady] = useState(false);
+  const levelSeqTimerRef = useRef(null);
+  // v133: Preload the Trail-of-Loot art ONCE on mount so the browser has the map + coin decoded and
+  // cached before the Welcome page first renders. Fixes the one-frame "flash of map before it renders"
+  // (CSS background-image was being fetched/decoded at mount time, so the scrim+text showed first).
+  useEffect(() => {
+    ["/level-map-bg.jpg", "/trail-coin.png"].forEach((src) => { const im = new Image(); im.src = src; });
+  }, []);
   // v108: A-hybrid rotating Level Clear line — running session counter. Starts at
   // -1; the render advances it once per clear (first clear of session uses the
   // deterministic daily line, subsequent clears advance). Resets on app launch.
@@ -3234,17 +3278,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         if (targetLevel >= 1 && targetLevel <= 5) {
           setShowIntro(false);
           setTab("play");
-          // Reset to L1, then advance to target level via handleNextLevel
-          handleFullReset({skipWelcome: true});
-          // Advance levels via timer to let React state settle
-          let i = 1;
-          const advance = () => {
-            if (i >= targetLevel) return;
-            handleNextLevel(false);
-            i++;
-            setTimeout(advance, 50);
-          };
-          setTimeout(advance, 100);
+          // v130: reset with NO Ready screen (skipReady), then jump DIRECTLY to the target level's
+          // Welcome map page. Fixes the collision where the Ready screen's own Level-1 sequence
+          // overrode the jump target. One timer tick lets the reset state settle first.
+          handleFullReset({skipWelcome: true, skipReady: true});
+          setTimeout(() => {
+            if (targetLevel === 1) {
+              fireLevelStartSequence(1);
+            } else {
+              handleNextLevel(false, targetLevel);
+            }
+          }, 120);
         }
       }
       // Modal triggers
@@ -3846,6 +3890,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
   const handleFullReset = useCallback((opts = {}) => {
     const skipWelcome = opts.skipWelcome === true;
+    const skipReady = opts.skipReady === true; // v130: debug jump goes straight to target level's Welcome map, no Ready screen
     const rng = seededRandom(getDailySeed());
     const bp = getBonusPositions(42, getBonusCount(1), rng);
     setTiles(generateLevelTiles(1, 0, rng, bp));
@@ -3897,7 +3942,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     justResetRef.current = true;
     // After reset, drop to Welcome OR directly to Ready, never both.
     // Setting both causes a double-prompt: Welcome → Let's Go → Ready → Let's Go again.
-    if (skipWelcome) {
+    if (skipReady) {
+      // v130: debug jump — no Welcome, no Ready screen; the caller immediately fires the
+      // target level's Welcome map page via handleNextLevel(false, targetLevel).
+      setShowReadyScreen(false);
+      setShowIntro(false);
+    } else if (skipWelcome) {
       setShowReadyScreen(true);
       setShowIntro(false);
     } else {
@@ -4628,23 +4678,42 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     }, VC_PULSE_MS);
   };
 
-  const handleNextLevel = (bought = false) => {
+  const handleNextLevel = (bought = false, explicitLevel = null) => {
     if (bought) forfeitPerfectDay();
     // Hard cap: cannot go beyond Level 5 unless bonus levels are enabled
-    if (!ENABLE_BONUS_LEVELS && level >= 5) return;
-    const newLevel = level + 1;
-    setLevel(newLevel); setLevelComplete(false); setShowBuyModal(false);
+    if (!ENABLE_BONUS_LEVELS && level >= 5 && explicitLevel == null) return;
+    // v130: explicitLevel lets the debug Jump-to-Ln set the target DIRECTLY (avoids the stale-closure
+    // bug where chaining handleNextLevel read a stale `level` and only advanced one step). Normal play
+    // passes no explicitLevel → computes level+1 as before.
+    const newLevel = explicitLevel != null ? explicitLevel : level + 1;
+    setLevel(newLevel); setShowBuyModal(false);
     levelScoreRef.current = 0; setLevelScore(0);
     greatWordFiredRef.current = 0; // v116 (#16): new level → Great Word can fire again
     const rng = seededRandom(getDailySeed() + newLevel * 999);
     const count = 42 + (newLevel - 1) * 7;
+    // v130: for a direct jump, derive the cumulative tile-count offset for the target level so tile
+    // identity stays deterministic (normal play accumulates this incrementally via tileCountRef).
+    if (explicitLevel != null) {
+      let cum = 42; // L1 base
+      for (let L = 2; L <= newLevel; L++) cum += 42 + (L - 1) * 7;
+      tileCountRef.current = cum - count; // offset BEFORE this level's tiles
+    }
     const bp = getBonusPositions(count, getBonusCount(newLevel), rng);
     const newTiles = generateLevelTiles(newLevel, tileCountRef.current, rng, bp);
     tileCountRef.current += count;
-    setTiles(newTiles); setSelected([]);
-    levelResetCount.current = 0; levelCleanRef.current = true; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
-    fireLootAnnounce(newLevel);
-    if (wotd && !wotdFound) showWotdReminderWithPause();
+    // v140: mount the Level Welcome scrim FIRST so it's painted before the new board hits the
+    // screen — kills the one-frame glimpse of the board swapping on L2-L5 opens. The board setters
+    // (tiles + their paired awaiting-first-tap / timer resets) are deferred one frame via rAF so they
+    // apply UNDER the already-painted scrim. newTiles/rng are computed above, so identity is unchanged.
+    fireLevelStartSequence(newLevel); // v128/v129: Level Welcome map page → then Loot + WoD
+    requestAnimationFrame(() => {
+      setTiles(newTiles); setSelected([]);
+      // v142: clear the Level Complete celebration HERE (not synchronously at the top). It stays up
+      // as the cover during the frame the map scrim mounts, so the board is never exposed between the
+      // celebration tearing down and the map painting — kills the L2-L5 board glimpse.
+      setLevelComplete(false);
+      levelResetCount.current = 0; levelCleanRef.current = true; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
+    });
     if (newLevel === 5) awardBadge("level_5");
   };
 
@@ -4658,6 +4727,31 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       setLootAnnounceLevel(null);
       lootAnnounceTimerRef.current = null;
     }, 2500);
+  };
+
+  // (v128) Level-start announcement SEQUENCE. Single entry point for every place a level
+  // opens (handleNextLevel, Ready "Let's Go", ReadyToPlay replay). v129 flow:
+  //   1. Show the full-screen TREASURE MAP Level Welcome page (map + text + accumulating coin piles).
+  //   2. It dwells 10s (auto) OR the player taps "Course is Set. Let's Sail!" to dismiss early.
+  //   3. EITHER path → dismissLevelWelcome() → fires Loot + WoD sequence, board becomes visible.
+  // The Loot letter also lives permanently in the "Tap tiles…" row, so an early dismiss loses nothing.
+  const fireLevelStartSequence = (lvl) => {
+    if (levelSeqTimerRef.current) clearTimeout(levelSeqTimerRef.current);
+    setMapReady(false); // v138: re-arm the map-decode gate for this open
+    setLevelAnnounceNum(lvl);
+    // 10s auto-dismiss safety timer; manual button dismiss clears this and calls the same handler.
+    levelSeqTimerRef.current = setTimeout(() => { dismissLevelWelcome(); }, 10000);
+  };
+  // v129: dismiss the Level Welcome map page (from the 10s timer OR the "Let's Sail" button), then
+  // hand off to the existing Loot + WoD announcement sequence. Idempotent-safe: guards on the timer ref.
+  const dismissLevelWelcome = () => {
+    if (levelSeqTimerRef.current) { clearTimeout(levelSeqTimerRef.current); levelSeqTimerRef.current = null; }
+    const lvl = levelAnnounceNum;
+    setLevelAnnounceNum(null);
+    if (lvl != null) {
+      fireLootAnnounce(lvl);
+      if (wotd && !wotdFound) showWotdReminderWithPause();
+    }
   };
 
   // WoD reminder helpers — pause timer, show 5s, fair-timer effect resumes
@@ -5128,7 +5222,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{position:"absolute",top:ipadIntro(3),left:showMascotsPref?ipadIntro(23):ipadIntro(3),width:ipadIntro(22),height:ipadIntro(22),borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
           </div>
         </div>
-        <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; fireLootAnnounce(1); }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
+        <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; fireLevelStartSequence(1); }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
           Let's Go! 🎯
         </button>
       </div>
@@ -5163,6 +5257,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         /* v109: speech-bubble pop-in — scale-up bounce, origin bottom (tail). Replaces caption-below with a real PNG bubble above the mascot's head. */
         @keyframes bubbleIn{0%{opacity:0;transform:translateX(-50%) scale(0.9)}100%{opacity:1;transform:translateX(-50%) scale(1)}}
         @keyframes lootAnnounce{0%{transform:scale(0.85) translateY(20px);opacity:0}12%{transform:scale(1.03) translateY(0);opacity:1}85%{transform:scale(1) translateY(0);opacity:1}100%{transform:scale(0.95) translateY(-12px);opacity:0}}
+        /* v128: Level-start banner — quick scale-in, hold, fade up. 2.5s total. */
+        @keyframes levelAnnounce{0%{transform:scale(0.96) translateY(8px)}100%{transform:scale(1) translateY(0)}}
+        /* v133: Trail-of-Loot target-pile flash (Stage 2). The coins for the level the player is HEADED
+           to pulse (opacity + slight scale) to say "here's where you're going." Cleared piles stay static.
+           1.2s loop, scale 1.22x, opacity dips to 0.55. --tx is the coin's per-coin x offset so the
+           translate(-50%,-50%) centering is preserved through the scale. */
+        @keyframes coinFlash{0%,100%{opacity:1;transform:translate(-50%,-50%) scale(1)}50%{opacity:0.55;transform:translate(-50%,-50%) scale(1.22)}}
+        .ll-coin-flash{animation:coinFlash 1.2s ease-in-out infinite;}
+        /* v133: L4->L5 chest fill. Each WP4 coin flies from its resting spot up into the chest and fades.
+           --fx/--fy are the per-coin px delta from its position to the chest center (set inline). A short
+           hold, then a launch arc, then shrink+fade as it drops into the chest. --dly staggers the pour. */
+        @keyframes chestFly{
+          0%{transform:translate(-50%,-50%) scale(1);opacity:1}
+          22%{transform:translate(-50%,-50%) scale(1);opacity:1}
+          60%{transform:translate(calc(-50% + var(--fx) * 0.6),calc(-50% + var(--fy) * 0.6)) scale(1.05);opacity:1}
+          100%{transform:translate(calc(-50% + var(--fx)),calc(-50% + var(--fy))) scale(0.35);opacity:0}
+        }
+        .ll-coin-fly{animation:chestFly 0.9s cubic-bezier(.55,-0.2,.4,1) forwards;animation-delay:var(--dly);}
         @keyframes provethat{0%,100%{transform:scale(1)}50%{transform:scale(1.03)}}
         @keyframes warningPulse{0%,100%{background:rgba(220,38,38,0.2)}50%{background:rgba(220,38,38,0.4)}}
         @keyframes purseGlow{0%,100%{box-shadow:0 0 18px rgba(139,92,246,0.7)}50%{box-shadow:0 0 32px rgba(167,139,250,0.95)}}
@@ -5216,7 +5328,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* Word of the Day reminder toast — shows at level start until found */}
       {showWotdReminder && wotd && !wotdFound && (
-        <div style={{position:"fixed",inset:0,zIndex:9500,display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",pointerEvents:"none"}}>
+        <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9500,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:"12vh",paddingLeft:"20px",paddingRight:"20px",pointerEvents:"none"}}>
+          {/* v130: anchored to LOWER area (bottom + 12vh) instead of center±90px. Now clearly below Loot. */}
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:`${ipadTour(18)}px ${ipadTour(22)}px`,boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:ipadTour(300),width:"100%",textAlign:"center",pointerEvents:"auto"}}>
             <div style={{fontSize:ipadTour(10),color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
             <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:8}}>{wotd}</div>
@@ -5238,11 +5351,125 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
       )}
 
+      {/* (v129) TREASURE MAP LEVEL WELCOME PAGE — Kim's "Trail of Loot" (STAGE 1: static).
+          Full-screen map interlude on each level open. Shows the current level, a Good Luck line, the
+          timer note, and ACCUMULATING gold-doubloon coin piles at trail waypoints charting progress
+          (L1=1 coin … L4=4 coins, clockwise from the X to the chest). Dwells 10s auto OR the
+          "Course is Set. Let's Sail!" button dismisses early — either path calls dismissLevelWelcome()
+          which fires the Loot+WoD sequence and reveals the board. NOT gated by the mascot toggle.
+          Stage 2 (v130) will add: pulse on the next-target pile, trail-fill, chest-fills-at-L5. */}
+      {levelAnnounceNum != null && (() => {
+        // Waypoint coords as fractions of the map image (traced off level-map-bg). Clockwise from X.
+        // Each entry: the level it represents + its position. Coin count shown = the level number,
+        // for every level ALREADY CLEARED (i.e. < current level). Accumulating & persistent.
+        const WAYPTS = [
+          { lvl: 1, x: 0.729, y: 0.631 }, // right
+          { lvl: 2, x: 0.332, y: 0.705 }, // lower-left
+          { lvl: 3, x: 0.255, y: 0.474 }, // mid-left
+          { lvl: 4, x: 0.339, y: 0.276 }, // upper-left
+        ];
+        const COIN = isIpadWidth() ? 46 : 30; // on-map coin diameter (px), tunable
+        // v133: chest center traced off the actual level-map-bg art (952x1288). The L5 "treasure
+        // reached" payoff flies the WP4 coins into this point.
+        const CHEST = { x: 0.495, y: 0.145 };
+        // Map render box in px (min(92vw,62vh)) — needed to convert the chest's fractional position
+        // into the per-coin px delta the fly animation uses. Aspect-locked 1085:1450.
+        const mapW = Math.min(window.innerWidth * 0.92, window.innerHeight * 0.62);
+        const mapH = mapW * (1450 / 1085);
+        // Render a pile of `n` coins clustered around a waypoint (sunflower stagger).
+        // mode: "static" (cleared, no anim), "flash" (target level — pulse), "fly" (L5 chest fill).
+        // v147: optional `n` override — the L5 chest fly emits 5 (the L5 clear's own coins going to the
+        // treasure), while the resting WP4 pile keeps its 4. Defaults to wp.lvl for static/flash.
+        const pile = (wp, mode = "static", n = wp.lvl) => {
+          const coins = [];
+          for (let i = 0; i < n; i++) {
+            // v131: wider spread so all coins in a pile are distinct/countable (L4's 4 coins were
+            // overlapping to look like 3). Larger radius + golden-angle fan; small pile-specific
+            // layouts keep them tidy. Slight vertical lift per coin for a stacked-pile feel.
+            const ang = i * 2.399 + 0.6;
+            const rad = i === 0 ? 0 : COIN * 0.62 * Math.sqrt(i);
+            const ox = Math.cos(ang) * rad;
+            const oy = Math.sin(ang) * rad - i * 5;
+            const cls = mode === "flash" ? "ll-coin-flash" : mode === "fly" ? "ll-coin-fly" : undefined;
+            const extra = {};
+            if (mode === "fly") {
+              // px delta from this coin's resting spot to the chest center.
+              const fx = (CHEST.x - wp.x) * mapW - ox;
+              const fy = (CHEST.y - wp.y) * mapH - oy;
+              extra["--fx"] = `${fx}px`;
+              extra["--fy"] = `${fy}px`;
+              extra["--dly"] = `${0.55 + i * 0.22}s`; // stagger the pour, after a brief look
+            }
+            coins.push(
+              <img key={`${wp.lvl}-${i}-${mode}`} src="/trail-coin.png" alt="" className={cls} style={{
+                position:"absolute", width:COIN, height:"auto",
+                left:`calc(${wp.x*100}% + ${ox}px)`, top:`calc(${wp.y*100}% + ${oy}px)`,
+                transform:"translate(-50%,-50%)", pointerEvents:"none", ...extra,
+              }} />
+            );
+          }
+          return coins;
+        };
+        return (
+          <div style={{position:"fixed",inset:0,zIndex:9620,display:"flex",alignItems:"center",justifyContent:"center",background:"#0a0719"
+              /* v143: scrim is now FULLY OPAQUE (#0a0719). A 55%-translucent scrim let the freshly
+                 swapped tile board show through during the map-<img> decode gap — the real cause of the
+                 L2-L5 glimpse. Solid dark hides everything behind until the map paints on top. */}}>
+            {/* Map container — aspect-ratio locked so waypoint % coords land correctly on the art.
+                v135: the parchment is now a real <img> (below) instead of a CSS background-image.
+                A CSS background-image decodes async and paints one frame late while the overlay's
+                levelAnnounce fade runs — so the coins/text (immediate DOM) showed first and the map
+                "flashed" in. An <img> (already preloaded on mount) paints with the element, no pop. */}
+            <div style={{position:"relative",width:"min(92vw, 62vh)",aspectRatio:"1085 / 1450",fontFamily:"Georgia,serif",boxShadow:"0 12px 60px rgba(0,0,0,0.7)",
+                /* v139: the map container is held hidden until its <img> decodes, then settles in.
+                   visibility:hidden keeps the <img> mounted so onLoad/ref still fire. The scrim above
+                   is already visible, so the reveal is scrim → map, never board → map. */
+                visibility: mapReady ? "visible" : "hidden",
+                animation: mapReady ? "levelAnnounce 0.4s ease-out" : "none"}}>
+              <img src="/level-map-bg.jpg" alt=""
+                   onLoad={() => setMapReady(true)}
+                   ref={(el) => { if (el && el.complete && el.naturalWidth > 0) setMapReady(true); }}
+                   style={{position:"absolute",inset:0,width:"100%",height:"100%",objectFit:"contain",pointerEvents:"none"}} />
+              {/* Static accumulating piles for every CLEARED level below the current target.
+                  v147: WP4 now KEEPS its static 4-coin pile on L5 too (consistency — L4 is cleared, so
+                  its checkpoint stays populated). The chest fly (below) is a SEPARATE set of 5 coins. */}
+              {WAYPTS.filter(wp => wp.lvl < levelAnnounceNum)
+                     .flatMap(wp => pile(wp, "static"))}
+              {/* v133: FLASHING target pile — the level the player is HEADED to (L2-L4). Opacity+scale
+                  pulse says "here's where you're going next." L5 has no WP5, so it uses the chest fly. */}
+              {levelAnnounceNum <= 4 && (() => {
+                const t = WAYPTS.find(wp => wp.lvl === levelAnnounceNum);
+                return t ? pile(t, "flash") : null;
+              })()}
+              {/* v133: L4->L5 chest fill — the L5 clear's own 5 doubloons fly up into the chest (the
+                  payoff). v147: 5 coins (was 4) and INDEPENDENT of the resting WP4 pile above. */}
+              {levelAnnounceNum === 5 && pile(WAYPTS.find(wp => wp.lvl === 4), "fly", 5)}
+              {/* Center text block — sits in the map's empty middle. */}
+              <div style={{position:"absolute",top:"42%",left:0,right:0,textAlign:"center",transform:"translateY(-50%)",padding:"0 10%"}}>
+                <div style={{color:"#961c18",fontWeight:"bold",fontSize:"clamp(28px, 7vh, 64px)",textShadow:"2px 2px 0 rgba(70,45,20,0.5)",lineHeight:1}}>Level {levelAnnounceNum}</div>
+                <div style={{color:"#8a6a1c",fontWeight:"bold",fontSize:"clamp(18px, 4vh, 38px)",marginTop:"0.35em",textShadow:"1px 1px 0 rgba(70,45,20,0.4)"}}>Good Luck!</div>
+              </div>
+              {/* Dismiss button — v134: moved UP to 50% (was 56%) so the "tap to dismiss" text clears
+                  the flashing L1 coin at WP1 (~63% down), which the tail of the label was overlapping.
+                  "tap to dismiss" enlarged for visibility. */}
+              <div style={{position:"absolute",top:"50%",left:0,right:0,textAlign:"center"}}>
+                <button onClick={dismissLevelWelcome} style={{padding:`${isIpadWidth()?14:10}px ${isIpadWidth()?30:20}px`,borderRadius:12,background:"linear-gradient(135deg,#f6d365,#e0a83a)",color:"#3a2408",fontFamily:"Georgia,serif",fontWeight:"bold",fontSize:"clamp(14px, 2.4vh, 22px)",border:"2px solid #a6741f",boxShadow:"0 4px 14px rgba(0,0,0,0.45)",cursor:"pointer",whiteSpace:"nowrap"}}>Course is Set. Let's Sail!</button>
+                <div style={{marginTop:"0.55em"}}>
+                  <button onClick={dismissLevelWelcome} style={{padding:`${isIpadWidth()?10:7}px ${isIpadWidth()?22:16}px`,borderRadius:10,background:"rgba(250,243,220,0.92)",color:"#1a1208",fontFamily:"Georgia,serif",fontWeight:"bold",fontStyle:"italic",fontSize:"clamp(13px, 2.1vh, 19px)",border:"2px solid #2a1c0a",boxShadow:"0 3px 10px rgba(0,0,0,0.4)",cursor:"pointer",whiteSpace:"nowrap"}}>tap to dismiss</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* (v106) Loot Letter announcement — brief informational popup at level open.
           NOT a celebration; ungated by the mascot toggle. Auto-dismisses (2s via
           fireLootAnnounce). Non-interactive (pointerEvents none). */}
       {lootAnnounceLevel != null && (
-        <div style={{position:"fixed",inset:0,zIndex:9600,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+        <div style={{position:"fixed",top:0,left:0,right:0,zIndex:9600,display:"flex",alignItems:"flex-start",justifyContent:"center",pointerEvents:"none",paddingTop:"12vh",paddingLeft:"20px",paddingRight:"20px"}}>
+          {/* v130: anchored to UPPER area (top + 12vh) instead of center±90px, which wasn't enough
+              separation — Loot and WoD were still overlapping. Now Loot sits high, WoD sits low. */}
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadIntro(24)}px ${ipadIntro(34)}px`,textAlign:"center",border:"1.5px solid rgba(246,211,101,0.5)",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",fontFamily:"Georgia,serif",animation:"lootAnnounce 2.5s forwards"}}>
             <div style={{fontSize:ipadIntro(13),color:"#fde68a",fontWeight:"bold",letterSpacing:1,marginBottom:2}}>💥 LOOT LETTER</div>
             <div style={{fontSize:ipadIntro(18),color:"#f6d365",fontWeight:"bold",marginBottom:ipadIntro(16)}}>Level {lootAnnounceLevel}</div>
@@ -5746,10 +5973,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* ── HEADER ── */}
       <div style={{zIndex:1,width:"100%",maxWidth:ipadBoardW()||ipadW(480),padding:"calc(var(--ll-safe-top, 0px) + 8px) 10px 0",minHeight:0}}>
 
-        {/* ROW 1: Name · Date · Tour */}
-        <div style={{display:"flex",alignItems:"center",gap:ipadChrome(3),marginBottom:ipadChrome(3)}}>
+        {/* ROW 1: Name · Date · Level · Tour — v126: added the red Level pill (bright-white text)
+            and switched to justifyContent:space-between so all four items distribute EVENLY across
+            the row regardless of the date string's length day-to-day. Date is no longer flex:1 (that
+            pinned Name left / Tour right); each item is natural width and the row spaces them out. */}
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:ipadChrome(3),marginBottom:ipadChrome(3)}}>
           <span style={{fontSize:isIpadWidth()?21:11,color:"#22d3ee",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(34,211,238,0.6)",borderRadius:8,padding:`${ipadChrome(1)}px ${ipadChrome(7)}px`,background:"rgba(34,211,238,0.1)"}}>{playerName||"Guest"}</span>
-          <span style={{flex:1,fontSize:isIpadWidth()?21:11,color:"rgba(255,255,255,0.95)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center"}}>{getCalendarDate()}</span>
+          <span style={{fontSize:isIpadWidth()?21:11,color:"rgba(255,255,255,0.95)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",textAlign:"center",flexShrink:1,minWidth:0}}>{getCalendarDate()}</span>
+          {tab==="play" && <span style={{fontSize:isIpadWidth()?20:11,color:"#ffffff",fontWeight:"bold",whiteSpace:"nowrap",flexShrink:0,border:"1.5px solid rgba(220,38,38,0.95)",borderRadius:8,padding:`${ipadChrome(1)}px ${ipadChrome(7)}px`,background:"rgba(220,38,38,0.18)",letterSpacing:0.5}}>✦ Level {level} ✦</span>}
           {tab==="play" && <button onClick={()=>setShowTour(true)} style={{background:"rgba(167,139,250,0.25)",border:"1.5px solid rgba(167,139,250,0.7)",borderRadius:12,padding:`${ipadChrome(3)}px ${ipadChrome(10)}px`,cursor:"pointer",fontSize:isIpadWidth()?21:10,color:"#e0d4ff",fontFamily:"Georgia,serif",fontWeight:"bold",flexShrink:0}}>↺ Tour</button>}
         </div>
 
@@ -5769,12 +6000,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         {/* ROW 3: L5 · TIME · Level 00:00 · Total 00:00 · Pause — only on play tab */}
         {tab==="play" && (<>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.07)",borderRadius:7,padding:`${ipadChrome(3)}px ${ipadChrome(8)}px`,marginBottom:3,border:"1px solid rgba(255,255,255,0.18)",gap:4}}>
-          <span style={{padding:`${ipadChrome(2)}px ${ipadChrome(8)}px`,borderRadius:10,fontSize:ipadChrome(9),fontWeight:"bold",background:"rgba(139,92,246,0.22)",border:"1.5px solid rgba(167,139,250,0.7)",color:"#e9d5ff",whiteSpace:"nowrap",letterSpacing:1,flexShrink:0}}>✦ L{level} ✦</span>
-          <span style={{fontSize:ipadChrome(9),color:"rgba(255,255,255,0.7)",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
-          <span style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.5)",flexShrink:0}}>Level</span>
-          <span className={pulseTime?"pulse-big":""} style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#60a5fa",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
-          <span style={{fontSize:ipadChrome(8),color:"rgba(255,255,255,0.5)",flexShrink:0}}>Total</span>
-          <span style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#a78bfa",fontFamily:"monospace",flexShrink:0}}>{formatTime(totalTime)}</span>
+          {/* v126: the old level pill was removed from here — the level now lives in the top row (Row 1) as the red Level pill. */}
+          {/* v126b: "TIME" label recolored to the Level-pill red; "Level"/"Total" labels enlarged + brightened
+              (were tiny 0.5-opacity, barely visible); clock VALUES recolored to the Loot-box gold (#f6d365,
+              top stop of the LOOT tile's gradient) so the running times stand clear of the blue/green/purple
+              letter-counter boxes on the line below. */}
+          <span style={{fontSize:ipadChrome(11),color:"#ff4444",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
+          <span style={{fontSize:ipadChrome(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",flexShrink:0}}>Level</span>
+          <span className={pulseTime?"pulse-big":""} style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#f6d365",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
+          <span style={{fontSize:ipadChrome(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",flexShrink:0}}>Total</span>
+          <span style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#f6d365",fontFamily:"monospace",flexShrink:0}}>{formatTime(totalTime)}</span>
           <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:`${ipadChrome(2)}px ${ipadChrome(8)}px`,fontSize:ipadChrome(9),color:paused?"#003300":"#ffffff",fontWeight:"bold",flexShrink:0}}>
             {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
@@ -5894,7 +6129,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* ── PLAY TAB ── */}
       {tab==="play"&&(
-        <div style={{zIndex:1,width:"100%",maxWidth:ipadBoardW()||ipadW(480),padding:isIpadWidth()?"0 0 6px":"0 10px 6px",animation:"slideUp 0.3s ease"}}>
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadBoardW()||ipadW(480),padding:isIpadWidth()?"0 0 6px":"0 10px 6px",animation:"slideUp 0.3s ease",
+          /* v144: hide the whole play/board view while the Level Welcome map overlay is up. The board
+             is always mounted (only gated by tab==="play"), so on L2-L5 the freshly-swapped tiles could
+             paint a frame before the map overlay composited over them — the real cause of the glimpse.
+             With the board hidden until the map dismisses, there is nothing to glimpse. */
+          visibility: levelAnnounceNum != null ? "hidden" : "visible"}}>
 
           {/* ROW 5: Submit Word · SCORE · Clear · Menu — Replay/Buy/UNDO all in Row 2 above tile board (v118) */}
           <div style={{display:"flex",gap:3,marginBottom:3}}>
@@ -6777,7 +7017,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{marginTop:12,background:"rgba(255,255,255,0.06)",borderRadius:12,padding:ipadTour(10),fontSize:ipadTour(12),color:"rgba(255,255,255,0.9)"}}>
             Level 1 · Fresh tiles · Good luck! 🍀
           </div>
-          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; if (wotd && !wotdFound) showWotdReminderWithPause(); }} style={{marginTop:20,width:"100%",padding:ipadTour(16),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(16),fontWeight:"bold",border:"none"}}>
+          <button className="ll-btn replay-btn" onClick={()=>{ setShowReadyToPlay(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; fireLevelStartSequence(1); }} style={{marginTop:20,width:"100%",padding:ipadTour(16),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(16),fontWeight:"bold",border:"none"}}>
             Let's Go! 🎯
           </button>
         </div>

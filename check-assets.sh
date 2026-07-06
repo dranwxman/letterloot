@@ -8,6 +8,7 @@
 # review. Exits non-zero if anything is missing, so it can gate a build script.
 #
 # Created July 3, 2026 (Option B — full public/ coverage, not just mascot art).
+# Updated July 6, 2026 — added Trail of Loot assets (level-map-bg.jpg, trail-coin.png); manifest 14 → 16.
 # When you add a NEW required file to public/, add its name to REQUIRED below.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,9 @@ REQUIRED=(
   "wotd-pirate-chest.png"
   "wotd-coin.png"
   "Speech_Bubble.png"
+  # Trail of Loot (Level Welcome map page)
+  "level-map-bg.jpg"
+  "trail-coin.png"
   # Required HTML pages (privacy is an App Store review requirement)
   "privacy.html"
   "reset-password.html"

@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   // Who we send from / notify. FROM must be on the verified letterloot.net domain.
-  const FROM = "LetterLoot <hello@letterloot.net>";
+  const FROM = "LetterLoot <noreply@support.letterloot.net>";
   const ADMIN_TO = "hello@letterloot.net";
   const APP_URL = "https://apps.apple.com/app/id6769522298";
 

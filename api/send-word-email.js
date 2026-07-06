@@ -1,12 +1,4 @@
 export default async function handler(req, res) {
-  // CORS: allow the Capacitor app (and browser) to call this cross-origin.
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
-
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
-  }
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -17,7 +9,7 @@ export default async function handler(req, res) {
   }
 
   // Who we send from / notify. FROM must be on the verified letterloot.net domain.
-  const FROM = "LetterLoot <noreply@support.letterloot.net>";
+  const FROM = "LetterLoot <hello@letterloot.net>";
   const ADMIN_TO = "hello@letterloot.net";
 
   const { type, word, playerName, email, status, reportedAt } = req.body || {};

@@ -575,7 +575,7 @@ function calcWordScore(tileIds, tiles, hideLoot) {
     const tile = tiles.find(t => t.id === id);
     if (!tile) return;
     let val = tile.value;
-    if (tile.isLoot && !tile.lootUsed && !hideLoot) val = tile.value * 5; // Loot Letter: 5x base value (one-time per game)
+    if (tile.isLoot && !tile.lootUsed && !hideLoot) val = tile.value * 5; // Loot Letter: 5x base value (one per level, once each)
     if (tile.bonus === "double") score += val * 2;
     else if (tile.bonus === "triple") score += val * 3;
     else score += val;
@@ -1274,9 +1274,21 @@ function TileScene({ tileStyle, onAnimDone }) {
 }
 
 function VisualTour({ onDone }) {
+  // v152: Tour now opens on a landing screen offering "Full Walkthrough" or
+  // "Latest Updates". mode drives which surface renders. The walkthrough is the
+  // original 6-scene flow, unchanged. "updates" reuses the approved What's New v1.1
+  // copy plus a self-contained V/C-alert demo. Version-stamped heading updates per release.
+  const [mode, setMode] = useState("landing"); // "landing" | "updates" | "walkthrough"
   const [cur, setCur] = useState(0);
   const [pulseOn, setPulseOn] = useState(false);
   const pulseRef = useRef(null);
+
+  // v152: self-contained pulse for the V/C-alert demo on the Latest Updates screen.
+  // Cosmetic ONLY — a plain 1s alternating loop, wired to NOTHING in game state
+  // (mirrors the Menu scene's isolated pulse pattern). Never touches the live vcPulse
+  // system. vcDemoOn drives the glow on the two mock Vowels/Consonants boxes.
+  const [vcDemoOn, setVcDemoOn] = useState(false);
+  const vcDemoRef = useRef(null);
 
   function startPulse() {
     if (pulseRef.current) clearInterval(pulseRef.current);
@@ -1287,9 +1299,19 @@ function VisualTour({ onDone }) {
   useEffect(() => {
     setPulseOn(false);
     if (pulseRef.current) clearInterval(pulseRef.current);
-    if (cur !== 1) setTimeout(startPulse, 400);
+    if (mode === "walkthrough" && cur !== 1) setTimeout(startPulse, 400);
     return () => { if (pulseRef.current) clearInterval(pulseRef.current); };
-  }, [cur]);
+  }, [cur, mode]);
+
+  // v152: run the V/C demo pulse only while the Latest Updates screen is showing.
+  useEffect(() => {
+    if (mode === "updates") {
+      let on = true;
+      setVcDemoOn(true);
+      vcDemoRef.current = setInterval(() => { on = !on; setVcDemoOn(on); }, 1000);
+    }
+    return () => { if (vcDemoRef.current) clearInterval(vcDemoRef.current); };
+  }, [mode]);
 
   const tileStyle = (letter, sel) => ({
     width: ipadTour(42), height: ipadTour(48), borderRadius: 8,
@@ -1409,26 +1431,38 @@ function VisualTour({ onDone }) {
     {
       title: "📋 The Menu Button",
       desc:  "Your hub for everything beyond gameplay.",
-      content: () => (
+      content: () => {
+        // v158: scene-local tier-aware scale. ipadTour is a FLAT 2.3× on both iPad
+        // tiers, which left the 11" cramped and the iPhone (base, no bump) too small.
+        // mT diverges per device: 13" unchanged (2.3×), 11" compressed ~15%, iPhone
+        // expanded 1.35×. Mirrors the uT pattern in the Latest Updates screen.
+        const on11 = isIpadWidth() && !isLargeIpad();
+        const on13 = isLargeIpad();
+        const mT = (base) =>
+          on13 ? ipadTour(base)
+          : on11 ? Math.round(base * 2.3 * 0.85)
+          : Math.round(base * 1.35);
+        return (
         <div style={{textAlign:'center'}}>
-          <div style={{display:'flex',justifyContent:'center',marginBottom:ipadTour(14)}}>
-            <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.7)",color:"#f6d365",padding:`${ipadTour(10)}px ${ipadTour(28)}px`,borderRadius:12,fontSize:ipadTour(18),fontWeight:"bold",fontFamily:"Georgia,serif",boxShadow: pulseOn ? '0 0 20px 6px rgba(246,211,101,0.85)' : 'none',transform: pulseOn ? 'scale(1.06)' : 'scale(1)',transition:'box-shadow 0.7s ease, transform 0.7s ease'}}>📋 Menu</div>
+          <div style={{display:'flex',justifyContent:'center',marginBottom:mT(14)}}>
+            <div style={{background:"rgba(246,211,101,0.15)",border:"2px solid rgba(246,211,101,0.7)",color:"#f6d365",padding:`${mT(10)}px ${mT(28)}px`,borderRadius:12,fontSize:mT(18),fontWeight:"bold",fontFamily:"Georgia,serif",boxShadow: pulseOn ? '0 0 20px 6px rgba(246,211,101,0.85)' : 'none',transform: pulseOn ? 'scale(1.06)' : 'scale(1)',transition:'box-shadow 0.7s ease, transform 0.7s ease'}}>📋 Menu</div>
           </div>
-          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:ipadTour(14),fontSize:ipadTour(12.5),color:'#f5f0e8',lineHeight:1.85,textAlign:'left',marginBottom:ipadTour(10)}}>
+          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:mT(14),fontSize:mT(12.5),color:'#f5f0e8',lineHeight:1.85,textAlign:'left',marginBottom:mT(10)}}>
             The <strong style={{color:'#f6d365'}}>📋 Menu</strong> button (under the tile board, next to UNDO) opens your hub. From there you can reach:
-            <div style={{marginTop:ipadTour(8),paddingLeft:ipadTour(6),fontSize:ipadTour(12),lineHeight:2}}>
+            <div style={{marginTop:mT(8),paddingLeft:mT(6),fontSize:mT(12),lineHeight:2}}>
               📜 <strong>History</strong> — every word you've played<br/>
               📊 <strong>Stats</strong> — your scores, streaks, Perfect Days<br/>
               🏅 <strong>Badges</strong> — achievements you've earned<br/>
-              🏆 <strong>Leaders</strong> — top players today<br/>
+              🏆 <strong>Leaders</strong> — top players today, this week &amp; all-time<br/>
               ℹ️ <strong>Tips</strong> — rules &amp; strategy
             </div>
           </div>
-          <div style={{fontSize:ipadTour(10),color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
+          <div style={{fontSize:mT(10),color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
             Each menu page has a ← Back to Menu button. From the menu, ✏️ Back to Game returns to play.
           </div>
         </div>
-      )
+        );
+      }
     },
 
     {
@@ -1516,8 +1550,117 @@ function VisualTour({ onDone }) {
     transition: 'box-shadow 0.7s ease, transform 0.7s ease'
   };
 
+  // ── v152: LANDING screen — first thing shown when ↺ Tour is tapped ──
+  if (mode === "landing") {
+    const choiceCard = (emoji, title, sub, onClick, accent) => (
+      <button className="ll-btn" onClick={onClick} style={{
+        width:'100%', textAlign:'left', display:'flex', alignItems:'center', gap:ipadTour(14),
+        padding:ipadTour(16), borderRadius:16, cursor:'pointer', marginBottom:ipadTour(12),
+        background:'rgba(255,255,255,0.06)', border:`1px solid ${accent}`, fontFamily:'Georgia,serif'
+      }}>
+        <span style={{fontSize:ipadTour(28),lineHeight:1}}>{emoji}</span>
+        <span style={{display:'flex',flexDirection:'column'}}>
+          <span style={{fontSize:ipadTour(16),fontWeight:'bold',color:'#f6d365'}}>{title}</span>
+          <span style={{fontSize:ipadTour(12),color:'rgba(255,255,255,0.7)',marginTop:ipadTour(2)}}>{sub}</span>
+        </span>
+      </button>
+    );
+    return (
+      <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(16)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(16)}px`,overflowY:'auto'}}>
+        <div style={{width:'100%',maxWidth:ipadW(400)}}>
+          <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:ipadIntroPad(24),border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
+            <div style={{textAlign:'center',marginBottom:ipadTour(18)}}>
+              <div style={{display:'flex',justifyContent:'center',marginBottom:ipadTour(10)}}><PencilLogo size={ipadIcon(72)}/></div>
+              <div style={{fontSize:ipadTour(18),fontWeight:'bold',color:'#f6d365',marginBottom:ipadTour(4)}}>LetterLoot</div>
+              <div style={{fontSize:ipadTour(13),color:'rgba(255,255,255,0.8)'}}>What would you like to see?</div>
+            </div>
+            {choiceCard('📖','Full Walkthrough','Learn how to play',()=>{setCur(0);setMode("walkthrough");},'rgba(246,211,101,0.45)')}
+            {choiceCard('📢','Latest Updates',"What's new in LetterLoot",()=>setMode("updates"),'rgba(167,139,250,0.55)')}
+            <button className="ll-btn" onClick={onDone} style={{width:'100%',marginTop:ipadTour(4),padding:ipadTour(11),borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.55)',fontFamily:'Georgia,serif',fontSize:ipadTour(13),cursor:'pointer'}}>Close ✕</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── v152: LATEST UPDATES screen — reuses approved What's New v1.1 cards + live V/C demo ──
+  if (mode === "updates") {
+    // v156: tier-aware scale for THIS screen only. ipadTour is a flat 2.3x for BOTH
+    // iPad tiers, which overflows the 11" (smaller viewport, same content height) while
+    // fitting the 13". uT trims the 11" tier (768–999px) ~12% so the whole card fits
+    // there, and leaves the 13" (>=1000) and phone (base) exactly as-is/approved.
+    const on11 = isIpadWidth() && !isLargeIpad();
+    const uT = (base) => on11 ? Math.round(base * 2.3 * 0.88) : ipadTour(base);
+    // v153: demo boxes now mirror the REAL in-game V/C box colors exactly —
+    // Vowels green (#34d399 family), Consonants purple (#a78bfa family) — so the
+    // demo teaches the same visual a player sees during play.
+    const vcBox = (label, num, c) => (
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:uT(4)}}>
+        <div style={{
+          minWidth:uT(54),padding:`${uT(6)}px ${uT(14)}px`,borderRadius:9,textAlign:'center',
+          fontFamily:'Georgia,serif',
+          background:c.bg,
+          border:`2px solid ${c.border}`,
+          boxShadow: vcDemoOn ? `0 0 22px 4px ${c.glow}` : `0 0 8px ${c.glow}`,
+          filter: vcDemoOn ? 'brightness(2.2)' : 'brightness(1)',
+          transition:'box-shadow 0.9s ease, filter 0.9s ease'
+        }}>
+          <div style={{fontSize:uT(20),fontWeight:'bold',color:c.num,textShadow:`0 0 8px ${c.glow}`}}>{num}</div>
+          <div style={{fontSize:uT(10),fontWeight:'bold',letterSpacing:0.5,color:c.label}}>{label}</div>
+        </div>
+      </div>
+    );
+    const VOWEL_C = { bg:"rgba(52,211,153,0.16)", border:"#34d399", glow:"rgba(52,211,153,0.55)", num:"#6ee7b7", label:"#a7f3d0" };
+    const CONSON_C = { bg:"rgba(167,139,250,0.16)", border:"#a78bfa", glow:"rgba(167,139,250,0.55)", num:"#c4b5fd", label:"#ddd6fe" };
+    return (
+      <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(12)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(40)}px`,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
+        <div style={{width:'100%',maxWidth:ipadW(560)}}>
+          <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:ipadIntroPad(18),border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
+            <div style={{textAlign:'center',fontSize:uT(17),fontWeight:'bold',color:'#f6d365',marginBottom:uT(14)}}>📢 What's New in v1.1</div>
+
+            {/* Loot Letters */}
+            <div style={{background:"rgba(110,231,183,0.1)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:12,padding:uT(12),marginBottom:uT(12)}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                <span style={{fontSize:uT(16)}}>💥</span>
+                <span style={{fontSize:uT(14),color:"#6ee7b7",fontWeight:"bold"}}>Loot Letters</span>
+              </div>
+              <div style={{fontSize:uT(12),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Each level now hides one Loot Letter worth 5× its value. We'll name the letter, just not which one! Only one tile on that board pockets the loot.</div>
+            </div>
+
+            {/* Pirate Celebrations */}
+            <div style={{background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:12,padding:uT(12),marginBottom:uT(12)}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                <span style={{fontSize:uT(16)}}>🏴‍☠️</span>
+                <span style={{fontSize:uT(14),color:"#c4b5fd",fontWeight:"bold"}}>Pirate Celebrations</span>
+              </div>
+              <div style={{fontSize:uT(12),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Our pirate crew now cheers your big moments — clearing a level, a great word, a Perfect Day. Not your style? A <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> toggle lets you turn them on or off — your choice, every time you play.</div>
+              <div style={{fontSize:uT(11),color:"rgba(196,181,253,0.9)",lineHeight:1.5,marginTop:8,fontStyle:"italic"}}>You'll find the toggle on the "Ready?" screen, just before each game begins.</div>
+            </div>
+
+            {/* Vowel / Consonant Alert + live demo */}
+            <div style={{background:"rgba(124,196,255,0.1)",border:"1px solid rgba(124,196,255,0.35)",borderRadius:12,padding:uT(12),marginBottom:uT(14)}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+                <span style={{fontSize:uT(16)}}>🔵</span>
+                <span style={{fontSize:uT(14),color:"#7cc4ff",fontWeight:"bold"}}>Vowel / Consonant Alert</span>
+              </div>
+              <div style={{fontSize:uT(12),color:"rgba(245,240,232,0.85)",lineHeight:1.55,marginBottom:uT(10)}}>When your remaining letters tip into a risky vowel-to-consonant balance, the Vowels and Consonants boxes gently pulse — a heads-up to adjust your strategy before you strand yourself.</div>
+              <div style={{display:'flex',justifyContent:'center',gap:uT(20),padding:`${uT(4)}px 0 ${uT(2)}px`}}>
+                {vcBox('VOWELS', 6, VOWEL_C)}
+                {vcBox('CONSON.', 20, CONSON_C)}
+              </div>
+              <div style={{textAlign:'center',fontSize:uT(10),color:'rgba(124,196,255,0.75)',fontStyle:'italic',marginTop:uT(6)}}>↑ a risky balance — watch for the pulse in your game!</div>
+            </div>
+
+            <button className="ll-btn" onClick={()=>setMode("landing")} style={{width:'100%',padding:uT(12),borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.65)',fontFamily:'Georgia,serif',fontSize:uT(13),cursor:'pointer'}}>← Back</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── WALKTHROUGH (original 6-scene flow) ──
   return (
-    <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:ipadIntroPad(16),overflowY:'auto'}}>
+    <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(12)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(16)}px`,overflowY:'auto'}}>
       <div style={{width:'100%',maxWidth:ipadW(400)}}>
         <div style={{display:'flex',gap:ipadTour(6),justifyContent:'center',marginBottom:ipadTour(10)}}>
           {scenes.map((_,i) => (
@@ -1529,8 +1672,8 @@ function VisualTour({ onDone }) {
           {scene.desc ? <div style={{fontSize:ipadTour(13),color:'rgba(255,255,255,0.88)',textAlign:'center',lineHeight:1.7,marginBottom:ipadTour(14),fontWeight:'bold'}}>{scene.desc}</div> : null}
           {scene.content()}
           <div style={{display:'flex',gap:ipadTour(10),marginTop:ipadTour(16)}}>
-            <button className="ll-btn" onClick={()=>cur>0?setCur(c=>c-1):onDone()} style={{flex:1,padding:ipadTour(10),borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:ipadTour(12),cursor:'pointer'}}>
-              {cur===0?'Skip':'← Back'}
+            <button className="ll-btn" onClick={()=>cur>0?setCur(c=>c-1):setMode("landing")} style={{flex:1,padding:ipadTour(10),borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.5)',fontFamily:'Georgia,serif',fontSize:ipadTour(12),cursor:'pointer'}}>
+              {cur===0?'← Menu':'← Back'}
             </button>
             {scene.last
               ? <button className="ll-btn" onClick={onDone} style={doneBtnStyle}>✏️ Lets Play!</button>
@@ -4032,8 +4175,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
   const getPerfectDayShareText = useCallback(() => {
     const allValid = submittedRef.current.filter(s => s.valid);
-    // CRITICAL: exclude loot words from share — score/length would expose the loot letter
-    // to other players today. Loot Letter must remain a daily mystery.
+    // CRITICAL: exclude loot words from share — score/length would expose a level's loot letter
+    // to other players today. Each day's Loot Letters must remain a mystery.
     const shareableWords = allValid.filter(s => !s.loot);
     const bestWord = shareableWords.reduce((b, s) => !b || s.score > b.score ? s : b, null);
     const longestW = shareableWords.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
@@ -4048,7 +4191,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // builder but without the Perfect Day framing — for players who want to share their
   // progress even when they didn't get a Perfect Day. Includes levels reached, score,
   // total time, WoD status, best-scoring word, longest word. Keeps the loot-word
-  // exclusion so the daily Loot Letter isn't leaked.
+  // exclusion so each day's Loot Letters aren't leaked.
   const getDayResultsShareText = useCallback(() => {
     const allValid = submittedRef.current.filter(s => s.valid);
     const shareableWords = allValid.filter(s => !s.loot);
@@ -5494,7 +5637,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
       )}
 
-      {/* Loot Letter celebration — fires when player uses the daily Loot Letter in a valid word */}
+      {/* Loot Letter celebration — fires when player uses a level's Loot Letter in a valid word (one per level, 5 per game) */}
       {lootCelebration && (
         <div style={{position:"fixed",inset:0,zIndex:9700,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
           <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 4s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
@@ -5506,7 +5649,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 <div style={{fontSize:ipadIntro(42),fontWeight:"bold",color:"#f6d365",letterSpacing:2,lineHeight:1,textShadow:"0 0 12px rgba(246,211,101,0.8)"}}>{lootCelebration.letter}</div>
               </div>
             )}
-            <div style={{fontSize:ipadIntro(13),color:"#2d1b00",fontWeight:"bold",marginBottom:6}}>You found the hidden Loot Letter!</div>
+            <div style={{fontSize:ipadIntro(13),color:"#2d1b00",fontWeight:"bold",marginBottom:6}}>Loot Letter Found!</div>
             <div style={{fontSize:ipadIntro(16),fontWeight:"bold",color:"#003300"}}>5× Letter Bonus Applied!</div>
             <div style={{fontSize:ipadIntro(14),fontWeight:"bold",color:"#003300",marginTop:4}}>+{lootCelebration.score} pts on this word</div>
           </div>

@@ -2366,6 +2366,14 @@ function AdminScreen({ onExit }) {
                             body:JSON.stringify({status:'approved'})
                           });
                           if(!res.ok){const errText=await res.text().catch(()=>'');alert('Approve failed: '+res.status+'\n'+errText);return;}
+                          // v150: notify registered player of outcome (guests have null email → skip)
+                          if(r.email){
+                            fetch("https://letterloot-6k6v.vercel.app/api/send-word-email",{
+                              method:"POST",
+                              headers:{"Content-Type":"application/json"},
+                              body:JSON.stringify({type:"player_status",status:"approved",word:r.word,playerName:r.player_name||"Player",email:r.email})
+                            }).catch(err=>console.error("Player notify (approve) failed:",err));
+                          }
                           loadData();
                         }catch(e){alert('Approve error: '+e.message);}
                       }} style={{padding:'3px 8px',borderRadius:6,border:'1px solid rgba(110,231,183,0.5)',background:'rgba(110,231,183,0.15)',color:'#6ee7b7',fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✓ Approve</button>
@@ -2377,6 +2385,14 @@ function AdminScreen({ onExit }) {
                             body:JSON.stringify({status:'rejected'})
                           });
                           if(!res.ok){const errText=await res.text().catch(()=>'');alert('Reject failed: '+res.status+'\n'+errText);return;}
+                          // v150: notify registered player of outcome (guests have null email → skip)
+                          if(r.email){
+                            fetch("https://letterloot-6k6v.vercel.app/api/send-word-email",{
+                              method:"POST",
+                              headers:{"Content-Type":"application/json"},
+                              body:JSON.stringify({type:"player_status",status:"rejected",word:r.word,playerName:r.player_name||"Player",email:r.email})
+                            }).catch(err=>console.error("Player notify (reject) failed:",err));
+                          }
                           loadData();
                         }catch(e){alert('Reject error: '+e.message);}
                       }} style={{padding:'3px 8px',borderRadius:6,border:'1px solid rgba(251,113,133,0.5)',background:'rgba(251,113,133,0.15)',color:'#fda4af',fontSize:10,fontWeight:'bold',cursor:'pointer'}}>✗ Reject</button>
@@ -6264,7 +6280,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                               try {
                                 const { data, error } = await supabase
                                   .from("word_reports")
-                                  .insert({ word: s.word.toLowerCase(), player_name: playerName||"Guest" })
+                                  .insert({ word: s.word.toLowerCase(), player_name: playerName||"Guest", email: user?.email || null })
                                   .select();
                                 if (error) {
                                   console.error("Word report failed:", error);
@@ -6281,6 +6297,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                                 if (!reported.includes(s.word.toLowerCase())) reported.push(s.word.toLowerCase());
                                 localStorage.setItem(reportedKey, JSON.stringify(reported));
                                 setDailyHistory({...getDailyHistory()});
+                                // Fire-and-forget admin notification (never blocks the report)
+                                fetch("https://letterloot-6k6v.vercel.app/api/send-word-email", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({
+                                    type: "admin_notify",
+                                    word: s.word.toLowerCase(),
+                                    playerName: playerName || "Guest",
+                                    email: user?.email || "guest",
+                                    reportedAt: new Date().toISOString()
+                                  })
+                                }).catch(err => console.error("Admin notify failed:", err));
                               } catch(err) { 
                                 console.error("Word report exception:", err);
                                 alert("Report failed: " + (err.message || "network error"));

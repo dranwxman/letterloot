@@ -136,6 +136,35 @@ function vcDangerState(v, c, tilesRemaining) {
 // First call of the session = deterministic daily index (getDailySeed() % 10);
 // each later call advances +1 (wrapping). Returns the line WITH the [score] token
 // still in it; the caller interpolates the real score at fire time.
+// v169 (v1.2 #12): Word of the Day sayings. WoD fires at most ONCE PER DAY, so there is no
+// session rotation to track (unlike Great Word) — a daily-seeded pick gives every player the
+// same line on a given day, and a different one tomorrow.
+// v171: Daryl's lines, verbatim. No emoji. Each carries the +1,000 itself, which is why the
+// panel needs no separate points row. Lengths run 46-61 chars, so the panel breathes a little
+// differently day to day (Daryl: "2 or 3 lines is fine").
+const WOTD_SAYINGS = [
+  "The Word o' the Day be YOURS \u2014 +1,000 doubloons!",
+  "Ye found the day's treasure \u2014 +1,000 to yer hoard!",
+  "Struck gold, ye clever devil \u2014 +1,000 doubloons be yers!",
+  "That be the very word \u2014 +1,000 bits conferred.",
+  "The daily prize is best \u2014 +1,000 in the chest!",
+  "Word o' the Day plundered'll keep us afloat longer \u2014 +1,000!",
+  "A captain's find to keep us from a bind \u2014 +1,000 to yer name!",
+];
+// Rotate on DAYS-SINCE-EPOCH, not getDailySeed(). getDailySeed() is YYYYMMDD, which jumps by
+// 70 across a 31-day month boundary (20260731 -> 20260801) — and 70 % 7 == 0, so the same
+// saying would repeat two days running every such rollover. Epoch-days increments by exactly 1
+// per day, so the cycle never stalls. (Consequence, by design: with 7 sayings on a 7-day cycle
+// each line lands on the same weekday each week.)
+function pickWotdSaying() {
+  // LOCAL midnight, not UTC: Date.now()/86400000 would flip the saying at 5pm Pacific,
+  // out of step with getTodayKey() and every other date-keyed thing in the app.
+  const d = new Date();
+  const dayIdx = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
+  const n = WOTD_SAYINGS.length;
+  return WOTD_SAYINGS[((dayIdx % n) + n) % n];
+}
+
 function pickGreatWordSaying(sessionIdx) {
   const lines = GREAT_WORD_SAYINGS;
   const daily = getDailySeed() % 10;
@@ -162,35 +191,58 @@ const PIRATE_CLEAR_IMG = {
 };
 const PIRATE_CLEAR_ANIM = { 1:"plClearL1", 2:"plClearL2", 3:"plClearL3", 4:"plClearL4", 5:"plClearL5" };
 
-// v114/v115: GENTLE auto-shrink for the speech-bubble text zone.
-// The bubble is a raster PNG (inner area can't grow), so for a genuinely long
-// rotating line we nudge the font DOWN a little until it fits — but only a
-// LITTLE. v114 shipped with an 8px floor + a too-short zone, which let the
-// longest line shrink to a tiny size in a mostly-empty bubble (the "sledgehammer"
-// Daryl flagged). v115 fixes it two ways: (1) the callers grow the zone height so
-// 3 lines fit near full size, and (2) the floor here is capped just a few px below
-// max, so the font can only ever step down a hair. Result: short lines stay at
-// maxPx; the longest line drops ~1-3px at most, never small.
-//
-// `minGap` = the largest number of px we allow the font to drop below maxPx.
-// Effective floor = maxPx - minGap (and never below a hard 18px readability floor).
-function BubbleFitText({ text, zLeft, zTop, zWidth, zHeight, maxPx, minGap = 4 }) {
+// Speech-bubble text auto-fit. History: v114 shrink-only w/ 8px floor; v115 capped the
+// shrink to a few px (which is what created the ceiling problem); v166 replaced both with
+// a true grow-and-shrink fit. See below.
+// v166 (v1.2 #8): TRUE fit — grows AND shrinks.
+// Was: `let size = maxPx` then a shrink-only loop with `floor = Math.max(18, maxPx - minGap)`.
+// Two bugs fell out of that:
+//   1. maxPx was a CEILING the text could never exceed. Widening the bubble (v165 -> 1.85)
+//      gave the text a much larger zone, but the font stayed pinned at maxPx. Making the
+//      bubble bigger could not make the letters bigger. (Daryl, July 9: "letters are way
+//      too small - that's the real issue".)
+//   2. On iPhone, maxPx = ipadTour(11) = 11 while floor = max(18, 6) = 18. The loop guard
+//      `size > floor` was `11 > 18` -> false, so it never ran a single iteration and long
+//      sayings were simply clipped by overflow:hidden.
+// Now: binary-search the largest size in [MIN_PX, maxPx] that fits the zone. Short sayings
+// render large, long ones step down, everything stays inside the bubble. maxPx is now a
+// genuine safety ceiling rather than the operative value, so future bubble-geometry changes
+// pick up the right font automatically instead of needing a hand-tuned constant.
+const BUBBLE_MIN_PX = 9;   // absolute legibility floor; below this we accept overflow rather than shrink further
+function BubbleFitText({ text, zLeft, zTop, zWidth, zHeight, maxPx }) {
   const boxRef = useRef(null);
-  const [fontPx, setFontPx] = useState(maxPx);
+  const innerRef = useRef(null);
+  const [fontPx, setFontPx] = useState(BUBBLE_MIN_PX);
   useLayoutEffect(() => {
-    const el = boxRef.current;
-    if (!el) return;
-    const floor = Math.max(18, maxPx - minGap);   // gentle: only a few px of headroom
-    let size = maxPx;
-    el.style.fontSize = size + "px";
-    // A tiny tolerance (1px) avoids sub-pixel rounding causing a needless step down.
-    const fits = () => el.scrollHeight <= el.clientHeight + 1 && el.scrollWidth <= el.clientWidth + 1;
-    while (size > floor && !fits()) {
-      size -= 0.5;
-      el.style.fontSize = size + "px";
+    const box = boxRef.current, inner = innerRef.current;
+    if (!box || !inner) return;
+    // v173: measure the INNER block, not the flex box. The outer div is `display:flex`, and on a
+    // flex container scrollWidth/scrollHeight do NOT report the text overflowing — the text is an
+    // anonymous flex item that gets COMPRESSED and wrapped to fit instead of spilling. So the old
+    // `box.scrollWidth <= box.clientWidth` answered "fits" at sizes where the text was actually
+    // being crushed into extra lines, and the search converged far too small. `wordBreak:
+    // break-word` made it worse: the text can nearly always find SOME way to wrap within the
+    // width, so the horizontal test was almost always true. Measuring a real block child gives
+    // honest overflow numbers. (v166 introduced the search; this is what it should have measured.)
+    const fitsAt = (px) => {
+      box.style.fontSize = px + "px";
+      return inner.scrollHeight <= box.clientHeight + 1 && inner.scrollWidth <= box.clientWidth + 1;
+    };
+    let lo = BUBBLE_MIN_PX, hi = maxPx, best = BUBBLE_MIN_PX;
+    if (fitsAt(hi)) {
+      best = hi;                       // ceiling already fits — take it, no search needed
+    } else {
+      // Invariant: `lo` fits (or is the floor), `hi` does not. Converge to 0.5px.
+      while (hi - lo > 0.5) {
+        const mid = Math.round(((lo + hi) / 2) * 2) / 2;   // snap to 0.5px steps
+        if (mid === lo || mid === hi) break;
+        if (fitsAt(mid)) { best = mid; lo = mid; } else { hi = mid; }
+      }
+      if (fitsAt(lo)) best = lo;
     }
-    setFontPx(size);
-  }, [text, maxPx, minGap, zWidth, zHeight]);
+    box.style.fontSize = best + "px";
+    setFontPx(best);
+  }, [text, maxPx, zWidth, zHeight]);
   return (
     <div
       ref={boxRef}
@@ -203,7 +255,7 @@ function BubbleFitText({ text, zLeft, zTop, zWidth, zHeight, maxPx, minGap = 4 }
         fontWeight: "bold", lineHeight: 1.15, fontSize: fontPx + "px",
         overflow: "hidden", wordBreak: "break-word",
       }}
-    >{text}</div>
+    ><span ref={innerRef} style={{ display: "block", width: "100%" }}>{text}</span></div>
   );
 }
 
@@ -291,6 +343,53 @@ const ipadDense = (base) => isIpadWidth() ? Math.round(base * 1.6) : base; // de
 const ipadWord = (base) => isIpadWidth() ? Math.round(base * 2.5) : base; // word-being-built row (largest scale)
 const ipadIcon = (base) => isIpadWidth() ? Math.round(base * 1.8) : base; // pencil/letterloot icon
 const ipadBoardW = () => isIpadWidth() ? 1500 : undefined; // wider tile-board container on iPad
+
+// v168 (v1.2 #11): SHARED Great Word overlay renderer.
+// The live block and the debug-preview block were byte-identical markup differing only in the
+// state variable they read. That duplication is exactly how they drifted apart before (bw hit
+// 1.15 in one and 1.27 in the other), and it would have meant the debug preview showed a
+// DIFFERENT screen than live — defeating the preview's whole purpose.
+//
+// The v116 rule ("debug triggers never touch live state") is about STATE isolation — the
+// rotation counter, the per-level guard. Sharing the MARKUP preserves that completely: both
+// callers still own their own state, they just render through one function.
+//
+// Card: matches the Level-Clear panel's gradient + gold border, but maxWidth ipadTour(420)
+// rather than 320 — this panel carries no results text, and the bubble (bw = 1.85*pw) needs
+// the room. Horizontal padding trimmed to 20 so the bubble clears a narrow iPhone
+// (375px viewport at width:92% → 345px card → 305px inner vs bw 278px).
+function GreatWordOverlay({ line }) {
+  const pw = ipadTour(150);                       // v168: 120→150 (+25%). The Level-Clear mascot is
+                                                  // boxed in a results card; this one floats, so it
+                                                  // needs more presence to hold the screen.
+  const bw = pw * 1.85;                           // v165 width (legibility)
+  const cropWR = 786/1024, cropHR = 546/1024;
+  const solidBottomFrac = (1 + cropHR)/2;
+  const marginBelow = bw * (1 - solidBottomFrac);
+  const gap = pw * (10/162);
+  const bubbleTop = -bw + marginBelow - gap;
+  // The bubble hangs above the group at a negative top; inside a card that would escape the
+  // panel. Drop the group by its upward extent — same technique v162 used on Level-Clear.
+  const groupDrop = Math.max(0, -bubbleTop) + ipadTour(10);
+  const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
+  const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
+  const zWidth = (81.7/100) * cropWR * 100;
+  const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115 zone (11%/66%)
+  const zHeight = (66/100) * cropHR * 100;
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+      <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(28)}px ${ipadTour(20)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(420),width:"92%"}}>
+        <div style={{position:"relative",display:"inline-block",marginTop:groupDrop}}>
+          <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
+            <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
+            <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(22)}/>
+          </div>
+          <img src="/great-word-pirate.png" alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL2 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
 // 360 → 640, 480 → 854 (UI rows). Game board itself goes to 1400px on iPad.
 // Tiles: 2.2× (38→84, 44→97, 17→37, 7→15). Chrome (buttons/labels): 1.5×.
 // Welcome card fonts: 1.3×, padding: 1.4×. App icon: 1.8× on iPad.
@@ -3128,6 +3227,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // Captured line to display for the current clear (set when the clear fires so
   // the counter doesn't advance on unrelated re-renders).
   const [clearSayingText, setClearSayingText] = useState("");
+  // v162 (v1.2 #2): gates the Level-Clear mascot so it only pops in AFTER the entire
+  // badge queue has had its solo moment. Set false when a level completes; flipped true
+  // either immediately (no badges pending) or by processBadgeQueue's drain branch.
+  const [mascotReady, setMascotReady] = useState(false);
   // v116 (#16): LIVE Great Word celebration — separate from greatWordPreview (debug
   // only) so debug triggers never touch live rotation state or the per-level guard.
   // Holds { line } (already score-interpolated) or null.
@@ -3139,7 +3242,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // loot-suppressed) on, so it fires at most once per level. 0 = not yet fired this
   // level. Reset to 0 on next-level / replay / fresh-game (see reset sites).
   const greatWordFiredRef = useRef(0);
-  const greatWordTimerRef = useRef(null);
+  // ── v164 (v1.2 #6): CELEBRATION QUEUE ────────────────────────────────────────
+  // The three full-screen celebration overlays (WoD / Loot / Great Word) all render
+  // UNDER the green word/points flash (flash zIndex 9997; overlays 9700-class), so a
+  // celebration firing in the same submit tick as the flash got the banner stamped
+  // across the mascot's chest. They also could co-fire with each other (a loot word
+  // that is ALSO the Word of the Day hits both blocks) and stack.
+  //
+  // Fix, same shape as badgeQueueRef: handleSubmit ENQUEUES a descriptor instead of
+  // setting overlay state directly. drainCelebrationQueue() runs them strictly serially,
+  // and it is the ONLY thing that touches the timer for celebrations. showFlash's dismiss
+  // timer kicks the drain, so the chain is: flash (2s) → celebration(s) → badges.
+  //
+  // Descriptor: { kind: "wotd" | "loot" | "greatWord", payload, dwellMs }
+  const celebrationQueueRef = useRef([]);
+  const celebrationActiveRef = useRef(false);
+  const celebrationTimerRef = useRef(null);
   // ── v119: V/C-ratio danger pulse ──────────────────────────────────────────────
   // vcPulse drives the CSS pulse on BOTH the Vowels and Consonants boxes: null = at
   // rest (the plain v118 glow), or "starve"/"over" while a 5s pulse is running.
@@ -3220,6 +3338,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [checkingStuck, setCheckingStuck] = useState(false);
   const [shake, setShake] = useState(false);
   const [flash, setFlash] = useState(null);
+  // v163 (v1.2 #5): the green word/points flash (top:40%, zIndex 9997) and the badge
+  // banner (top:72, zIndex 9998) used to fire in the SAME tick on a badge-earning
+  // submission, so the flash sat over the badge. flashActiveRef gates processBadgeQueue:
+  // while a flash is up, badges stay queued; the flash's own dismiss drains the queue.
+  // Decision A (July 9): ALL flashes gate — including "BOARD CLEAR!" — for one uniform rule.
+  const flashActiveRef = useRef(false);
+  const flashTimerRef = useRef(null);
   const [showBadge, setShowBadge] = useState(null);
   const [showBadgeExtra, setShowBadgeExtra] = useState("");
   const badgeQueueRef = useRef([]);
@@ -3257,6 +3382,29 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // setTimeouts) can read the CURRENT value instead of a stale closure value.
   const levelCompleteRef = useRef(false);
   useEffect(() => { levelCompleteRef.current = levelComplete; }, [levelComplete]);
+  // v162 (v1.2 #2): when a level completes, decide when the mascot may pop in.
+  // v167 (v1.2 #10): ALSO wait on the celebration queue. v164 wired celebrations →
+  // badges, but nothing wired celebrations → mascot, so a level cleared with a LOOT word
+  // or the WORD OF THE DAY and NO badge earned released the mascot after 450ms while the
+  // loot/WoD overlay was still queued behind the flash — the mascot rendered underneath
+  // the `inset:0` overlay. (Daryl's July 9 debug screenshots surfaced this; the debug
+  // panel bypasses the queue by design, but the live zero-badge path had the same hole.)
+  //
+  // Full chain, every link releasing the next: flash → celebration(s) → badge(s) → mascot.
+  // If ANYTHING is pending, HOLD. The last drain in the chain flips mascotReady:
+  //   - badges pending  → processBadgeQueue's empty branch releases it
+  //   - only celebrations pending → drainCelebrationQueue's empty branch releases it
+  //   - nothing pending → the 450ms beat below releases it
+  useEffect(() => {
+    if (!levelComplete) { setMascotReady(false); return; }
+    const badgesPending = badgeQueueRef.current.length > 0 || badgePopupActiveRef.current;
+    const celebrationsPending = celebrationQueueRef.current.length > 0 || celebrationActiveRef.current;
+    if (!badgesPending && !celebrationsPending) {
+      const t = setTimeout(() => setMascotReady(true), 450);
+      return () => clearTimeout(t);
+    }
+    // else: the celebration and/or badge drain will release the mascot when it empties
+  }, [levelComplete]);
   const [showBuyModal, setShowBuyModal] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   // (v103) showNewGameConfirm state removed — the mid-play Start New Game button and its confirm modal were deleted.
@@ -3533,13 +3681,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       else if (debugAction === "mascot-wotd") {
         setShowIntro(false);
         setTab("play");
-        setMascotsPref(true);
+        // v172: NO setMascotsPref(true) here. WoD is not gated by the mascot toggle, so forcing
+        // the pref on was pointless — and worse, setMascotsPref() PERSISTS to localStorage
+        // ("ll_show_mascots"), so pressing this debug button silently rewrote the player's saved
+        // setting. That defeated the very test it was used for (toggle mascots OFF, confirm the
+        // WoD pirate still fires). The other mascot-* debug branches still set it because those
+        // celebrations ARE toggle-gated and would render nothing otherwise.
         setWotdCelebration(true);
         stopTimer();
         setTimeout(() => {
           setWotdCelebration(false);
           if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) { stopTimer(); } else { startTimer(); }
-        }, 4000);
+        }, 8000); // v172: match the live 8s WoD dwell
       }
       // State helpers
       else if (debugAction === "fresh-game") {
@@ -3952,6 +4105,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // BUG FIX 4: Independent scope checking for "all" badges
   const processBadgeQueue = useCallback(() => {
     if (badgePopupActiveRef.current) return; // already showing one
+    // v163 (v1.2 #5): a word/points (or BOARD CLEAR / error) flash is on screen — hold the
+    // queue. showFlash's dismiss timer calls back into here once the flash clears, so
+    // badges pop AFTER the player has read the word and its score. Nothing is lost:
+    // the badge stays in badgeQueueRef until then.
+    if (flashActiveRef.current) return;
     const next = badgeQueueRef.current.shift();
     if (!next) return;
     badgePopupActiveRef.current = true;
@@ -3975,9 +4133,136 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         // captured levelComplete=false, so it wrongly restarted the clock on the
         // "Level Complete!" screen. The startTimer() guard also blocks if awaiting first tap.
         if (!pausedRef.current && !levelCompleteRef.current && !awaitingFirstTapRef.current) startTimer();
+        // v162 (v1.2 #2): the whole badge queue has now had its solo moment — release the
+        // Level-Clear mascot so it pops in. Guard on levelCompleteRef so this only fires
+        // when we're actually on the Level Complete screen (not a mid-play badge).
+        if (levelCompleteRef.current) setMascotReady(true);
       }
     }, 5000);
   }, [stopTimer, startTimer, levelComplete]);
+
+  // v164: extracted verbatim from the old inline loot block so the haptic + slot-machine
+  // chime fire WITH the loot overlay (from the drain), not 2s early at submit time.
+  const playLootChime = useCallback(() => {
+    // Haptic feedback (1-2 sharp pulses, slot-machine win style)
+    try { if (navigator.vibrate) navigator.vibrate([60, 40, 120]); } catch {}
+    // Sound effect if not muted
+    try {
+      if (musicOn) {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const playTone = (freq, time, dur=0.15) => {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.connect(gain); gain.connect(audioCtx.destination);
+          osc.frequency.value = freq;
+          osc.type = "triangle";
+          gain.gain.setValueAtTime(0, audioCtx.currentTime + time);
+          gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + time + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + time + dur);
+          osc.start(audioCtx.currentTime + time); osc.stop(audioCtx.currentTime + time + dur);
+        };
+        // Slot-machine ascending chime
+        playTone(523.25, 0);     // C5
+        playTone(659.25, 0.08);  // E5
+        playTone(783.99, 0.16);  // G5
+        playTone(1046.50, 0.24, 0.3); // C6 (held)
+      }
+    } catch {}
+  }, [musicOn]);
+
+  // v164 (v1.2 #6): drains the celebration queue one overlay at a time. This is the
+  // ONLY place a celebration touches the timer. The clock was already stopped the moment
+  // the celebration was enqueued (see enqueueCelebration), so it stays frozen for the whole
+  // chain — the player is not charged for the flash beat or any of the dwell time. On the
+  // final overlay we run the standard guarded resume (frozen if the level completed /
+  // awaiting first tap / paused), then release any badges that were waiting.
+  const drainCelebrationQueue = useCallback(() => {
+    if (celebrationActiveRef.current) return;      // one at a time
+    if (flashActiveRef.current) return;            // flash still on screen — wait for it
+    // v167: single hand-off point for "celebrations are done, who's next?" Both exits below
+    // route through this so a new stage can never be added to one path and forgotten on the
+    // other. Badges run next if any; otherwise the mascot is released.
+    const handOff = () => {
+      if (badgeQueueRef.current.length > 0) processBadgeQueue();
+      else if (levelCompleteRef.current) setMascotReady(true);
+    };
+    const next = celebrationQueueRef.current.shift();
+    if (!next) { handOff(); return; }
+    celebrationActiveRef.current = true;
+    if (next.kind === "wotd") {
+      setWotdCelebration(true);
+      setConfetti(true); setTimeout(() => setConfetti(false), next.dwellMs);
+    } else if (next.kind === "loot") {
+      setLootCelebration(next.payload);
+      playLootChime();
+    } else if (next.kind === "greatWord") {
+      setGreatWordCelebration(next.payload);
+      triggerHaptic("medium");
+    }
+    if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    celebrationTimerRef.current = setTimeout(() => {
+      celebrationTimerRef.current = null;
+      if (next.kind === "wotd") setWotdCelebration(false);
+      else if (next.kind === "loot") setLootCelebration(null);
+      else if (next.kind === "greatWord") setGreatWordCelebration(null);
+      celebrationActiveRef.current = false;
+      if (celebrationQueueRef.current.length > 0) {
+        // More celebrations pending (e.g. a loot word that is ALSO the Word of the Day).
+        // Brief beat between them, same rhythm as the badge queue.
+        setTimeout(() => drainCelebrationQueue(), 400);
+      } else {
+        // Last celebration done — guarded resume (v80 stop-only model).
+        if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) {
+          stopTimer();
+        } else {
+          startTimer();
+        }
+        handOff();
+      }
+    }, next.dwellMs);
+  }, [stopTimer, startTimer, processBadgeQueue, playLootChime]);
+
+  // v164: enqueue a celebration. Freezes the clock IMMEDIATELY so the 2s flash that
+  // precedes the overlay is not charged to the player, then attempts a drain (which
+  // no-ops while the flash is up — showFlash's dismiss timer kicks it).
+  const enqueueCelebration = useCallback((kind, payload, dwellMs) => {
+    celebrationQueueRef.current.push({ kind, payload, dwellMs });
+    stopTimer();
+    drainCelebrationQueue();
+  }, [stopTimer, drainCelebrationQueue]);
+
+  // v164: hard-clear any in-flight or pending celebration. Called from the reset paths
+  // (fresh game / replay level / next level / PLAY NOW) so a descriptor queued behind a
+  // flash on the last word of a level can't surface on the NEXT level's board.
+  const clearCelebrationQueue = useCallback(() => {
+    if (celebrationTimerRef.current) { clearTimeout(celebrationTimerRef.current); celebrationTimerRef.current = null; }
+    celebrationQueueRef.current = [];
+    celebrationActiveRef.current = false;
+    setWotdCelebration(false);
+    setLootCelebration(null);
+    setGreatWordCelebration(null);
+  }, []);
+
+  // v163 (v1.2 #5): single entry point for the green/red flash popup. Marks the flash
+  // active (which holds the badge queue), then on dismiss clears the flag and drains any
+  // badges that were queued while it was up. Later calls cancel an earlier pending timer,
+  // so an overwrite (word flash → "BOARD CLEAR!" in the same submit) has ONE lifetime and
+  // the queue is released exactly once, when the last flash clears.
+  const showFlash = useCallback((payload, ms = 2000) => {
+    if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
+    flashActiveRef.current = true;
+    setFlash(payload);
+    flashTimerRef.current = setTimeout(() => {
+      flashTimerRef.current = null;
+      setFlash(null);
+      flashActiveRef.current = false;
+      // v167: always route through drainCelebrationQueue. It no-ops if the queue is empty
+      // and owns the hand-off (badges next, else release the mascot), so there is exactly
+      // ONE place that decides what follows a celebration. Previously this branched here
+      // AND inside the drain, which is how the mascot got orphaned on the loot/WoD path.
+      drainCelebrationQueue();
+    }, ms);
+  }, [processBadgeQueue, drainCelebrationQueue]);
 
   const awardBadge = useCallback((id, extraLabel) => {
     const def = BADGE_DEFS.find(b => b.id === id);
@@ -4058,6 +4343,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setTotalScore(0); totalRef.current = 0;
     setLevelScore(0); levelScoreRef.current = 0;
     greatWordFiredRef.current = 0; greatWordIdxRef.current = -1; // v116 (#16): fresh game re-arms + resets Great Word rotation
+    clearCelebrationQueue(); // v164: drop any celebration queued behind a flash
     setStreak(0); setShowBadge(null);
     setLevelComplete(false); setShowBuyModal(false); setShowNameInput(false);
     setShowResetConfirm(false); setShowStuckModal(false); setPaused(false);
@@ -4113,7 +4399,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       setShowReadyScreen(false);
       setShowIntro(true);
     }
-  }, [startTimer, stopTimer, setPerfectDaySync]);
+  }, [startTimer, stopTimer, setPerfectDaySync, clearCelebrationQueue]);
 
   const doLevelReset = useCallback(() => {
     if (ENABLE_BONUS_LEVELS && isBonusLevel(level)) {
@@ -4131,13 +4417,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     levelResetCount.current += 1;
     levelCleanRef.current = false; // #18b: any reset/re-do disqualifies this level's cloud time
     greatWordFiredRef.current = 0; // v116 (#16): replaying the level re-arms Great Word
+    clearCelebrationQueue(); // v164: drop any celebration queued behind a flash
     setTiles(prev => prev.map(t => ({ ...t, used: false })));
     // v79 FIX: a level reset/replay must also freeze the clock until the first tap.
     // Previously this only called resetLevelTimer() (zeroed the clock) but left the
     // timer running and the gate unarmed — a source of the pre-tap timer leak.
     setSelected([]); resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
     setShowResetConfirm(false); setShowStuckModal(false);
-  }, [resetLevelTimer, stopTimer, level, forfeitPerfectDay]);
+  }, [resetLevelTimer, stopTimer, level, forfeitPerfectDay, clearCelebrationQueue]);
 
   const handleUndo = useCallback(() => {
     if (undoUsed || !lastValidEntry || totalRef.current < 1000) return;
@@ -4153,9 +4440,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (lastIdx !== -1) newSubmitted.splice(lastIdx, 1);
     submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
     setUndoUsed(true); setLastValidEntry(null); setShowUndoConfirm(false);
-    setFlash({ word: `↩️ UNDO: ${word}`, score: 0, valid: true });
-    setTimeout(() => setFlash(null), 2000);
-  }, [undoUsed, lastValidEntry, isGuest]);
+    showFlash({ word: `↩️ UNDO: ${word}`, score: 0, valid: true }, 2000);
+  }, [undoUsed, lastValidEntry, isGuest, showFlash]);
 
   const handleNameSave = async () => {
     if (!playerName.trim()) return;
@@ -4440,13 +4726,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
-    if (!online) { setFlash({ word: "No internet connection!", score: 0, valid: false }); setTimeout(() => setFlash(null), 2000); return; }
+    if (!online) { showFlash({ word: "No internet connection!", score: 0, valid: false }, 2000); return; }
     setValidating(true);
     // Hard safety timeout — if validation hangs for any reason, force-clear after 15s
     const safetyTimer = setTimeout(() => {
       setValidating(false);
-      setFlash({ word: "Connection slow — try again", score: 0, valid: false });
-      setTimeout(() => setFlash(null), 2000);
+      showFlash({ word: "Connection slow — try again", score: 0, valid: false }, 2000);
     }, 15000);
     let result;
     try {
@@ -4458,8 +4743,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     }
     clearTimeout(safetyTimer);
     if (result.source === "timeout") {
-      setFlash({ word: "Dictionary lookup timed out — try again.", score: 0, valid: false });
-      setTimeout(() => setFlash(null), 3000);
+      showFlash({ word: "Dictionary lookup timed out — try again.", score: 0, valid: false }, 3000);
       setShake(true); setTimeout(() => setShake(false), 500);
       setSelected([]); setValidating(false); return;
     }
@@ -4488,8 +4772,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setStreak(newStreak);
     let flashMsg = currentWord;
     if (valid && longBonus > 0) flashMsg = `${currentWord}  +${longBonus} bonus!`;
-    setFlash({ word: flashMsg, score, valid, medical: isMedical, collegiate: isCollegiate });
-    setTimeout(() => setFlash(null), 2000);
+    showFlash({ word: flashMsg, score, valid, medical: isMedical, collegiate: isCollegiate }, 2000);
     if (valid) {
       triggerHaptic("medium");
     } else {
@@ -4534,21 +4817,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
         if (isGuest) saveLifetimeData(lifetimeRef.current);
         // Trigger celebration
-        stopTimer();
-        setConfetti(true); setTimeout(() => setConfetti(false), 4000); // v113: 4s celebration standard
-        setWotdCelebration(true);
-        setTimeout(() => {
-          setWotdCelebration(false);
-          // v80 (stop-only model): the fair-timer effect no longer auto-resumes. Resume
-          // explicitly here for the normal mid-play case (player found the WoD while
-          // playing). The startTimer() guard + these checks keep it FROZEN if the level
-          // was completed during the celebration or we're awaiting the next level's first tap.
-          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) {
-            stopTimer();
-          } else {
-            startTimer();
-          }
-        }, 4000); // v113: 4s celebration standard (was 5000)
+        // v164: enqueued, not fired directly. enqueueCelebration() stops the clock now and
+        // the drain runs it after the flash clears. Confetti + guarded resume live in the drain.
+        enqueueCelebration("wotd", null, 8000); // v172: 4s -> 8s (Daryl). Loot/Great Word unchanged.
       }
       const newTiles = tiles.map(t => {
         if (!selected.includes(t.id)) return t;
@@ -4564,73 +4835,32 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         // level, and the loot celebration already shows the score + carries the 5x.
         greatWordFiredRef.current = level;
         // Fire celebration: popup, haptic, sound (no confetti per spec)
-        stopTimer();
-        setLootCelebration({ word: currentWord, score, letter: usedLootTile.letter });
-        // Haptic feedback (1-2 sharp pulses, slot-machine win style)
-        try { if (navigator.vibrate) navigator.vibrate([60, 40, 120]); } catch {}
-        // Sound effect if not muted
-        try {
-          if (musicOn) {
-            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            const playTone = (freq, time, dur=0.15) => {
-              const osc = audioCtx.createOscillator();
-              const gain = audioCtx.createGain();
-              osc.connect(gain); gain.connect(audioCtx.destination);
-              osc.frequency.value = freq;
-              osc.type = "triangle";
-              gain.gain.setValueAtTime(0, audioCtx.currentTime + time);
-              gain.gain.linearRampToValueAtTime(0.15, audioCtx.currentTime + time + 0.02);
-              gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + time + dur);
-              osc.start(audioCtx.currentTime + time); osc.stop(audioCtx.currentTime + time + dur);
-            };
-            // Slot-machine ascending chime
-            playTone(523.25, 0);     // C5
-            playTone(659.25, 0.08);  // E5
-            playTone(783.99, 0.16);  // G5
-            playTone(1046.50, 0.24, 0.3); // C6 (held)
-          }
-        } catch {}
-        // Auto-dismiss after 4s (v113 standard); the fair-timer useEffect handles restart.
-        setTimeout(() => {
-          setLootCelebration(null);
-          // v80 (stop-only model): resume explicitly for the normal mid-play case;
-          // stay frozen if level just completed / awaiting first tap / paused.
-          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) {
-            stopTimer();
-          } else {
-            startTimer();
-          }
-        }, 4000); // v113: 4s celebration standard (was 5000)
+        // v164: enqueued. The haptic + slot-machine chime ride along in onShow so they
+        // land WITH the overlay, not 2s early under the flash.
+        enqueueCelebration("loot", { word: currentWord, score, letter: usedLootTile.letter }, 4000);
       }
       // ── v116 (#16): GREAT WORD moment ──────────────────────────────────────────
-      // Fires when a SINGLE submitted word's real score (currentScoreReal, 5x-inclusive)
-      // meets the per-level threshold, once per level, gated behind the mascot toggle,
-      // and NOT on a loot word (loot wins — see collision marker above, which already
-      // set the guard). Full 4.0s clock freeze with the guarded resume, same pattern
-      // as loot/WoD. currentScoreReal is in scope (declared before the flash block).
+      // Fires when a SINGLE submitted word's score meets the per-level threshold, once per
+      // level, gated behind the mascot toggle, and NOT on a loot word (loot wins — see the
+      // collision marker above, which already set the guard).
+      //
+      // v164 (v1.2 #7): use `score` (= currentScoreReal + longBonus), NOT currentScoreReal.
+      // The bubble previously interpolated the BASE score while the green flash showed
+      // base+bonus — so an 11-letter word read "+128 worth o' plunder" under a "+138 pts"
+      // banner. Daryl's call (July 9): the bonus counts for BOTH the displayed number and
+      // for QUALIFYING. In practice qualification is unchanged — an 8+ letter word scoring
+      // under its level threshold on base alone is effectively unreachable.
       if (
         !isLootWord &&
         greatWordFiredRef.current !== level &&
         showMascotCelebrations() &&
-        currentScoreReal >= (GREAT_WORD_THRESH[level] || 40)
+        score >= (GREAT_WORD_THRESH[level] || 40)
       ) {
         greatWordFiredRef.current = level;
         greatWordIdxRef.current = greatWordIdxRef.current + 1;
-        const gwLine = pickGreatWordSaying(greatWordIdxRef.current).replace("[score]", String(currentScoreReal));
-        stopTimer();
-        setGreatWordCelebration({ line: gwLine });
-        triggerHaptic("medium");
-        if (greatWordTimerRef.current) clearTimeout(greatWordTimerRef.current);
-        greatWordTimerRef.current = setTimeout(() => {
-          setGreatWordCelebration(null);
-          // Guarded resume — stay frozen if the level just completed / awaiting first
-          // tap / paused; otherwise resume play. Identical to loot/WoD.
-          if (awaitingFirstTapRef.current || levelCompleteRef.current || pausedRef.current) {
-            stopTimer();
-          } else {
-            startTimer();
-          }
-        }, 5000); // v117: Great Word dwell 4s → 5s (Daryl: 4s too quick in real play; Loot+WoD stay 4s)
+        const gwLine = pickGreatWordSaying(greatWordIdxRef.current).replace("[score]", String(score));
+        // v164: enqueued; haptic rides along in the drain so it lands with the overlay.
+        enqueueCelebration("greatWord", { line: gwLine }, 5000); // v117: Great Word dwell 5s
       }
       setTiles(newTiles);
       setLastValidEntry({ word: currentWord, score, tileIds: [...selected], levelScoreDelta: score });
@@ -4672,7 +4902,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         levelScoreRef.current += bonus; setLevelScore(levelScoreRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
         if (isGuest) saveLifetimeData(lifetimeRef.current);
-        setFlash({ word: "BOARD CLEAR!", score: bonus, valid: true });
+        showFlash({ word: "BOARD CLEAR!", score: bonus, valid: true }, 2000);
         setConfetti(true); setTimeout(() => setConfetti(false), 4000);
         triggerHaptic("heavy");
         stopTimer();
@@ -4848,6 +5078,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setLevel(newLevel); setShowBuyModal(false);
     levelScoreRef.current = 0; setLevelScore(0);
     greatWordFiredRef.current = 0; // v116 (#16): new level → Great Word can fire again
+    clearCelebrationQueue(); // v164: drop any celebration queued behind a flash
     const rng = seededRandom(getDailySeed() + newLevel * 999);
     const count = 42 + (newLevel - 1) * 7;
     // v130: for a direct jump, derive the cumulative tile-count offset for the target level so tile
@@ -5214,6 +5445,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             setTotalScore(0); totalRef.current = 0;
             setLevelScore(0); levelScoreRef.current = 0;
             greatWordFiredRef.current = 0; greatWordIdxRef.current = -1; // v116 (#16): new game via PLAY NOW re-arms + resets rotation
+            clearCelebrationQueue(); // v164: drop any celebration queued behind a flash
             setStreak(0); setLevelComplete(false);
             // v100 (item #2c): respect the per-day PD forfeit flag here too — starting another
             // game today via PLAY NOW must not re-open a Perfect Day shot once forfeited.
@@ -5501,11 +5733,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* Word of the Day celebration — fires when player spells the WoD */}
       {wotdCelebration && (
         <div style={{position:"fixed",inset:0,zIndex:9650,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
-          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 4s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
-            <div style={{fontSize:ipadIntro(42),marginBottom:6}}>🎯✨</div>
-            <div style={{fontSize:ipadIntro(14),color:"#f6d365",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>WORD OF THE DAY!</div>
-            <div style={{fontSize:ipadIntro(26),fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:8}}>{wotd}</div>
-            <div style={{fontSize:ipadIntro(18),fontWeight:"bold",color:"#6ee7b7"}}>+1,000 pts!</div>
+          {/* v169-v171 (v1.2 #12): illustrated WoD panel. Was a purple card with a 🎯✨ emoji, a
+              "WORD OF THE DAY!" label, the word, and "+1,000 pts!".
+              Now: the pirate and one line. Nothing else.
+              Rationale (Daryl, July 9): finding, spelling and submitting the Word of the Day is an
+              exceedingly deliberate act the player just performed — there is no question what the
+              celebration is for, so the label is redundant, and so is echoing the word back. The
+              saying carries the +1,000 itself.
+              NOT gated by the mascot toggle: WoD is a STANDALONE celebration, fires at most once
+              per game, and is the biggest single prize. Every player sees it. */}
+          <div style={{background:"linear-gradient(135deg,#a78bfa,#7c3aed)",border:"3px solid #f6d365",borderRadius:22,padding:`${ipadIntro(22)}px ${ipadIntro(24)}px`,boxShadow:"0 0 60px rgba(246,211,101,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 8s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
+            <img src="/wotd-pirate.png" alt="" style={{display:"block",height:ipadIntro(340),width:"auto",margin:"0 auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL4 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
+            {/* Darkened band behind the saying. The card is a gradient, and gold (#f6d365) on its
+                LIGHT end (#a78bfa) measures 1.87:1 contrast — unreadable, the same mistake we just
+                fixed on the speech bubbles. Off-white on a 22% black scrim holds contrast wherever
+                the gradient lands. (Daryl chose the band over plain off-white.) */}
+            <div style={{marginTop:ipadIntro(14),background:"rgba(0,0,0,0.22)",borderRadius:14,padding:`${ipadIntro(10)}px ${ipadIntro(12)}px`}}>
+              <div style={{fontSize:ipadIntro(15),color:"#fdf6e3",fontStyle:"italic",fontWeight:"bold",lineHeight:1.45}}>{pickWotdSaying()}</div>
+            </div>
           </div>
         </div>
       )}
@@ -5527,7 +5772,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           { lvl: 3, x: 0.255, y: 0.474 }, // mid-left
           { lvl: 4, x: 0.339, y: 0.276 }, // upper-left
         ];
-        const COIN = isIpadWidth() ? 46 : 30; // on-map coin diameter (px), tunable
+        const COIN = isIpadWidth() ? 64 : 42; // on-map coin diameter (px), tunable
         // v133: chest center traced off the actual level-map-bg art (952x1288). The L5 "treasure
         // reached" payoff flies the WP4 coins into this point.
         const CHEST = { x: 0.495, y: 0.145 };
@@ -5563,7 +5808,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               <img key={`${wp.lvl}-${i}-${mode}`} src="/trail-coin.png" alt="" className={cls} style={{
                 position:"absolute", width:COIN, height:"auto",
                 left:`calc(${wp.x*100}% + ${ox}px)`, top:`calc(${wp.y*100}% + ${oy}px)`,
-                transform:"translate(-50%,-50%)", pointerEvents:"none", ...extra,
+                transform:"translate(-50%,-50%)", pointerEvents:"none",
+                // v161: golden glow (lighter than the coin edge) so coins pop off the busy parchment
+                // WITHOUT the dark drop-shadow "oxidation/tarnish" look. Layered light-gold halos.
+                filter:"drop-shadow(0 0 6px rgba(255,214,90,0.95)) drop-shadow(0 0 14px rgba(255,190,40,0.7))",
+                ...extra,
               }} />
             );
           }
@@ -5603,19 +5852,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               {/* v133: L4->L5 chest fill — the L5 clear's own 5 doubloons fly up into the chest (the
                   payoff). v147: 5 coins (was 4) and INDEPENDENT of the resting WP4 pile above. */}
               {levelAnnounceNum === 5 && pile(WAYPTS.find(wp => wp.lvl === 4), "fly", 5)}
-              {/* Center text block — sits in the map's empty middle. */}
-              <div style={{position:"absolute",top:"42%",left:0,right:0,textAlign:"center",transform:"translateY(-50%)",padding:"0 10%"}}>
-                <div style={{color:"#961c18",fontWeight:"bold",fontSize:"clamp(28px, 7vh, 64px)",textShadow:"2px 2px 0 rgba(70,45,20,0.5)",lineHeight:1}}>Level {levelAnnounceNum}</div>
-                <div style={{color:"#8a6a1c",fontWeight:"bold",fontSize:"clamp(18px, 4vh, 38px)",marginTop:"0.35em",textShadow:"1px 1px 0 rgba(70,45,20,0.4)"}}>Good Luck!</div>
-              </div>
-              {/* Dismiss button — v134: moved UP to 50% (was 56%) so the "tap to dismiss" text clears
-                  the flashing L1 coin at WP1 (~63% down), which the tail of the label was overlapping.
-                  "tap to dismiss" enlarged for visibility. */}
-              <div style={{position:"absolute",top:"50%",left:0,right:0,textAlign:"center"}}>
-                <button onClick={dismissLevelWelcome} style={{padding:`${isIpadWidth()?14:10}px ${isIpadWidth()?30:20}px`,borderRadius:12,background:"linear-gradient(135deg,#f6d365,#e0a83a)",color:"#3a2408",fontFamily:"Georgia,serif",fontWeight:"bold",fontSize:"clamp(14px, 2.4vh, 22px)",border:"2px solid #a6741f",boxShadow:"0 4px 14px rgba(0,0,0,0.45)",cursor:"pointer",whiteSpace:"nowrap"}}>Course is Set. Let's Sail!</button>
-                <div style={{marginTop:"0.55em"}}>
-                  <button onClick={dismissLevelWelcome} style={{padding:`${isIpadWidth()?10:7}px ${isIpadWidth()?22:16}px`,borderRadius:10,background:"rgba(250,243,220,0.92)",color:"#1a1208",fontFamily:"Georgia,serif",fontWeight:"bold",fontStyle:"italic",fontSize:"clamp(13px, 2.1vh, 19px)",border:"2px solid #2a1c0a",boxShadow:"0 3px 10px rgba(0,0,0,0.4)",cursor:"pointer",whiteSpace:"nowrap"}}>tap to dismiss</button>
+              {/* v173: Title + dismiss button are ONE flow column, not two absolutely-positioned
+                  blocks. Two bugs were compounding here:
+                    1. The text sized with `vh` (VIEWPORT height) while both blocks positioned with
+                       `%` (CONTAINER height). The map container is roughly half the viewport on a
+                       phone, so "Level N" rendered at 7vh = 64px inside a ~430px box — the text
+                       block grew until it ran under the button, which sat at a fixed top:50%.
+                    2. Two absolute siblings can't push each other apart, so nothing could give.
+                  Now: one flex column bounded to the map's empty middle band (20%..60%). The button
+                  follows the text in normal flow, so it can NEVER overlap it, whatever the fonts
+                  resolve to. The band's bottom edge (60%) also keeps the button clear of the
+                  flashing L1 coin at WP1 (~63%) — the constraint v134 was hand-tuning for.
+                  Fonts now scale to the container via clamp() on `%`-free px values. */}
+              <div style={{position:"absolute",top:"20%",bottom:"40%",left:0,right:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:isIpadWidth()?14:9,padding:"0 10%",pointerEvents:"none"}}>
+                <div style={{textAlign:"center",pointerEvents:"none"}}>
+                  <div style={{color:"#961c18",fontWeight:"bold",fontSize:isIpadWidth()?64:34,textShadow:"2px 2px 0 rgba(70,45,20,0.5)",lineHeight:1}}>Level {levelAnnounceNum}</div>
+                  <div style={{color:"#8a6a1c",fontWeight:"bold",fontSize:isIpadWidth()?38:21,marginTop:"0.35em",textShadow:"1px 1px 0 rgba(70,45,20,0.4)",lineHeight:1.1}}>Good Luck!</div>
                 </div>
+                <button onClick={dismissLevelWelcome} style={{pointerEvents:"auto",padding:`${isIpadWidth()?10:7}px ${isIpadWidth()?22:16}px`,borderRadius:10,background:"rgba(250,243,220,0.92)",color:"#1a1208",fontFamily:"Georgia,serif",fontWeight:"bold",fontStyle:"italic",fontSize:isIpadWidth()?19:14,border:"2px solid #2a1c0a",boxShadow:"0 3px 10px rgba(0,0,0,0.4)",cursor:"pointer",whiteSpace:"nowrap"}}>Tap to Dismiss Map</button>
               </div>
             </div>
           </div>
@@ -5656,71 +5910,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
       )}
 
-      {/* v113: Great Word popup — PREVIEW render (debug-triggered via greatWordPreview).
-          Reuses the proven Level-Clear speech-bubble geometry verbatim, over
-          great-word-pirate.png. v113 will add the real trigger/rotation/collision logic;
-          this render block is the same one it will use. LAB≠LIVE: the tail-to-head gap
-          must be eyeballed against great-word-pirate.png specifically at v113 wiring —
-          this preview is exactly where to check it. */}
-      {greatWordPreview && (
-        <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
-          {(()=>{
-            const pw = ipadTour(120);
-            const bw = pw * 1.15;
-            const cropWR = 786/1024, cropHR = 546/1024;
-            const solidBottomFrac = (1 + cropHR)/2;
-            const marginBelow = bw * (1 - solidBottomFrac);
-            const gap = pw * (10/162);
-            const bubbleTop = -bw + marginBelow - gap;
-            const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
-            const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
-            const zWidth = (81.7/100) * cropWR * 100;
-            const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115: 16→11 (band grew, stays centered)
-            const zHeight = (66/100) * cropHR * 100;              // v115: 54→66 uses more of the bubble interior
-            return (
-              <div style={{position:"relative",display:"inline-block"}}>
-                <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
-                  <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
-                  {/* v114: auto-shrink text to fit the fixed zone (shared with Level Clear) */}
-                  <BubbleFitText text={greatWordPreview.line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(11)}/>
-                </div>
-                <img src="/great-word-pirate.png" alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL2 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      {/* PREVIEW render (debug-triggered via greatWordPreview). v168: shares GreatWordOverlay
+          with the live block, so the preview is guaranteed to show exactly what players see.
+          State stays isolated (own variable, no rotation counter / guard touched). */}
+      {greatWordPreview && <GreatWordOverlay line={greatWordPreview.line}/>}
 
-      {/* v116 (#16): Great Word popup — LIVE render (real word-submit trigger via
-          greatWordCelebration). Geometry IDENTICAL to the debug preview above; kept a
-          separate block + state so debug triggers never touch live rotation/guard. */}
-      {greatWordCelebration && (
-        <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
-          {(()=>{
-            const pw = ipadTour(120);
-            const bw = pw * 1.15;
-            const cropWR = 786/1024, cropHR = 546/1024;
-            const solidBottomFrac = (1 + cropHR)/2;
-            const marginBelow = bw * (1 - solidBottomFrac);
-            const gap = pw * (10/162);
-            const bubbleTop = -bw + marginBelow - gap;
-            const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
-            const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
-            const zWidth = (81.7/100) * cropWR * 100;
-            const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115 zone (11%/66%)
-            const zHeight = (66/100) * cropHR * 100;
-            return (
-              <div style={{position:"relative",display:"inline-block"}}>
-                <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
-                  <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
-                  <BubbleFitText text={greatWordCelebration.line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(11)}/>
-                </div>
-                <img src="/great-word-pirate.png" alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL2 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
-              </div>
-            );
-          })()}
-        </div>
-      )}
+      {/* v116 (#16): LIVE render (real word-submit trigger via greatWordCelebration).
+          v168: same GreatWordOverlay component as the preview above — separate STATE, shared
+          markup, so the two can never drift apart again (they had: bw 1.15 vs 1.27). */}
+      {greatWordCelebration && <GreatWordOverlay line={greatWordCelebration.line}/>}
 
       {showBadge&&(()=>{ const b=BADGE_DEFS.find(x=>x.id===showBadge); return b?(<div style={{position:"fixed",top:72,left:"50%",zIndex:9998,animation:"badgePop 5s forwards",background:"linear-gradient(135deg,#f6d365,#fda085)",borderRadius:20,padding:`${ipadTour(12)}px ${ipadTour(26)}px`,boxShadow:"0 8px 32px rgba(0,0,0,0.7)",textAlign:"center",whiteSpace:"nowrap"}}>
         <div style={{display:"flex",justifyContent:"center"}}>{renderBadgeIcon(b)}</div>
@@ -6068,17 +6266,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(36)}px ${ipadTour(32)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(320),width:"90%"}}>
           {/* v94: celebrating pirate with a per-level entrance animation + level-specific saying */}
           {/* v104: mascot image + saying gated behind showMascotCelebrations(); results below always show */}
-          {showMascotCelebrations() && (()=>{
+          {/* v162 (v1.2 #2): also gated on mascotReady so it pops in only AFTER the badge queue drains */}
+          {showMascotCelebrations() && mascotReady && (()=>{
             // v109: speech bubble above the mascot's head, replacing the old caption-below.
-            // Geometry locked in the lab (bubbleWidthPct=115, gap≈10px@162 → fraction, textTop=16%, textHeight=54%).
+            // Geometry from the lab (gap≈10px@162 → fraction, textTop=11%, textHeight=66%).
+            // bubbleWidthPct: 115 (v109) → 127 (v162) → 185 (v165).
             // Source PNG is square with transparent margin; solid bubble crops to 1.44:1 (w:h).
             const pw = ipadTour(120);                     // rendered pirate width
-            const bw = pw * 1.15;                          // bubbleWidthPct=115
+            const bw = pw * 1.85;                          // v165: 1.27→1.85 — widen for legibility (Daryl, July 9). v162 groupDrop absorbs the extra upward extent.
             const cropWR = 786/1024, cropHR = 546/1024;   // solid-bubble fraction of the square img
             const solidBottomFrac = (1 + cropHR)/2;       // ~0.766 within the square
             const marginBelow = bw * (1 - solidBottomFrac);
             const gap = pw * (10/162);                     // lab gap normalized to pirate width (≈17px @ iPad)
             const bubbleTop = -bw + marginBelow - gap;     // tail tip sits `gap` above top of head
+            // v162: the bubble extends upward by roughly |bubbleTop|; add that as top margin on
+            // the group so the whole mascot+bubble drops down, clearing the top clip AND moving
+            // clear of the badge banner zone (fixed top:72). Small safety pad on top.
+            const groupDrop = Math.max(0, -bubbleTop) + ipadTour(14);
             const cropLeftFrac = (1 - cropWR)/2, cropTopFrac = (1 - cropHR)/2;
             const zLeft = (cropLeftFrac + (9.4/100)*cropWR) * 100;
             const zWidth = (81.7/100) * cropWR * 100;
@@ -6086,12 +6290,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             const zHeight = (66/100) * cropHR * 100;              // v115: textHeightPct 54→66 uses more bubble interior
             const line = clearSayingText || pickClearSaying(level, Math.max(0, clearSayingIdxRef.current));
             return (
-              <div style={{position:"relative",display:"inline-block",marginBottom:4}}>
+              <div style={{position:"relative",display:"inline-block",marginBottom:4,marginTop:groupDrop}}>
                 {/* speech bubble overlay — absolute, above head */}
                 <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
                   <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
                   {/* v114: auto-shrink text to fit the fixed zone (was static fontSize → clipped long lines) */}
-                  <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(11)}/>
+                  <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(22)}/>
                 </div>
                 <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
               </div>
@@ -6338,7 +6542,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             {tileRows.map((row,ri)=>(
               <div key={ri} style={{display:"flex",justifyContent:"center",gap:ipadTile(3,level),marginBottom:ipadTile(3,level)}}>
                 {row.map(tile=>{ const isSel=selected.includes(tile.id); const isDouble=tile.bonus==="double"; const isTriple=tile.bonus==="triple"; const isLootUsed=tile.lootUsed; return(
-                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${isLootUsed?" loot-used":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&(awaitingFirstTapRef.current&&(awaitingFirstTapRef.current=false,setAwaitingFirstTap(false)),triggerHaptic("light"),setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id]))} style={{width:ipadTileW(38,level),height:ipadTile(44,level),background:isLootUsed?"linear-gradient(135deg,#f6d365,#fda085)":tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isLootUsed?"2px solid #00e676":isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)",boxShadow:isLootUsed?"0 0 12px rgba(246,211,101,0.6),0 0 4px rgba(0,230,118,0.5)":isSel?`0 0 ${ipadTile(12,level)}px ${ipadTile(3,level)}px rgba(0,230,118,0.85), 0 0 ${ipadTile(4,level)}px rgba(0,230,118,0.5)`:"none",position:"relative"}}>
+                  <div key={tile.id} className={`ll-tile${isSel?" sel":""}${tile.used?" used":""}${isDouble?" bonus-double":""}${isTriple?" bonus-triple":""}${isLootUsed?" loot-used":""}${paused?" paused-tile":""}`} onClick={()=>!tile.used&&!validating&&!paused&&(awaitingFirstTapRef.current&&(awaitingFirstTapRef.current=false,setAwaitingFirstTap(false),!levelCompleteRef.current&&startTimer()),triggerHaptic("light"),setSelected(prev=>prev.includes(tile.id)?prev.filter(i=>i!==tile.id):[...prev,tile.id]))} style={{width:ipadTileW(38,level),height:ipadTile(44,level),background:isLootUsed?"linear-gradient(135deg,#f6d365,#fda085)":tile.used?"rgba(255,255,255,0.02)":isSel?"linear-gradient(135deg,#5c6bc0,#512da8)":isTriple?"linear-gradient(135deg,rgba(224,64,251,0.35),rgba(123,31,162,0.25))":isDouble?"linear-gradient(135deg,rgba(255,215,0,0.35),rgba(245,124,0,0.25))":"linear-gradient(135deg,rgba(255,255,255,0.15),rgba(255,255,255,0.07))",borderRadius:8,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",border:isLootUsed?"2px solid #00e676":isSel?"2px solid #9fa8da":isTriple?"1px solid rgba(224,64,251,0.7)":isDouble?"1px solid rgba(255,215,0,0.7)":"1px solid rgba(255,255,255,0.22)",boxShadow:isLootUsed?"0 0 12px rgba(246,211,101,0.6),0 0 4px rgba(0,230,118,0.5)":isSel?`0 0 ${ipadTile(12,level)}px ${ipadTile(3,level)}px rgba(0,230,118,0.85), 0 0 ${ipadTile(4,level)}px rgba(0,230,118,0.5)`:"none",position:"relative"}}>
                     <div style={{fontSize:ipadTile(17,level),fontWeight:"bold",lineHeight:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.2)":"#fff"}}>{tile.letter}</div>
                     <div style={{fontSize:ipadTile(7,level),fontWeight:"bold",marginTop:1,color:isLootUsed?"#1a1a2e":tile.used?"rgba(255,255,255,0.1)":isTriple?"#e040fb":isDouble?"#ffd700":"#fda085"}}>{isLootUsed?"5×":isTriple?"3×":isDouble?"2×":tile.value}</div>
                     {isLootUsed&&<div style={{position:"absolute",top:-4,right:-4,fontSize:ipadTile(10,level)}}>✨</div>}

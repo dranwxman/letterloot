@@ -9,6 +9,7 @@
 #
 # Created July 3, 2026 (Option B — full public/ coverage, not just mascot art).
 # Updated July 6, 2026 — added Trail of Loot assets (level-map-bg.jpg, trail-coin.png); manifest 14 → 16.
+# Updated July 10, 2026 — WoD redesign (v171): +wotd-pirate.png, -wotd-pirate-chest.png, -wotd-coin.png; manifest 16 → 15.
 # When you add a NEW required file to public/, add its name to REQUIRED below.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -32,8 +33,7 @@ REQUIRED=(
   "pirate-captain-female.png"
   "perfect-day-pirates.png"
   "great-word-pirate.png"
-  "wotd-pirate-chest.png"
-  "wotd-coin.png"
+  "wotd-pirate.png"
   "Speech_Bubble.png"
   # Trail of Loot (Level Welcome map page)
   "level-map-bg.jpg"

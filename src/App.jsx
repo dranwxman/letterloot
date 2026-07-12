@@ -209,7 +209,17 @@ const PIRATE_CLEAR_ANIM = { 1:"plClearL1", 2:"plClearL2", 3:"plClearL3", 4:"plCl
 // genuine safety ceiling rather than the operative value, so future bubble-geometry changes
 // pick up the right font automatically instead of needing a hand-tuned constant.
 const BUBBLE_MIN_PX = 9;   // absolute legibility floor; below this we accept overflow rather than shrink further
-function BubbleFitText({ text, zLeft, zTop, zWidth, zHeight, maxPx }) {
+// v176 (Item 14 RESOLVED): the text zone no longer derives its HEIGHT from the bubble <img>.
+// Measured on-device (v175 instrumentation): on a cold render the fit ran in useLayoutEffect
+// BEFORE /Speech_Bubble.png had decoded, so the wrapper had height 0, so `height:${zHeight}%`
+// resolved to 0px, so the box had boxH=0, so nothing fit and the search bottomed out at
+// BUBBLE_MIN_PX=9 (an illegible smear). Warm cache → boxH≈44 → best≈15. Same screen, different
+// result depending purely on whether the PNG was cached — that was the L5 "screwball."
+// FIX (Option B): the caller computes the zone in PIXELS from `bw` (the bubble is a fixed
+// 1024×1024 square rendered at width:bw, so its rendered height is also bw). The box gets an
+// explicit px height that can never be 0. `zLeft`/`zTop` stay percentages — position was never
+// the problem, only height. `boxWpx`/`boxHpx` are the deterministic zone dimensions.
+function BubbleFitText({ text, zLeft, zTop, boxWpx, boxHpx, maxPx }) {
   const boxRef = useRef(null);
   const innerRef = useRef(null);
   const [fontPx, setFontPx] = useState(BUBBLE_MIN_PX);
@@ -242,14 +252,14 @@ function BubbleFitText({ text, zLeft, zTop, zWidth, zHeight, maxPx }) {
     }
     box.style.fontSize = best + "px";
     setFontPx(best);
-  }, [text, maxPx, zWidth, zHeight]);
+  }, [text, maxPx, boxWpx, boxHpx]);
   return (
     <div
       ref={boxRef}
       style={{
         position: "absolute",
         left: `${zLeft}%`, top: `${zTop}%`,
-        width: `${zWidth}%`, height: `${zHeight}%`,
+        width: `${boxWpx}px`, height: `${boxHpx}px`,
         display: "flex", alignItems: "center", justifyContent: "center",
         textAlign: "center", color: "#5a3a12", fontFamily: "Georgia,serif",
         fontWeight: "bold", lineHeight: 1.15, fontSize: fontPx + "px",
@@ -286,7 +296,7 @@ const ipadW = (base) => isIpadWidth() ? Math.round(base * 1.78) : base;
 // tuning so 7/8/10-row boards stop clipping the last row + End Game bar on the 11" iPad
 // (reviewer's device). L1 (6 rows, fits) and L4 (9 rows, the good-fit anchor) UNCHANGED.
 // Locked values sit just under the computed 11" max-fit (2.09/1.83/1.47) for a safety margin.
-const IPAD_TILE_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.05, 3: 1.80, 4: 1.6, 5: 1.44 };
+const IPAD_TILE_SCALE_BY_LEVEL = { 1: 1.86, 2: 1.74, 3: 1.52, 4: 1.35, 5: 1.22 }; // v183: additional ~6% HEIGHT trim on top of v182 (v182 was {1:1.98,2:1.85,3:1.62,4:1.44,5:1.30}). v181's 6% and v182's +4% still left all levels clipping (top row OR bottom border, never both at once). ~16% cumulative below the v180 baseline {1:2.2,2:2.05,3:1.80,4:1.6,5:1.44}. NOTE: if this STILL clips, the remaining overflow is likely FIXED CHROME (header+stats+input+2 bottom buttons), not tile size — switch to trimming chrome / capping the play-column to viewport rather than shrinking tiles further. HEIGHT only; width/13"/iPhone untouched.
 const IPAD_TILE_WIDTH_SCALE_BY_LEVEL = { 1: 2.2, 2: 2.2, 3: 2.1, 4: 2.15, 5: 2.05 }; // v60: L4 1.9→2.15, L5 1.85→2.05 (bug #13). 11" width unchanged — nothing overflowed sideways.
 // v125 13" (>=1000px) HEIGHT tier: the 13" has ~917px board-height budget vs the 11"'s
 // ~745px (≈1.23×), so it can run LARGER tiles at every level and fill its bigger screen
@@ -330,14 +340,27 @@ const ipadTileW = (base, level = 1) => {
   return Math.round(base * scale);
 };
 const ipadChrome = (base) => isIpadWidth() ? Math.round(base * 1.5) : base;
-const ipadIntro = (base) => isIpadWidth() ? Math.round(base * 2.0) : base; // welcome/intro card content
-const ipadIntroPad = (base) => isIpadWidth() ? Math.round(base * 2.0) : base; // welcome/intro card padding
+// v179: TIER-AWARE (same rationale as ipadTour). Pop-ups/modals/intro cards rendered too
+// large on the 11" tier (July 12 playthrough — "taking up entire screen"). 13" unchanged at
+// 2.0x; 11" trims to 1.72x (~14%). iPhone unchanged.
+const ipadIntro = (base) => isIpadWidth() ? (isLargeIpad() ? Math.round(base * 2.0) : Math.round(base * 1.63)) : base; // welcome/intro card content (v180: 11" 1.72->1.63)
+const ipadIntroPad = (base) => isIpadWidth() ? (isLargeIpad() ? Math.round(base * 2.0) : Math.round(base * 1.63)) : base; // welcome/intro card padding (v180: 11" 1.72->1.63)
 // ipadProfile (added v48): Profile Setup screen — 2.0× was overflowing on 11" iPad
 // (Save button below the safe area). 1.5× on iPad keeps everything visible while
 // still feeling proportional. iPhone unchanged.
 const ipadProfile = (base) => isIpadWidth() ? Math.round(base * 1.5) : base;
 const ipadProfilePad = (base) => isIpadWidth() ? Math.round(base * 1.5) : base;
-const ipadTour = (base) => isIpadWidth() ? Math.round(base * 2.3) : base; // tour scenes - slightly larger than intro
+// v179: TIER-AWARE. Was a flat 2.3x on BOTH iPad tiers, which OVERFLOWED the 11" tier
+// (celebration cards, Great Word, Level-Clear all rendered too large and ran off the 11"
+// reviewer device — confirmed in full playthrough July 12). The 13" tier is UNCHANGED at
+// 2.3x (it fits and is approved); only the 11" tier (768-999px) trims to 1.95x (~15%) so
+// these surfaces sit inside the 11" viewport. iPhone (base) unchanged. Board is a SEPARATE
+// system (ipadTile/ipadTileW) and is intentionally not touched here.
+const ipadTour = (base) => {
+  if (!isIpadWidth()) return base;                 // iPhone: identity
+  if (isLargeIpad()) return Math.round(base * 2.3); // 13": unchanged/approved
+  return Math.round(base * 1.85);                   // 11": trimmed to fit (v180: 1.95->1.85)
+};
 const ipadMenu = (base) => isIpadWidth() ? Math.round(base * 1.75) : base; // menu hub - moderate scale, fits all cards on screen
 const ipadDense = (base) => isIpadWidth() ? Math.round(base * 1.6) : base; // dense screens (Stats, Debug Menu) - v60: bumped 1.3→1.6 for readability (bug #15)
 const ipadWord = (base) => isIpadWidth() ? Math.round(base * 2.5) : base; // word-being-built row (largest scale)
@@ -355,13 +378,26 @@ const ipadBoardW = () => isIpadWidth() ? 1500 : undefined; // wider tile-board c
 // callers still own their own state, they just render through one function.
 //
 // Card: matches the Level-Clear panel's gradient + gold border, but maxWidth ipadTour(420)
-// rather than 320 — this panel carries no results text, and the bubble (bw = 1.85*pw) needs
-// the room. Horizontal padding trimmed to 20 so the bubble clears a narrow iPhone
-// (375px viewport at width:92% → 345px card → 305px inner vs bw 278px).
+// rather than 320 — this panel carries no results text.
+// NOTE (v174): the CARD does not constrain the bubble. The bubble is position:absolute inside
+// an inline-block group, so it does not participate in the group's width (the group is sized by
+// the pirate, width:pw) and there is no overflow:hidden anywhere on the path. The bubble simply
+// overhangs the card. The real constraint is the VIEWPORT: group is centered in the card, card
+// is centered in the overlay, and the bubble is centered on the group — so the bubble is
+// centered on the screen and bw must fit within (viewport - 40px overlay padding).
 function GreatWordOverlay({ line }) {
-  const pw = ipadTour(150);                       // v168: 120→150 (+25%). The Level-Clear mascot is
+  const pw = ipadTour(180);                       // v174: 150→180 (+20%). The Level-Clear mascot is
                                                   // boxed in a results card; this one floats, so it
                                                   // needs more presence to hold the screen.
+                                                  // 180 is the CEILING, not a taste call. The bubble is
+                                                  // centered on the viewport (translateX(-50%) lives in
+                                                  // the bubbleIn keyframes, fill-mode both), so bw must
+                                                  // fit inside viewport-minus-40px of overlay padding.
+                                                  // Narrowest supported phone = 375px (iPhone SE):
+                                                  //   375 - 40 = 335px of room; bw = 1.85*180 = 333px.
+                                                  // 2px of margin. pw=190 → bw=351.5 → clips on an SE.
+                                                  // Level-Clear's pw (120) is a SEPARATE constant and is
+                                                  // deliberately untouched — Daryl: "perfectly sized."
   const bw = pw * 1.85;                           // v165 width (legibility)
   const cropWR = 786/1024, cropHR = 546/1024;
   const solidBottomFrac = (1 + cropHR)/2;
@@ -376,13 +412,35 @@ function GreatWordOverlay({ line }) {
   const zWidth = (81.7/100) * cropWR * 100;
   const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115 zone (11%/66%)
   const zHeight = (66/100) * cropHR * 100;
+  // v176: the bubble PNG is a 1024×1024 square rendered at width:bw, so its rendered HEIGHT is
+  // also bw. Compute the text zone in PIXELS from bw so the box height never waits on image
+  // decode (Item 14 root cause). zLeft/zTop stay % of the bw-wide wrapper — position was fine.
+  const boxWpx = bw * (zWidth/100);
+  const boxHpx = bw * (zHeight/100);
   return (
     <div style={{position:"fixed",inset:0,zIndex:9700,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
       <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(28)}px ${ipadTour(20)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(420),width:"92%"}}>
         <div style={{position:"relative",display:"inline-block",marginTop:groupDrop}}>
           <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
             <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
-            <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(22)}/>
+            {/* Item 14 (RESOLVED v176): the Great Word saying sometimes rendered as an
+                illegible smear, worst on L5 (longest sayings). The REAL cause — found by
+                instrumenting the device, not by modelling — was an image-decode height race:
+                BubbleFitText's box took its HEIGHT from `height:${zHeight}%`, a percentage of
+                the bubble wrapper, whose height came from the <img src="/Speech_Bubble.png">.
+                useLayoutEffect ran BEFORE the image decoded, so wrapper height = 0 → box
+                height = 0 → nothing fit vertically → the binary search bottomed out at the 9px
+                floor. Image load wasn't in the dep array, so it never re-measured. Cold-load /
+                cache race; warm cache looked fine, which is why it read as intermittent.
+                (The earlier v174 note here claimed the text was "pinned at the 22px ceiling"
+                and that height was fine — that diagnosis was WRONG. Height was the whole
+                problem.)
+                FIX: the caller computes the zone in PIXELS from `bw` (boxWpx/boxHpx above);
+                the box height can no longer be 0, cold or warm. maxPx=ipadTour(30) and pw=180
+                are the accepted legibility values for THIS Great Word site. The Level-Clear
+                block below keeps ipadTour(22)/pw=120 — accepted as-is, deliberately different.
+                Confirmed on-device L1–L5. */}
+            <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} boxWpx={boxWpx} boxHpx={boxHpx} maxPx={ipadTour(30)}/>
           </div>
           <img src="/great-word-pirate.png" alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:"plClearL2 0.9s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
         </div>
@@ -1531,15 +1589,15 @@ function VisualTour({ onDone }) {
       title: "📋 The Menu Button",
       desc:  "Your hub for everything beyond gameplay.",
       content: () => {
-        // v158: scene-local tier-aware scale. ipadTour is a FLAT 2.3× on both iPad
-        // tiers, which left the 11" cramped and the iPhone (base, no bump) too small.
-        // mT diverges per device: 13" unchanged (2.3×), 11" compressed ~15%, iPhone
-        // expanded 1.35×. Mirrors the uT pattern in the Latest Updates screen.
+        // v158: scene-local tier-aware scale. v179: ipadTour is now itself tier-aware
+        // (11" already trimmed to 1.95x, 13" still 2.3x), so mT no longer applies its own
+        // 11" trim — that would DOUBLE-trim. 11" and 13" both defer to ipadTour now; only
+        // the iPhone branch (base * 1.35, a deliberate phone EXPANSION for this scene) is
+        // kept as-is.
         const on11 = isIpadWidth() && !isLargeIpad();
         const on13 = isLargeIpad();
         const mT = (base) =>
-          on13 ? ipadTour(base)
-          : on11 ? Math.round(base * 2.3 * 0.85)
+          (on13 || on11) ? ipadTour(base)
           : Math.round(base * 1.35);
         return (
         <div style={{textAlign:'center'}}>
@@ -1684,12 +1742,12 @@ function VisualTour({ onDone }) {
 
   // ── v152: LATEST UPDATES screen — reuses approved What's New v1.1 cards + live V/C demo ──
   if (mode === "updates") {
-    // v156: tier-aware scale for THIS screen only. ipadTour is a flat 2.3x for BOTH
-    // iPad tiers, which overflows the 11" (smaller viewport, same content height) while
-    // fitting the 13". uT trims the 11" tier (768–999px) ~12% so the whole card fits
-    // there, and leaves the 13" (>=1000) and phone (base) exactly as-is/approved.
+    // v156: tier-aware scale for THIS screen only. v179: ipadTour is now itself tier-aware
+    // (11" trimmed to 1.95x), so uT no longer applies its own 11" trim — it would double-trim.
+    // uT now just defers to ipadTour on every device. Kept as a named alias so the scene's
+    // call sites don't all have to change.
     const on11 = isIpadWidth() && !isLargeIpad();
-    const uT = (base) => on11 ? Math.round(base * 2.3 * 0.88) : ipadTour(base);
+    const uT = (base) => ipadTour(base);
     // v153: demo boxes now mirror the REAL in-game V/C box colors exactly —
     // Vowels green (#34d399 family), Consonants purple (#a78bfa family) — so the
     // demo teaches the same visual a player sees during play.
@@ -4828,12 +4886,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       });
       // ── Loot Letter detection (already determined above as usedLootTile) ──
       if (usedLootTile) {
-        // v116 (#16) COLLISION RULE (LOCKED July03e): a loot word that would ALSO
-        // qualify as a Great Word — Loot WINS, Great Word is suppressed AND counted
-        // as used for this level (won't re-fire later this level). Marking the guard
-        // here regardless of score is safe: it only blocks a FUTURE Great Word this
-        // level, and the loot celebration already shows the score + carries the 5x.
-        greatWordFiredRef.current = level;
+        // v178 CO-FIRE RULE (Daryl, July 12 — supersedes the July03e "Loot WINS" lock):
+        // a loot word that ALSO clears the Great Word threshold now fires BOTH celebrations.
+        // The old rule suppressed Great Word to avoid two overlays stacking — but the v164
+        // celebration QUEUE already serializes celebrations 400ms apart, so stacking is no
+        // longer a risk, and suppressing a reward the player earned works against the goal of
+        // always making the game fun and rewarding. Order is B1: Loot FIRST, then Great Word
+        // (this branch enqueues before the Great Word branch below; the queue drains in
+        // enqueue order). We deliberately do NOT set greatWordFiredRef here anymore — the
+        // Great Word branch sets its own once-per-level guard when it fires.
         // Fire celebration: popup, haptic, sound (no confetti per spec)
         // v164: enqueued. The haptic + slot-machine chime ride along in onShow so they
         // land WITH the overlay, not 2s early under the flash.
@@ -4841,8 +4902,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       }
       // ── v116 (#16): GREAT WORD moment ──────────────────────────────────────────
       // Fires when a SINGLE submitted word's score meets the per-level threshold, once per
-      // level, gated behind the mascot toggle, and NOT on a loot word (loot wins — see the
-      // collision marker above, which already set the guard).
+      // level, gated behind the mascot toggle. v178: a loot word CAN now also fire Great Word
+      // (co-fire — see the loot branch above); the `!isLootWord` suppression was removed.
       //
       // v164 (v1.2 #7): use `score` (= currentScoreReal + longBonus), NOT currentScoreReal.
       // The bubble previously interpolated the BASE score while the green flash showed
@@ -4851,7 +4912,6 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       // for QUALIFYING. In practice qualification is unchanged — an 8+ letter word scoring
       // under its level threshold on base alone is effectively unreachable.
       if (
-        !isLootWord &&
         greatWordFiredRef.current !== level &&
         showMascotCelebrations() &&
         score >= (GREAT_WORD_THRESH[level] || 40)
@@ -6288,6 +6348,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             const zWidth = (81.7/100) * cropWR * 100;
             const zTop = (cropTopFrac + (11/100)*cropHR) * 100;   // v115: textTopPct 16→11 (band grew, stays centered)
             const zHeight = (66/100) * cropHR * 100;              // v115: textHeightPct 54→66 uses more bubble interior
+            // v176: same Item-14 fix as GreatWordOverlay — compute the zone in PIXELS from bw so
+            // the box height never depends on async image decode. bw-wide square PNG → height bw.
+            // For the warm-cache case this is identical to the old %-of-image; it only removes the
+            // cold-load 0-height race. Level-Clear appearance is unchanged (Daryl: "perfectly sized").
+            const boxWpx = bw * (zWidth/100);
+            const boxHpx = bw * (zHeight/100);
             const line = clearSayingText || pickClearSaying(level, Math.max(0, clearSayingIdxRef.current));
             return (
               <div style={{position:"relative",display:"inline-block",marginBottom:4,marginTop:groupDrop}}>
@@ -6295,7 +6361,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 <div style={{position:"absolute",left:"50%",top:bubbleTop,width:bw,transformOrigin:"bottom center",pointerEvents:"none",animation:"bubbleIn 0.55s cubic-bezier(.34,1.56,.64,1) 0.35s both",zIndex:2}}>
                   <img src="/Speech_Bubble.png" alt="" style={{display:"block",width:"100%",height:"auto"}}/>
                   {/* v114: auto-shrink text to fit the fixed zone (was static fontSize → clipped long lines) */}
-                  <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} zWidth={zWidth} zHeight={zHeight} maxPx={ipadTour(22)}/>
+                  <BubbleFitText text={line} zLeft={zLeft} zTop={zTop} boxWpx={boxWpx} boxHpx={boxHpx} maxPx={ipadTour(22)}/>
                 </div>
                 <img key={level} src={PIRATE_CLEAR_IMG[level]||"/pirate-cheer.png"} alt="" style={{display:"block",width:pw,height:"auto",filter:"drop-shadow(0 6px 12px rgba(0,0,0,0.5))",animation:`${PIRATE_CLEAR_ANIM[level]||"plClearL1"} 0.9s cubic-bezier(.34,1.56,.64,1) forwards`}}/>
               </div>

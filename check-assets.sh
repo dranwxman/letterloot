@@ -35,6 +35,11 @@ REQUIRED=(
   "great-word-pirate.png"
   "wotd-pirate.png"
   "Speech_Bubble.png"
+  "treasure-chest.png"
+  "treasure-chest-2.png"
+  "treasure-chest-3.png"
+  "treasure-chest-4.png"
+  "treasure-chest-5.png"
   # Trail of Loot (Level Welcome map page)
   "level-map-bg.jpg"
   "trail-coin.png"

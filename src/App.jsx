@@ -448,7 +448,68 @@ function GreatWordOverlay({ line }) {
     </div>
   );
 }
-// 360 → 640, 480 → 854 (UI rows). Game board itself goes to 1400px on iPad.
+
+// ── Board-Clear Finisher celebration overlay (step 3a: chest + count-up, NO coins yet) ─────
+// Full-screen overlay modeled on GreatWordOverlay: fixed inset:0, gold-bordered gradient card,
+// ipadTour() scaling. Shows the treasure chest (public/treasure-chest.png), a tier label that
+// escalates with word length, and a point count-up rolling from 0 to `bonus`. Coins flying INTO
+// the chest are step 3b (added on top of this). `len` drives the tier label/intensity; `bonus`
+// is the finisher points (already computed via finisherBonus()). Purely presentational — no
+// scoring here (that's applied at the board-clear point in handleSubmit).
+function finisherTier(len) {
+  // Daryl's loot-themed wording, 5 tiers (voice-matched to the Great Word / WoD sayings).
+  // Escalating color/glow intensity climbs with the tier. Wording is verbatim — do not reword.
+  if (len >= 10) return { label: "A Lootin' Legacy ya be!", color: "#fef08a", glow: "rgba(253,224,71,0.95)" };
+  if (len === 9) return { label: "Yer Loot Legend grows!",  color: "#fde047", glow: "rgba(253,224,71,0.9)"  };
+  if (len === 8) return { label: "Yer Lucky Lootin' Day!",  color: "#fcd34d", glow: "rgba(252,211,77,0.85)" };
+  if (len === 7) return { label: "Big ol' Looter Y'arr!",   color: "#fbbf24", glow: "rgba(251,191,36,0.8)"  };
+  return             { label: "Tidy Looter ya be",      color: "#fcd34d", glow: "rgba(252,211,77,0.7)"  };
+}
+// a/an by SPOKEN sound of the numeral: 8 ("eight") and 11 ("eleven") take "an"; all others "a".
+function aOrAn(n) { return (n === 8 || n === 11) ? "an" : "a"; }
+function FinisherOverlay({ len, bonus, onDismiss }) {
+  const tier = finisherTier(len);
+  const chestW = ipadTour(380);
+  const rollMs = 1500 + Math.max(0, len - 5) * 500;
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    let raf; const t0 = performance.now();
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / rollMs);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setShown(Math.round(bonus * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [bonus, rollMs]);
+  // ── 3b (chest set): pick the chest image by finisher tier. 5 static chests with escalating
+  // coin fill, so the chest itself shows how big the finish was — no animated coins (the
+  // count-up is the motion). Mapping: 5–6→Chest 1 (modest), 7→2 (fuller), 8→3 (brimming),
+  // 9→4 (spilling), 10+→5 (heavy overflow). All 5 chests share framing/orientation.
+  const chestSrc =
+    len >= 10 ? "/treasure-chest-5.png" :
+    len === 9 ? "/treasure-chest-4.png" :
+    len === 8 ? "/treasure-chest-3.png" :
+    len === 7 ? "/treasure-chest-2.png" :
+                "/treasure-chest.png";
+  return (
+    <div style={{position:"fixed",inset:0,zIndex:9720,background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"auto",padding:"20px"}}>
+      <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(22)}px ${ipadTour(24)}px ${ipadTour(16)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.85)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(580),width:"94%"}}>
+        {/* Line 1: the flourish (dynamic letter count) */}
+        <div style={{fontSize:ipadTour(16),color:"#e9d8fd",fontWeight:"bold",marginBottom:ipadTour(18),lineHeight:1.2}}>Finishing Flourish Bonus — {aOrAn(len)} {len} letter finish!</div>
+        {/* Line 2: tier label (Daryl's loot wording) */}
+        <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:tier.color,letterSpacing:"0.3px",textShadow:`0 0 20px ${tier.glow}`,marginBottom:ipadTour(18),lineHeight:1.15}}>{tier.label}</div>
+        {/* Scoring line — the big anchor, churns up to +bonus */}
+        <div style={{fontSize:ipadTour(len>=9?54:46),fontWeight:"bold",color:"#f6d365",lineHeight:1,textShadow:`0 2px 16px ${tier.glow}`,marginBottom:ipadTour(2)}}>+{shown.toLocaleString()}</div>
+        {/* Chest — tier-selected image (fill level = finish size) */}
+        <img src={chestSrc} alt="" style={{display:"block",width:chestW,height:"auto",margin:"0 auto",filter:`drop-shadow(0 10px 24px ${tier.glow})`,animation:"plClearL2 0.8s cubic-bezier(.34,1.56,.64,1) forwards"}}/>
+        {/* Dismiss button beneath the chest */}
+        <button onClick={onDismiss} style={{marginTop:ipadTour(2),background:"linear-gradient(135deg,#f6d365,#fda085)",border:"none",borderRadius:14,padding:`${ipadTour(12)}px ${ipadTour(34)}px`,fontSize:ipadTour(17),fontWeight:"bold",color:"#3a2410",fontFamily:"Georgia,serif",cursor:"pointer",boxShadow:"0 4px 16px rgba(0,0,0,0.5)"}}>Dismiss Page</button>
+      </div>
+    </div>
+  );
+}
 // Tiles: 2.2× (38→84, 44→97, 17→37, 7→15). Chrome (buttons/labels): 1.5×.
 // Welcome card fonts: 1.3×, padding: 1.4×. App icon: 1.8× on iPad.
 
@@ -557,6 +618,19 @@ function getLongWordBonus(length) {
   if (length === 12) return 15;
   if (length === 13) return 25;
   return 25 + (length - 13) * 10;
+}
+// ── Board-Clear Finisher bonus (Item: Finisher, v185) ─────────────────────────
+// The bonus awarded to a word that SUCCESSFULLY CLEARS THE BOARD, scaled by length.
+// Scale (Daryl; "may change"): 5=100, 6=500, 7=1,000, 8=2,000, then +1,500/letter above 8.
+// Sub-5 clears get NO finisher (0). This is the single source of truth for the point value;
+// v185 only READS it for instrumentation/preview — no scoring is applied to gameplay yet.
+function finisherBonus(length) {
+  if (length < 5) return 0;
+  if (length === 5) return 100;
+  if (length === 6) return 500;
+  if (length === 7) return 1000;
+  if (length === 8) return 2000;
+  return 2000 + (length - 8) * 1500; // 9=3500, 10=5000, 11=6500, ...
 }
 // ── Bonus Level Helpers ───────────────────────────────────────
 function isBonusLevel(level) { return ENABLE_BONUS_LEVELS && level >= 6; }
@@ -1611,6 +1685,7 @@ function VisualTour({ onDone }) {
               📊 <strong>Stats</strong> — your scores, streaks, Perfect Days<br/>
               🏅 <strong>Badges</strong> — achievements you've earned<br/>
               🏆 <strong>Leaders</strong> — top players today, this week &amp; all-time<br/>
+              🏴‍☠️ <strong>Special Features</strong> — the extras that make LetterLoot shine<br/>
               ℹ️ <strong>Tips</strong> — rules &amp; strategy
             </div>
           </div>
@@ -1623,20 +1698,50 @@ function VisualTour({ onDone }) {
     },
 
     {
+      // v210: Special Features scene — permanent home for all the extras added since the original
+      // tour. Built as a list so future features are just one more entry. Placed after Menu (which
+      // now links here in-game) and before History. Also mirrored as an in-game Menu page.
+      title: "🏴‍☠️ Special Features",
+      desc:  "The extras that make LetterLoot shine.",
+      content: () => (
+        <div style={{display:'flex',flexDirection:'column',gap:ipadTour(10)}}>
+          <div style={{background:'rgba(110,231,183,0.1)',border:'1px solid rgba(110,231,183,0.35)',borderRadius:12,padding:ipadTour(11)}}>
+            <div style={{fontSize:ipadTour(14),color:'#6ee7b7',fontWeight:'bold',marginBottom:ipadTour(4)}}>✨ Loot Letters</div>
+            <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Every level hides one Loot Letter — a single tile worth 5× its normal value. We'll tell you which letter it is, but not which tile holds it. Use it in a word to pocket the bonus.</div>
+          </div>
+          <div style={{background:'rgba(246,211,101,0.12)',border:'1px solid rgba(246,211,101,0.45)',borderRadius:12,padding:ipadTour(11)}}>
+            <div style={{fontSize:ipadTour(14),color:'#ff4444',fontWeight:'bold',marginBottom:ipadTour(4)}}>🦜 Finishing Flourish Bonus</div>
+            <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Use a 5+ letter word as your final, board-clearing word to pocket a Finishing Flourish Bonus — treasure that grows with every extra letter. The longer that finishing word, the bigger the haul!</div>
+          </div>
+          <div style={{background:'rgba(124,196,255,0.1)',border:'1px solid rgba(124,196,255,0.35)',borderRadius:12,padding:ipadTour(11)}}>
+            <div style={{fontSize:ipadTour(14),color:'#7cc4ff',fontWeight:'bold',marginBottom:ipadTour(4)}}>⚠️ Vowel / Consonant Alert</div>
+            <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>When your remaining letters tip into a risky vowel-to-consonant balance, the Vowels and Consonants boxes pulse — a heads-up to adjust your strategy before you strand yourself.</div>
+          </div>
+          <div style={{background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.4)',borderRadius:12,padding:ipadTour(11)}}>
+            <div style={{fontSize:ipadTour(14),color:'#c4b5fd',fontWeight:'bold',marginBottom:ipadTour(4)}}>🏴‍☠️ Pirate Celebrations</div>
+            <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Our pirate crew cheers your big moments — clearing a level, a great word, a Perfect Day. Want them on or off? Toggle <strong style={{color:'#c4b5fd'}}>Show Mascot Celebrations</strong> on the "Ready?" screen before each game begins.</div>
+          </div>
+        </div>
+      )
+    },
+
+    {
       title: "📜 History Keeps Everything",
       desc:  "Even the words that didn't count.",
       content: () => (
         <div style={{textAlign:'center'}}>
-          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:ipadTour(14),fontSize:ipadTour(13),color:'#f5f0e8',lineHeight:1.8,textAlign:'left',marginBottom:ipadTour(10)}}>
-            History saves <strong style={{color:'#f6d365'}}>every word you played today</strong> — valid words AND rejected ones.
-            <div style={{marginTop:ipadTour(10),padding:`${ipadTour(10)}px ${ipadTour(12)}px`,background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.5)',borderRadius:10}}>
-              <div style={{fontSize:ipadTour(11),color:'#c4b5fd',letterSpacing:1.5,fontWeight:'bold',marginBottom:ipadTour(4)}}>📝 REPORT FOR REVIEW</div>
-              <div style={{fontSize:ipadTour(12),color:'rgba(255,255,255,0.85)',lineHeight:1.7}}>
-                Think a rejected word should count? Tap <strong style={{color:'#f6d365'}}>📝 Report for review</strong> next to it in History. We review every submission and add valid ones to the dictionary.
-              </div>
+          <div style={{background:'rgba(255,255,255,0.06)',border:'1px solid rgba(255,255,255,0.2)',borderRadius:14,padding:ipadTour(15),fontSize:ipadTour(14),color:'#f5f0e8',lineHeight:1.8,textAlign:'left',marginBottom:ipadTour(12)}}>
+            History saves <strong style={{color:'#f6d365'}}>every word you played today</strong> — valid words AND rejected ones. Tap any level to look back at exactly what you played.
+          </div>
+          {/* v216: Report for Review — kept ON the History page (linked), but with ENHANCED
+              visibility (bigger box, stronger border, larger text, glow). */}
+          <div style={{background:'rgba(167,139,250,0.14)',border:'2px solid rgba(167,139,250,0.6)',borderRadius:14,padding:ipadTour(15),textAlign:'left',boxShadow:'0 0 20px rgba(167,139,250,0.22)'}}>
+            <div style={{fontSize:ipadTour(13),color:'#c4b5fd',letterSpacing:1.5,fontWeight:'bold',marginBottom:ipadTour(7)}}>📝 REPORT FOR REVIEW</div>
+            <div style={{fontSize:ipadTour(14),color:'rgba(255,255,255,0.92)',lineHeight:1.75}}>
+              Think a rejected word should count? Tap <strong style={{color:'#f6d365'}}>📝 Report for review</strong> next to it in History. We review <strong style={{color:'#f6d365'}}>every</strong> submission and add valid words to the dictionary.
             </div>
           </div>
-          <div style={{fontSize:ipadTour(10),color:'rgba(255,255,255,0.55)',fontStyle:'italic'}}>
+          <div style={{fontSize:ipadTour(12),color:'rgba(255,255,255,0.6)',fontStyle:'italic',marginTop:ipadTour(12)}}>
             Help us make LetterLoot smarter for everyone!
           </div>
         </div>
@@ -1740,7 +1845,8 @@ function VisualTour({ onDone }) {
     );
   }
 
-  // ── v152: LATEST UPDATES screen — reuses approved What's New v1.1 cards + live V/C demo ──
+  // ── v152/v204: LATEST UPDATES screen — v1.2 featured Finishing Flourish card + pared v1.1 recap
+  //    (one-liners) with the live V/C demo retained. Button-accessible permanent reference. ──
   if (mode === "updates") {
     // v156: tier-aware scale for THIS screen only. v179: ipadTour is now itself tier-aware
     // (11" trimmed to 1.95x), so uT no longer applies its own 11" trim — it would double-trim.
@@ -1771,44 +1877,38 @@ function VisualTour({ onDone }) {
     const CONSON_C = { bg:"rgba(167,139,250,0.16)", border:"#a78bfa", glow:"rgba(167,139,250,0.55)", num:"#c4b5fd", label:"#ddd6fe" };
     return (
       <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(12)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(40)}px`,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
-        <div style={{width:'100%',maxWidth:ipadW(560)}}>
-          <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:ipadIntroPad(18),border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)'}}>
-            <div style={{textAlign:'center',fontSize:uT(17),fontWeight:'bold',color:'#f6d365',marginBottom:uT(14)}}>📢 What's New in v1.1</div>
+        <div style={{width:'100%',maxWidth:ipadW(560),minHeight:'calc(100vh - var(--ll-safe-top, 0px) - '+ipadIntroPad(60)+'px)',display:'flex',flexDirection:'column'}}>
+          <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:ipadIntroPad(18),border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)',flex:1,display:'flex',flexDirection:'column'}}>
+            <div style={{textAlign:'center',fontSize:uT(17),fontWeight:'bold',color:'#f6d365',marginBottom:uT(16)}}>📢 What's New in v1.2</div>
 
-            {/* Loot Letters */}
-            <div style={{background:"rgba(110,231,183,0.1)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:12,padding:uT(12),marginBottom:uT(12)}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                <span style={{fontSize:uT(16)}}>💥</span>
-                <span style={{fontSize:uT(14),color:"#6ee7b7",fontWeight:"bold"}}>Loot Letters</span>
+            {/* v205/v213: FEATURED Finishing Flourish — enlarged, STRONGER border, bold red title. */}
+            <div style={{background:"rgba(246,211,101,0.16)",border:"2.5px solid rgba(246,211,101,0.85)",borderRadius:14,padding:uT(18),boxShadow:"0 0 28px rgba(246,211,101,0.35)"}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+                <span style={{fontSize:uT(24)}}>🏴‍☠️</span>
+                <span style={{fontSize:uT(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>Finishing Flourish Bonus</span>
               </div>
-              <div style={{fontSize:uT(12),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Each level now hides one Loot Letter worth 5× its value. We'll name the letter, just not which one! Only one tile on that board pockets the loot.</div>
+              <div style={{fontSize:uT(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Use a 5+ letter word as your final, board-clearing word to pocket a Finishing Flourish Bonus — treasure that grows with every extra letter. The longer that finishing word, the bigger the haul!</div>
             </div>
 
-            {/* Pirate Celebrations */}
-            <div style={{background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:12,padding:uT(12),marginBottom:uT(12)}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                <span style={{fontSize:uT(16)}}>🏴‍☠️</span>
-                <span style={{fontSize:uT(14),color:"#c4b5fd",fontWeight:"bold"}}>Pirate Celebrations</span>
-              </div>
-              <div style={{fontSize:uT(12),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Our pirate crew now cheers your big moments — clearing a level, a great word, a Perfect Day. Not your style? A <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> toggle lets you turn them on or off — your choice, every time you play.</div>
-              <div style={{fontSize:uT(11),color:"rgba(196,181,253,0.9)",lineHeight:1.5,marginTop:8,fontStyle:"italic"}}>You'll find the toggle on the "Ready?" screen, just before each game begins.</div>
-            </div>
+            {/* v209/v213: Tour note CENTERED in the gap — bigger font, STRONGER border. */}
+            <div style={{flex:0.8,minHeight:uT(18)}} />
+            <div style={{textAlign:"center",fontSize:uT(17),color:"#f5f0e8",lineHeight:1.5,padding:`${uT(14)}px ${uT(16)}px`,background:"rgba(167,139,250,0.16)",border:"1.5px solid rgba(167,139,250,0.65)",borderRadius:10}}>Want to see this again? Tap <strong style={{color:"#f6d365"}}>↺ Tour</strong> anytime to review these changes.</div>
+            <div style={{flex:0.8,minHeight:uT(18)}} />
 
-            {/* Vowel / Consonant Alert + live demo */}
-            <div style={{background:"rgba(124,196,255,0.1)",border:"1px solid rgba(124,196,255,0.35)",borderRadius:12,padding:uT(12),marginBottom:uT(14)}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-                <span style={{fontSize:uT(16)}}>🔵</span>
-                <span style={{fontSize:uT(14),color:"#7cc4ff",fontWeight:"bold"}}>Vowel / Consonant Alert</span>
-              </div>
-              <div style={{fontSize:uT(12),color:"rgba(245,240,232,0.85)",lineHeight:1.55,marginBottom:uT(10)}}>When your remaining letters tip into a risky vowel-to-consonant balance, the Vowels and Consonants boxes gently pulse — a heads-up to adjust your strategy before you strand yourself.</div>
-              <div style={{display:'flex',justifyContent:'center',gap:uT(20),padding:`${uT(4)}px 0 ${uT(2)}px`}}>
+            {/* v204/v213: pared v1.1 recap — bigger font, STRONGER border. Keeps its live V/C demo. */}
+            <div style={{background:"rgba(255,255,255,0.05)",border:"1.5px solid rgba(255,255,255,0.28)",borderRadius:12,padding:uT(16),marginBottom:uT(14)}}>
+              <div style={{fontSize:uT(13),letterSpacing:1,color:"rgba(245,240,232,0.7)",fontWeight:"bold",marginBottom:uT(11),textTransform:"uppercase"}}>Still worth knowing</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>✨ <strong style={{color:"#6ee7b7"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Pirate Celebrations</strong> — cheers for big moments (toggle on or off on the "Ready?" screen).</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>⚠️ <strong style={{color:"#7cc4ff"}}>Vowel / Consonant Alert</strong> — the letter boxes pulse when your balance gets risky.</div>
+              <div style={{display:'flex',justifyContent:'center',gap:uT(20),padding:`${uT(12)}px 0 ${uT(2)}px`}}>
                 {vcBox('VOWELS', 6, VOWEL_C)}
                 {vcBox('CONSON.', 20, CONSON_C)}
               </div>
-              <div style={{textAlign:'center',fontSize:uT(10),color:'rgba(124,196,255,0.75)',fontStyle:'italic',marginTop:uT(6)}}>↑ a risky balance — watch for the pulse in your game!</div>
+              <div style={{textAlign:'center',fontSize:uT(14),color:'#9ecbff',fontWeight:'bold',fontStyle:'italic',marginTop:uT(8)}}>↑ a risky balance — watch for the pulse in your game!</div>
             </div>
 
-            <button className="ll-btn" onClick={()=>setMode("landing")} style={{width:'100%',padding:uT(12),borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.65)',fontFamily:'Georgia,serif',fontSize:uT(13),cursor:'pointer'}}>← Back</button>
+            <button className="ll-btn" onClick={()=>setMode("landing")} style={{width:'100%',padding:uT(13),borderRadius:12,background:'rgba(255,255,255,0.07)',border:'1px solid rgba(255,255,255,0.15)',color:'rgba(255,255,255,0.65)',fontFamily:'Georgia,serif',fontSize:uT(14),cursor:'pointer'}}>← Back</button>
           </div>
         </div>
       </div>
@@ -1817,8 +1917,10 @@ function VisualTour({ onDone }) {
 
   // ── WALKTHROUGH (original 6-scene flow) ──
   return (
-    <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(12)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(16)}px`,overflowY:'auto'}}>
-      <div style={{width:'100%',maxWidth:ipadW(400)}}>
+    <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(12)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(16)}px`,overflowY:'auto'}}>
+      {/* v215 Option B: content vertically CENTERED (justifyContent:center on the container) so the
+          empty space splits evenly above/below rather than dumping at the bottom — reads intentional. */}
+      <div style={{width:'100%',maxWidth:ipadW(400),margin:'auto 0'}}>
         <div style={{display:'flex',gap:ipadTour(6),justifyContent:'center',marginBottom:ipadTour(10)}}>
           {scenes.map((_,i) => (
             <div key={i} onClick={()=>setCur(i)} style={{width:i===cur?ipadTour(20):ipadTour(8),height:ipadTour(8),borderRadius:4,background:i===cur?'#a78bfa':i<cur?'rgba(167,139,250,0.5)':'rgba(255,255,255,0.2)',transition:'all 0.3s',cursor:'pointer'}}/>
@@ -2811,6 +2913,7 @@ function DebugMenu({ onClose, onAction, currentMode }) {
             {btn("🏁 Near Game End", "near-end", "#22d3ee")}
             {btn("🗑 Wipe localStorage", "wipe-local", "#fb7185")}
             {btn("📋 Welcome Screen", "go-welcome", "#22d3ee")}
+            {btn("📢 What's New Popup", "show-whatsnew", "#f6d365")}
           </div>
         </div>
 
@@ -3254,6 +3357,19 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // isn't wired until v113, but its RENDER block is built now (below) so the debug
   // menu can preview the real presentation. Holds {line, score} or null.
   const [greatWordPreview, setGreatWordPreview] = useState(null);
+  // v186 (Finisher scoring): the REAL finisher bonus earned on the current board clear
+  // (0 if the clearing word was <5 letters). Displayed as its own line on the Level-Complete
+  // card only when > 0 (Option C). Reset per level.
+  const [finisherBonusEarned, setFinisherBonusEarned] = useState(0);
+  // v187 (Finisher step 3a): controls the FinisherOverlay celebration (chest + count-up).
+  // { len, bonus } while showing, null when hidden. Debug buttons set it; it self-dismisses.
+  const [finisherOverlay, setFinisherOverlay] = useState(null);
+  // v198 (Finisher step 4): when a REAL board clear earns a finisher, the FinisherOverlay plays
+  // FIRST and the whole visible Level-Clear sequence (flash, confetti, badges, best-time,
+  // level-advance / endgame) is deferred until the player dismisses the overlay. This ref holds
+  // that deferred sequence closure; the overlay's dismiss (button or 10s auto) invokes it once.
+  // Sub-5 clears (no finisher) never touch this — they run the sequence inline as before.
+  const pendingBoardClearRef = useRef(null);
   // (v106) Loot Letter announcement: a brief, self-dismissing INFORMATIONAL popup
   // ("💥 Loot Letter · Level N · X") shown at each level open. NOT a celebration —
   // ungated by showMascotCelebrations(). Auto-clears after 2s; no button. The
@@ -3575,10 +3691,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // the normal Ready screen. Also re-openable later via Tour (#33). The WhatsNewScreen
   // render is a self-contained block so #33 can reuse it as a Tour page.
   const [showWhatsNew, setShowWhatsNew] = useState(() => {
-    try { return localStorage.getItem("ll_whatsnew_v11_seen") !== "1"; } catch { return false; }
+    // v203: key bumped v11→v12 for the v1.2 What's New (Finishing Flourish Bonus). Returning players
+    // who dismissed the v1.1 screen have ll_whatsnew_v11_seen set; the new key means they see the
+    // v1.2 screen once, then it's marked seen. Each version release bumps this suffix.
+    try { return localStorage.getItem("ll_whatsnew_v12_seen") !== "1"; } catch { return false; }
   });
   const dismissWhatsNew = () => {
-    try { localStorage.setItem("ll_whatsnew_v11_seen", "1"); } catch {}
+    try { localStorage.setItem("ll_whatsnew_v12_seen", "1"); } catch {}
     setShowWhatsNew(false);
   };
   const [leaderboardFromPerfectDay, setLeaderboardFromPerfectDay] = useState(false);
@@ -3787,6 +3906,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setShowStuckModal(false);
         setShowBuyModal(false);
         setShowGuestUpsell(false);
+      }
+      else if (debugAction === "show-whatsnew") {
+        // v205 DEBUG: jump straight to the one-time "What's New" popup. It normally only appears
+        // once (gated by the ll_whatsnew_v12_seen flag on the Ready screen), so force both gates:
+        // showReadyScreen + showWhatsNew. Does NOT clear the seen-flag, so this is view-only and
+        // doesn't change whether a real player would see it.
+        setShowIntro(false);
+        setTab("play");
+        setShowReadyScreen(true);
+        setShowWhatsNew(true);
       }
     } catch (e) {
       // Silent — debug action errors shouldn't crash gameplay
@@ -4301,6 +4430,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setGreatWordCelebration(null);
   }, []);
 
+  // v198 (Finisher step 4): single dismiss path for the FinisherOverlay. Closes the overlay,
+  // then runs the deferred Level-Clear sequence exactly once (guarded by nulling the ref first,
+  // so the "Dismiss Page" button and the 10s auto-timeout can't both fire it). On the DEBUG
+  // preview path there is no pending sequence, so this just closes the overlay.
+  const dismissFinisherOverlay = useCallback(() => {
+    setFinisherOverlay(null);
+    const pending = pendingBoardClearRef.current;
+    pendingBoardClearRef.current = null;
+    if (pending) pending();
+  }, []);
+
   // v163 (v1.2 #5): single entry point for the green/red flash popup. Marks the flash
   // active (which holds the badge queue), then on dismiss clears the flag and drains any
   // badges that were queued while it was up. Later calls cancel an earlier pending timer,
@@ -4410,7 +4550,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // starts non-PD-eligible for the rest of the day — you get one clean shot at Perfect Day.
     const pdForfeitedToday = (() => { try { return localStorage.getItem("ll_pd_forfeited_today") === getTodayKey(); } catch { return false; } })();
     setPerfectDaySync(!pdForfeitedToday); setPerfectDayAchieved(false); setLongestWordToday("");
-    setShowRepeatPerfect(false); setNewBestTime(false);
+    setShowRepeatPerfect(false); setNewBestTime(false); setFinisherBonusEarned(0);
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
     setPerfectDayStreakBonus(0); setShowStreakBonus(false); setStreakBonusCount(1);
@@ -4480,7 +4620,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // v79 FIX: a level reset/replay must also freeze the clock until the first tap.
     // Previously this only called resetLevelTimer() (zeroed the clock) but left the
     // timer running and the gate unarmed — a source of the pre-tap timer leak.
-    setSelected([]); resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
+    setSelected([]); resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false); setFinisherBonusEarned(0);
     setShowResetConfirm(false); setShowStuckModal(false);
   }, [resetLevelTimer, stopTimer, level, forfeitPerfectDay, clearCelebrationQueue]);
 
@@ -4528,7 +4668,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
     const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts` : "";
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nCheck it out — ${getShareUrlLabel()}\n${getShareUrl()}\n🌈🏆`;
+    // v202 (share step 3): Finishing Flourish Bonus lines — one per level a finisher was earned (read
+    // off submittedRef entries tagged with finisher>0), sorted by level; else the "not today" line.
+    const ffEntries = submittedRef.current.filter(s => s.valid && s.finisher > 0).sort((a,b)=>a.level-b.level);
+    const ffLines = ffEntries.length
+      ? ffEntries.map(s => `\n🏴‍☠️ Finishing Flourish Bonus — L${s.level} · ${s.word.length} letters · ${s.finisher.toLocaleString()} pts`).join("")
+      : `\n🏴‍☠️ Finishing Flourish Bonus — Not today, but tomorrow offers great promise!~`;
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\n____________________________\nCheck it out — ${getShareUrlLabel()}\n${getShareUrl()}\n🌈🏆`;
   }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
 
   // Non-Perfect-Day "day's results" share (item 6, added v72). Mirrors the Perfect Day
@@ -4547,7 +4693,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const wotdLine = wotdFoundDetails
       ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts`
       : `\n🎯 Word of the Day: not found today`;
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n____________________________\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
+    // v202 (share step 3): Finishing Flourish Bonus lines — one per level earned (from submittedRef),
+    // sorted by level; else the "not today" line. Same treatment as the Perfect Day builder.
+    const ffEntries = submittedRef.current.filter(s => s.valid && s.finisher > 0).sort((a,b)=>a.level-b.level);
+    const ffLines = ffEntries.length
+      ? ffEntries.map(s => `\n🏴‍☠️ Finishing Flourish Bonus — L${s.level} · ${s.word.length} letters · ${s.finisher.toLocaleString()} pts`).join("")
+      : `\n🏴‍☠️ Finishing Flourish Bonus — Not today, but tomorrow offers great promise!~`;
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\n____________________________\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
   }, [playerName, level, wotd, wotdFoundDetails]);
 
   // v74 (Option A): triggerFarewell passes the precomputed day-results share text up to
@@ -4847,7 +4999,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // parallel to the Loot Letter. Only the FIRST time the WoD is found counts (matches
     // the wotdFound award gate below), so re-submitting the same word later isn't re-badged.
     const isWotdWord = !!(valid && wotd && !wotdFound && currentWord.toUpperCase() === wotd.toUpperCase());
-    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false, loot: isLootWord, wotd: isWotdWord };
+    // v202 (Finishing Flourish share, step 3, Option A): tag each entry with the LEVEL it was played
+    // on and a FINISHER field (points earned if this word cleared the board, else 0). `finisher`
+    // starts at 0 here because the real value isn't computed until the board-clear block below;
+    // that block back-fills this same entry (it's the last in submittedRef). The "Share My Results"
+    // builders read these off submittedRef — which already persists/restores with the session — so
+    // no separate day-level ref/reset plumbing is needed.
+    const newEntry = { word: currentWord, score, valid, medical: isMedical, collegiate: isCollegiate, likelyValid: result.likelyValid || false, loot: isLootWord, wotd: isWotdWord, level, finisher: 0 };
     const newSubmitted = [...submittedRef.current, newEntry];
     submittedRef.current = newSubmitted; setSubmitted(newSubmitted);
     appendToDailyHistory(currentWord, score, valid, isMedical, isCollegiate, gameIndexRef.current, isLootWord, isWotdWord);
@@ -4962,6 +5120,35 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         levelScoreRef.current += bonus; setLevelScore(levelScoreRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
         if (isGuest) saveLifetimeData(lifetimeRef.current);
+        // ── v186 Finisher SCORING (real) ──────────────────────────────────────────
+        // The word that cleared the board earns a length-scaled finisher bonus that STACKS
+        // on top of the level-clear bonus just applied (decision #2), and coexists with any
+        // long-word / Great Word bonuses already counted this word (decision #3 — all stack).
+        // Sub-5 clears earn 0 (decision #4). Applied the SAME three ways as the level-clear
+        // bonus (total, levelScore, lifetime; guests persist lifetime) so it's a real,
+        // persisted score. Celebration/animation is a SEPARATE later step — none here yet.
+        const finisher = finisherBonus(currentWord.length);
+        setFinisherBonusEarned(finisher);
+        if (finisher > 0) {
+          totalRef.current += finisher; setTotalScore(totalRef.current);
+          levelScoreRef.current += finisher; setLevelScore(levelScoreRef.current);
+          lifetimeRef.current += finisher; setLifetimePoints(lifetimeRef.current);
+          if (isGuest) saveLifetimeData(lifetimeRef.current);
+          // v202 (share step 3): back-fill the finisher onto THIS word's entry (the last one
+          // pushed to submittedRef just above), so the "Share My Results" builders can list it.
+          const _last = submittedRef.current[submittedRef.current.length - 1];
+          if (_last && _last.word === currentWord) _last.finisher = finisher;
+        }
+        // ── v198 Finisher step 4: DEFERRED VISIBLE LEVEL-CLEAR SEQUENCE ──────────────
+        // Everything the player SEES for a board clear — the BOARD CLEAR! flash, confetti,
+        // speed/No-Retreat badges, New-Best-Time flash, level-advance card, and the entire
+        // L5 endgame (Perfect Day / streak / bonus-unlock / farewell) — is collected here as
+        // one closure. On a FINISHER clear it runs AFTER the FinisherOverlay is dismissed (so
+        // the FF celebration plays first, then the Level-Clear screen the player already knows,
+        // intact). On a sub-5 clear it runs INLINE immediately — byte-identical to pre-v198.
+        // Scoring/refs above already ran; only the visible presentation is gated. syncToCloud
+        // stays at the tail, unchanged.
+        const runBoardClearSequence = async () => {
         showFlash({ word: "BOARD CLEAR!", score: bonus, valid: true }, 2000);
         setConfetti(true); setTimeout(() => setConfetti(false), 4000);
         triggerHaptic("heavy");
@@ -4976,9 +5163,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         else if (clearedTime < 300) awardBadge("slow_lane");
         // ── No Retreat — clear without resets, replays, or bought levels (UNDO is OK) ──
         if (perfectDayRef.current) awardBadge("no_retreat");
+        // ── Item 16 (v184): "⚡ New Best Time!" must match the "Best:" line shown on the
+        // card. That line (see render ~6375) displays the CLOUD all-time best for this level:
+        // timeLeaderboard.levels[level][0].seconds. Previously the banner compared only the
+        // LOCAL personal best (statsData.fastestLevels), so it could fire on a 00:49 run while
+        // the card showed a faster cloud Best of 00:48 — a contradiction. Daryl's intent
+        // (Option B1): the banner means "you beat the all-time best per level shown on the
+        // card." So:
+        //   - If a cloud best EXISTS for this level → fire only if clearedTime strictly beats
+        //     it (clearedTime < shown best). This guarantees the banner never contradicts the
+        //     visible "Best:" line.
+        //   - If NO cloud best exists (guest sessions never fetch the leaderboard; also
+        //     first-ever clear, or fetch not yet loaded/failed) → there is no "Best:" line to
+        //     contradict, so fall back to the LOCAL personal-best test, so guests and
+        //     first-timers are still rewarded (Daryl: even unregistered guests should enjoy it).
         const existingTime = statsData.fastestLevels?.[String(level)];
         const existingSecs = existingTime ? existingTime.seconds : null;
-        const isNewTimeRecord = existingSecs === null || clearedTime < existingSecs;
+        const cloudBestArr = timeLeaderboard?.levels?.[level];
+        const cloudBestSecs = (cloudBestArr && cloudBestArr.length > 0) ? cloudBestArr[0].seconds : null;
+        const isNewTimeRecord = (cloudBestSecs !== null)
+          ? (clearedTime < cloudBestSecs)                          // beat the shown all-time best
+          : (existingSecs === null || clearedTime < existingSecs); // no cloud best shown → local PB fallback
         if (isNewTimeRecord) setNewBestTime(true);
         const updatedStats = updateLocalStats({ levelTime: clearedTime, levelNum: level, score: totalRef.current, levelScore: clearedLevelScore });
         setStatsData(updatedStats);
@@ -5074,6 +5279,35 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           }
         }
         if (!isGuest && user) await syncToCloud();
+        }; // end runBoardClearSequence
+        // ── v198/v199 Finisher step 4: GATE ─────────────────────────────────────────
+        // Finisher earned → the FinisherOverlay is the star and plays FIRST. Supersede is now
+        // SELECTIVE (v199, Daryl): clearCelebrationQueue() drops the QUEUED celebrations so
+        // nothing drains behind FF — this kills the Great Word visual for this word (no artifact,
+        // points already counted, so nothing lost). BUT the Loot Letter is a tangible earned
+        // item the player is tracking, so if this clearing word USED a loot tile we re-fire the
+        // Loot celebration DIRECTLY (bypassing the queue) so it co-fires WITH the FF overlay.
+        // The Loot overlay repositions to the BOTTOM (below the chest, over the Dismiss button)
+        // whenever finisherOverlay is active — see its renderer. It self-dismisses in ~4s while
+        // FF holds until the player dismisses it → player is double-rewarded, nothing hidden.
+        // Sub-5 clear (finisher === 0) → run the sequence inline now, exactly as before v198.
+        if (finisher > 0) {
+          clearCelebrationQueue();              // drop queued visuals (kills Great Word for this word)
+          if (usedLootTile) {                    // v199: but LET LOOT THROUGH — fire it directly, co-firing with FF
+            setLootCelebration({ word: currentWord, score, letter: usedLootTile.letter });
+            // Fired directly (not via the queue), so the queue-drain never clears it — self-clear
+            // after the 4s wotdPop animation so it doesn't linger under/after the FF overlay.
+            setTimeout(() => setLootCelebration(null), 4000);
+          }
+          pendingBoardClearRef.current = runBoardClearSequence;
+          setFinisherOverlay({ len: currentWord.length, bonus: finisher });
+          // 10s max dwell — if the player never taps "Dismiss Page", auto-dismiss releases the
+          // deferred Level-Clear sequence. Routes through dismissFinisherOverlay so the sequence
+          // fires exactly once (the ref guard prevents a double-run if they also tap the button).
+          setTimeout(() => dismissFinisherOverlay(), 10000);
+        } else {
+          await runBoardClearSequence();
+        }
       } else {
         scheduleSyncToCloud();
         stopTimer();
@@ -5162,7 +5396,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       // as the cover during the frame the map scrim mounts, so the board is never exposed between the
       // celebration tearing down and the map painting — kills the L2-L5 board glimpse.
       setLevelComplete(false);
-      levelResetCount.current = 0; levelCleanRef.current = true; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false);
+      levelResetCount.current = 0; levelCleanRef.current = true; resetLevelTimer(); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; setNewBestTime(false); setFinisherBonusEarned(0);
     });
     if (newLevel === 5) awardBadge("level_5");
   };
@@ -5603,43 +5837,39 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   if (showWhatsNew && showReadyScreen) return (
     <div style={{minHeight:"100vh",background:"linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)",fontFamily:"Georgia,serif",color:"#f5f0e8",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"40px 12px",position:"relative",overflowY:"auto",overflowX:"hidden"}}>
       <Starfield/>
-      <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:isIpadWidth()?ipadW(440):400}}>
+      <div style={{position:"relative",zIndex:1,width:"100%",maxWidth:isIpadWidth()?ipadW(440):400,minHeight:"calc(100vh - 80px)",display:"flex",flexDirection:"column"}}>
         {/* Header */}
         <div style={{textAlign:"center",marginBottom:ipadIntro(18)}}>
           <div style={{fontSize:ipadIntro(11),letterSpacing:2,color:"#a78bfa",fontWeight:"bold",marginBottom:ipadIntro(6)}}>WHAT'S NEW</div>
-          <div style={{fontSize:ipadIntro(22),color:"#f6d365",fontWeight:"bold"}}>Fresh treasure in v1.1</div>
+          <div style={{fontSize:ipadIntro(22),color:"#f6d365",fontWeight:"bold"}}>Fresh treasure in v1.2</div>
           <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.75)",marginTop:ipadIntro(6),lineHeight:1.5}}>A few things have changed since you last played — here's what to look for.</div>
         </div>
-        {/* Cards */}
+        {/* FF featured card */}
         <div style={{display:"flex",flexDirection:"column",gap:ipadIntro(12)}}>
-          {/* Loot Letters */}
-          <div style={{background:"rgba(246,211,101,0.08)",border:"1px solid rgba(246,211,101,0.3)",borderRadius:12,padding:`${ipadIntroPad(12)}px ${ipadIntroPad(14)}px`}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-              <span style={{fontSize:ipadIntro(18)}}>✨</span>
-              <span style={{fontSize:ipadIntro(15),color:"#f6d365",fontWeight:"bold"}}>Loot Letters</span>
+          {/* v203/v205/v212: FEATURED Finishing Flourish card — enlarged, STRONGER border, bold red title. */}
+          <div style={{background:"rgba(246,211,101,0.16)",border:"2.5px solid rgba(246,211,101,0.85)",borderRadius:14,padding:`${ipadIntroPad(18)}px ${ipadIntroPad(18)}px`,boxShadow:"0 0 28px rgba(246,211,101,0.35)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
+              <span style={{fontSize:ipadIntro(24)}}>🏴‍☠️</span>
+              <span style={{fontSize:ipadIntro(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>Finishing Flourish Bonus</span>
             </div>
-            <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Each level now hides one Loot Letter worth 5× its value. We'll name the letter, just not which one! Only one tile on that board pockets the loot.</div>
-          </div>
-          {/* Pirate Celebrations */}
-          <div style={{background:"rgba(167,139,250,0.1)",border:"1px solid rgba(167,139,250,0.35)",borderRadius:12,padding:`${ipadIntroPad(12)}px ${ipadIntroPad(14)}px`}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-              <span style={{fontSize:ipadIntro(18)}}>🏴‍☠️</span>
-              <span style={{fontSize:ipadIntro(15),color:"#c4b5fd",fontWeight:"bold"}}>Pirate Celebrations</span>
-            </div>
-            <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>Our pirate crew now cheers your big moments — clearing a level, a great word, a Perfect Day. Not your style? A <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> toggle lets you turn them on or off — your choice, every time you play.</div>
-            <div style={{fontSize:ipadIntro(12),color:"rgba(196,181,253,0.9)",lineHeight:1.5,marginTop:8,fontStyle:"italic"}}>You'll find the toggle on the "Ready?" screen, just before each game begins.</div>
-          </div>
-          {/* Vowel / Consonant Alert */}
-          <div style={{background:"rgba(96,165,250,0.09)",border:"1px solid rgba(96,165,250,0.3)",borderRadius:12,padding:`${ipadIntroPad(12)}px ${ipadIntroPad(14)}px`}}>
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
-              <span style={{fontSize:ipadIntro(18)}}>⚠️</span>
-              <span style={{fontSize:ipadIntro(15),color:"#7cc4ff",fontWeight:"bold"}}>Vowel / Consonant Alert</span>
-            </div>
-            <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.85)",lineHeight:1.55}}>When your remaining letters tip into a risky vowel-to-consonant balance, the Vowels and Consonants boxes gently pulse — a heads-up to adjust your strategy before you strand yourself.</div>
+            <div style={{fontSize:ipadIntro(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Use a 5+ letter word as your final, board-clearing word to pocket a Finishing Flourish Bonus — treasure that grows with every extra letter. The longer that finishing word, the bigger the haul!</div>
           </div>
         </div>
-        {/* Tour note */}
-        <div style={{textAlign:"center",fontSize:ipadIntro(12),color:"rgba(245,240,232,0.7)",lineHeight:1.5,marginTop:ipadIntro(16),padding:"0 4px"}}>Want to see this again? Tap <strong style={{color:"#f6d365"}}>↺ Tour</strong> anytime to review these changes.</div>
+        {/* v212: proportional spacer — content distributes down the screen to fill the space. */}
+        <div style={{flex:0.8,minHeight:ipadIntro(20)}} />
+        {/* v209/v212: Tour note — boxed, bigger font, STRONGER border. */}
+        <div style={{textAlign:"center",fontSize:ipadIntro(17),color:"#f5f0e8",lineHeight:1.5,padding:`${ipadIntroPad(14)}px ${ipadIntroPad(16)}px`,background:"rgba(167,139,250,0.16)",border:"1.5px solid rgba(167,139,250,0.65)",borderRadius:10}}>Want to see this again? Tap <strong style={{color:"#f6d365"}}>↺ Tour</strong> anytime to review these changes.</div>
+        {/* v212: proportional spacer below the note. */}
+        <div style={{flex:0.8,minHeight:ipadIntro(20)}} />
+        {/* v203/v212: "still worth knowing" recap — bigger font, STRONGER border. */}
+        <div style={{background:"rgba(255,255,255,0.05)",border:"1.5px solid rgba(255,255,255,0.28)",borderRadius:12,padding:`${ipadIntroPad(16)}px ${ipadIntroPad(18)}px`}}>
+            <div style={{fontSize:ipadIntro(14),letterSpacing:1,color:"rgba(245,240,232,0.7)",fontWeight:"bold",marginBottom:ipadIntro(11),textTransform:"uppercase"}}>Still worth knowing</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>✨ <strong style={{color:"#f6d365"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Pirate Celebrations</strong> — cheers for big moments (toggle on or off on the "Ready?" screen).</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>⚠️ <strong style={{color:"#7cc4ff"}}>Vowel / Consonant Alert</strong> — the letter boxes pulse when your balance gets risky.</div>
+        </div>
+        {/* v212: small spacer before the button so the recap isn't glued to it when filling. */}
+        <div style={{flex:0.5,minHeight:ipadIntro(14)}} />
         {/* Acknowledge button — deliberately NOT "Let's Go" so it isn't reflex-tapped */}
         <button onClick={dismissWhatsNew} style={{width:"100%",marginTop:ipadIntro(14),marginBottom:ipadIntro(24),padding:`${ipadIntroPad(15)}px`,borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadIntro(16),fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif"}}>
           Got it — let's play! 🎯
@@ -5953,7 +6183,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {/* Loot Letter celebration — fires when player uses a level's Loot Letter in a valid word (one per level, 5 per game) */}
       {lootCelebration && (
-        <div style={{position:"fixed",inset:0,zIndex:9700,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+        <div style={{position:"fixed",inset:0,zIndex:finisherOverlay?9730:9700,display:"flex",alignItems:"center",justifyContent:"center",pointerEvents:"none",padding:"20px"}}>
+          {/* v199: when the FinisherOverlay is active, this co-fires WITH it — anchored to the
+              BOTTOM so it sits below the chest (OK to cover the Dismiss Page button), and z-raised
+              above FF (9720) so it's visible on the dark FF backdrop. Otherwise: unchanged (centered). */}
+          {/* v200/v201: scaler wrapper — the card's own wotdPop animation drives transform, so the
+              co-fire shrink lives HERE on a separate element (0.4 → ~60% smaller). v201: the card is
+              CENTERED (in the chest region) and pushed DOWN by FF_LOOT_NUDGE so it lands on the BROWN
+              chest body, below the gold coins (gold-on-gold would camouflage it). translateY is applied
+              BEFORE scale so the nudge is in real screen pixels. Both numbers are tunable on-device:
+              nudge = how far down onto the chest; 0.4 = size. */}
+          <div style={finisherOverlay?{transform:`translateY(${ipadTour(150)}px) scale(0.4)`,transformOrigin:"center center"}:{}}>
           <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 4s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
             <div style={{fontSize:ipadIntro(42),marginBottom:6}}>💥✨</div>
             <div style={{fontSize:ipadIntro(18),color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:10}}>💥 LOOT LETTER! 💥</div>
@@ -5967,6 +6207,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:ipadIntro(16),fontWeight:"bold",color:"#003300"}}>5× Letter Bonus Applied!</div>
             <div style={{fontSize:ipadIntro(14),fontWeight:"bold",color:"#003300",marginTop:4}}>+{lootCelebration.score} pts on this word</div>
           </div>
+          </div>
         </div>
       )}
 
@@ -5974,6 +6215,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           with the live block, so the preview is guaranteed to show exactly what players see.
           State stays isolated (own variable, no rotation counter / guard touched). */}
       {greatWordPreview && <GreatWordOverlay line={greatWordPreview.line}/>}
+      {finisherOverlay && <FinisherOverlay len={finisherOverlay.len} bonus={finisherOverlay.bonus} onDismiss={dismissFinisherOverlay}/>}
 
       {/* v116 (#16): LIVE render (real word-submit trigger via greatWordCelebration).
           v168: same GreatWordOverlay component as the preview above — separate STATE, shared
@@ -6370,6 +6612,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
           <div style={{fontSize:ipadTour(13),color:"#ccc",marginTop:8}}>You used every tile!</div>
           <div style={{fontSize:ipadTour(22),color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
+          {finisherBonusEarned > 0 && (
+            <div style={{fontSize:ipadTour(20),color:"#fbbf24",fontWeight:"bold",marginTop:8}}>🏴‍☠️ Finishing Flourish Bonus: +{finisherBonusEarned.toLocaleString()}!</div>
+          )}
           <div style={{fontSize:ipadTour(13),color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
           {newBestTime&&<div style={{fontSize:ipadTour(12),color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
           {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:ipadTour(11),color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
@@ -6527,6 +6772,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{flex:1,textAlign:"left"}}>
               <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f5f0e8",marginBottom:2}}>Tips &amp; How to Play</div>
               <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)",lineHeight:1.4}}>Rules, scoring, strategy</div>
+            </div>
+          </button>
+
+          {/* v210: Special Features — dedicated Menu page (B1). Same horizontal card style as Tips. */}
+          <button className="ll-btn" onClick={()=>setTab("features")} style={{width:"100%",marginTop:8,padding:`${ipadMenu(14)}px ${ipadMenu(14)}px`,borderRadius:14,background:"rgba(246,211,101,0.08)",border:"1px solid rgba(246,211,101,0.35)",color:"#f5f0e8",fontFamily:"Georgia,serif",textAlign:"left",cursor:"pointer",display:"flex",alignItems:"center",gap:ipadMenu(14)}}>
+            <div style={{fontSize:ipadMenu(24),flexShrink:0,lineHeight:1}}>🏴‍☠️</div>
+            <div style={{flex:1,textAlign:"left"}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:"#f5f0e8",marginBottom:2}}>Special Features</div>
+              <div style={{fontSize:ipadMenu(10),color:"rgba(255,255,255,0.9)",lineHeight:1.4}}>The extras that make LetterLoot shine</div>
             </div>
           </button>
 
@@ -7267,6 +7521,59 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{marginTop:10,display:"flex",gap:8}}>
             <button className="ll-btn" onClick={()=>{ if(leaderboardTab==="times"){ setTimeCloudData(null); setTimeCloudLoading(true); fetchTimeLeaderboard().then(d=>{ setTimeCloudData(d); setTimeCloudLoading(false); }); } else { setLeaderboardData(null); setLeaderboardLoading(true); fetchLeaderboard().then(d=>{ setLeaderboardData(d); setLeaderboardLoading(false); }); } }} style={{flex:1,padding:ipadMenu(7),borderRadius:12,background:"rgba(167,139,250,0.2)",border:"1px solid rgba(167,139,250,0.7)",color:"#c4b5fd",fontSize:ipadMenu(10),fontWeight:"bold"}}>↺ Refresh</button>
             <button className="ll-btn" onClick={()=>{ if(leaderboardFromPerfectDay){ setLeaderboardFromPerfectDay(false); setPerfectDayAchieved(true); setTab("play"); } else { setTab("menu"); } }} style={{flex:2,padding:ipadMenu(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(12),fontWeight:"bold",border:"none"}}>{leaderboardFromPerfectDay?"🌈 Back to Perfect Day":"← Back to Menu"}</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── SPECIAL FEATURES TAB (v210) ── dedicated Menu page (B1). Mirrors the Tips page pattern.
+          Content matches the walkthrough Special Features scene + the What's New screens. */}
+      {tab==="features"&&(
+        <div style={{zIndex:1,width:"100%",maxWidth:ipadW(480),padding:"0 11px",animation:"slideUp 0.3s ease"}}>
+          <div style={{background:"linear-gradient(135deg,rgba(246,211,101,0.18),rgba(253,160,133,0.12))",borderRadius:16,padding:`${ipadMenu(18)}px ${ipadMenu(16)}px`,marginBottom:12,border:"2px solid rgba(246,211,101,0.5)",textAlign:"center"}}>
+            <div style={{fontSize:ipadMenu(30),marginBottom:4}}>🏴‍☠️</div>
+            <div style={{fontSize:ipadMenu(17),fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:4}}>SPECIAL FEATURES</div>
+            <div style={{fontSize:ipadMenu(11),color:"rgba(255,255,255,0.9)"}}>The extras that make LetterLoot shine</div>
+          </div>
+          <button className="ll-btn" onClick={()=>setTab("menu")} style={{width:"100%",padding:ipadMenu(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(13),fontWeight:"bold",border:"none",marginBottom:10,display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            ← Back to Menu
+          </button>
+
+          <div style={{background:"rgba(110,231,183,0.1)",border:"1px solid rgba(110,231,183,0.35)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
+            <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>✨</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#6ee7b7"}}>Loot Letters</div>
+              <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>Every level hides one Loot Letter — a single tile worth 5× its normal value. We'll tell you which letter it is, but not which tile holds it. Use it in a word to pocket the bonus.</div>
+            </div>
+          </div>
+
+          <div style={{background:"rgba(246,211,101,0.12)",border:"1px solid rgba(246,211,101,0.45)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
+            <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>🦜</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#ff4444"}}>Finishing Flourish Bonus</div>
+              <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>Use a 5+ letter word as your final, board-clearing word to pocket a Finishing Flourish Bonus — treasure that grows with every extra letter. The longer that finishing word, the bigger the haul!</div>
+            </div>
+          </div>
+
+          <div style={{background:"rgba(124,196,255,0.1)",border:"1px solid rgba(124,196,255,0.35)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
+            <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>⚠️</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#7cc4ff"}}>Vowel / Consonant Alert</div>
+              <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>When your remaining letters tip into a risky vowel-to-consonant balance, the Vowels and Consonants boxes pulse — a heads-up to adjust your strategy before you strand yourself.</div>
+            </div>
+          </div>
+
+          <div style={{background:"rgba(167,139,250,0.12)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
+            <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>🏴‍☠️</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#c4b5fd"}}>Pirate Celebrations</div>
+              <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>Our pirate crew cheers your big moments — clearing a level, a great word, a Perfect Day. Want them on or off? Toggle <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> on the "Ready?" screen before each game begins.</div>
+            </div>
+          </div>
+
+          <div style={{textAlign:"center",marginBottom:16,marginTop:4}}>
+            <button className="ll-btn" onClick={()=>setTab("menu")} style={{padding:`${ipadMenu(11)}px ${ipadMenu(28)}px`,borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadMenu(13),fontWeight:"bold",letterSpacing:1}}>
+              ← Back to Menu
+            </button>
           </div>
         </div>
       )}

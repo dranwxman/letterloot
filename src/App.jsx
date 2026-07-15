@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false;
+const DEBUG_MODE = true;
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
@@ -190,6 +190,22 @@ const PIRATE_CLEAR_IMG = {
   5: "/pirate-captain-female.png",
 };
 const PIRATE_CLEAR_ANIM = { 1:"plClearL1", 2:"plClearL2", 3:"plClearL3", 4:"plClearL4", 5:"plClearL5" };
+// ── v219: Perfect Day celebration image width. TUNING KNOB — adjust this ONE number on-device.
+// The PD art is /pirates-m-f-celebration.png (1024x1024, both pirates mid-leap, arms out).
+// The retired art was a pirate+leprechaun composite at 280; this pair is wider and throws its
+// arms out to the sides, so it starts a touch larger. ipadTour() makes it device-aware.
+const PD_PIRATE_W = 400;
+// v220: how far the pair sits above the bottom of the screen, in % (fed into the pdPirates*
+// keyframes, which are inside a template-literal <style> block so this interpolates).
+// Was a hard-coded 6% — correct for the retired wide composite that rose from the floor, but
+// it left this squarer arms-up art looking sunk. 28% ≈ vertically centered.
+const PD_PIRATE_BOTTOM = 28;
+// v220: PD stats modal spacing multiplier. The card's gaps were squeezed tight to fit a
+// narrow card, leaving ~280px of dead vertical space on iPhone. This opens them up so the
+// card breathes and fills more of the screen. Width cap deliberately UNCHANGED (Daryl: width
+// is good). Raise for more air, lower for less. Note ipadTour() scales on top of this.
+const PD_MODAL_AIR = 1.5;
+const pdAir = (n) => Math.round(n * PD_MODAL_AIR);
 
 // Speech-bubble text auto-fit. History: v114 shrink-only w/ 8px floor; v115 capped the
 // shrink to a few px (which is what created the ceiling problem); v166 replaced both with
@@ -3613,14 +3629,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
-  // v91: full-screen pirate+leprechaun dance celebration that plays BEFORE the Perfect Day
-  // stats modal. Triggered the first time perfectDayAchieved flips true (see effect below).
+  // v91: full-screen two-pirate (male + female) jig celebration that plays BEFORE the Perfect
+  // Day stats modal. Triggered the first time perfectDayAchieved flips true (see effect below).
+  // v219: art corrected — was pointed at a pirate+leprechaun composite that predated the
+  // intended pair; now /pirates-m-f-celebration.png. Width knob = PD_PIRATE_W.
   const [showPirateDance, setShowPirateDance] = useState(false);
   const pirateDancePlayedRef = useRef(false);
   // v91: when a Perfect Day is achieved (first time this session), play the pirate dance
   // celebration overlay, then auto-dismiss it (~5.2s) leaving the stats modal underneath.
+  // v219: now GATED behind showMascotCelebrations() — this overlay is a mascot celebration and
+  // must obey the player's "Show Mascot Celebrations" toggle (it never did; that was the bug).
+  // Gating the EFFECT (not just the render) matters: if it merely hid the visual, the
+  // once-per-session ref would still burn and the PD stats modal timing would be unchanged.
+  // With mascots OFF the dance never arms, and the PD stats modal shows immediately — which is
+  // exactly what the toggle promises. The Finishing Flourish overlay is deliberately NOT gated
+  // (it follows the WoD pattern); the PD dance is a mascot, so it IS.
   useEffect(() => {
-    if (perfectDayAchieved && !pirateDancePlayedRef.current) {
+    if (perfectDayAchieved && !pirateDancePlayedRef.current && showMascotCelebrations()) {
       pirateDancePlayedRef.current = true;
       setShowPirateDance(true);
       const t = setTimeout(() => setShowPirateDance(false), 5200);
@@ -5923,9 +5948,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}} @keyframes ll-pulse{0%,100%{box-shadow:0 0 0 0 rgba(246,211,101,0.7);transform:scale(1)}50%{box-shadow:0 0 0 10px rgba(246,211,101,0);transform:scale(1.04)}}
         @keyframes rainbow{0%{color:#ff0000}16%{color:#ff8800}33%{color:#ffff00}50%{color:#00ff00}66%{color:#0088ff}83%{color:#8800ff}100%{color:#ff0000}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-        @keyframes pdPiratesRise{0%{bottom:-380px;opacity:0;transform:translateX(-50%) scale(0.85)}60%{bottom:8%;opacity:1;transform:translateX(-50%) scale(1.04)}100%{bottom:6%;opacity:1;transform:translateX(-50%) scale(1)}}
-        @keyframes pdPiratesJig{0%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}12%{bottom:6%;opacity:1;transform:translateX(-70%) rotate(-5deg) translateY(-14px)}25%{bottom:6%;opacity:1;transform:translateX(-70%) rotate(-3deg) translateY(0)}37%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(-14px)}50%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}62%{bottom:6%;opacity:1;transform:translateX(-30%) rotate(5deg) translateY(-14px)}75%{bottom:6%;opacity:1;transform:translateX(-30%) rotate(3deg) translateY(0)}87%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(-14px)}100%{bottom:6%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}}
-        @keyframes pdPiratesOut{0%{bottom:6%;opacity:1;transform:translateX(-50%) scale(1)}100%{bottom:-380px;opacity:0;transform:translateX(-50%) scale(0.9)}}
+        @keyframes pdPiratesRise{0%{bottom:-380px;opacity:0;transform:translateX(-50%) scale(0.85)}60%{bottom:${PD_PIRATE_BOTTOM + 2}%;opacity:1;transform:translateX(-50%) scale(1.04)}100%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-50%) scale(1)}}
+        @keyframes pdPiratesJig{0%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}12%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-70%) rotate(-5deg) translateY(-14px)}25%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-70%) rotate(-3deg) translateY(0)}37%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(-14px)}50%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}62%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-30%) rotate(5deg) translateY(-14px)}75%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-30%) rotate(3deg) translateY(0)}87%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(-14px)}100%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-50%) rotate(0deg) translateY(0)}}
+        @keyframes pdPiratesOut{0%{bottom:${PD_PIRATE_BOTTOM}%;opacity:1;transform:translateX(-50%) scale(1)}100%{bottom:-380px;opacity:0;transform:translateX(-50%) scale(0.9)}}
         @keyframes pdSparkleFloat{0%{opacity:0;transform:translateY(0) scale(0.5) rotate(0deg)}30%{opacity:1;transform:translateY(-40px) scale(1.2) rotate(40deg)}100%{opacity:0;transform:translateY(-90px) scale(0.4) rotate(120deg)}}
         @keyframes pdFlash{0%,100%{background:rgba(0,0,0,0)}50%{background:rgba(246,211,101,0.18)}}
         /* v94: per-level pirate level-clear entrances — each level feels different */
@@ -6457,24 +6482,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div key={i} style={{position:"absolute",left:`${8+Math.random()*84}%`,bottom:`${20+Math.random()*55}%`,fontSize:`${20+Math.random()*18}px`,opacity:0,animation:`pdSparkleFloat ${1.1+Math.random()*0.8}s ease ${0.3+Math.random()*3.5}s forwards`,pointerEvents:"none"}}>{["✨","⭐","💫","🌟","🎉"][i%5]}</div>
         ))}
         <div style={{position:"absolute",top:"16%",left:0,right:0,textAlign:"center",fontSize:ipadTour(26),fontWeight:"bold",letterSpacing:1}} className="perfect-text">PERFECT DAY! 🌈</div>
-        <img src="/perfect-day-pirates.png" alt="" style={{position:"absolute",left:"50%",bottom:"-380px",transform:"translateX(-50%)",width:ipadTour(280),height:"auto",pointerEvents:"none",filter:"drop-shadow(0 8px 16px rgba(0,0,0,0.6))",animation:"pdPiratesRise 0.7s cubic-bezier(.34,1.56,.64,1) 0.1s forwards, pdPiratesJig 1.0s ease 1.0s 3 forwards, pdPiratesOut 0.6s ease-in 4.4s forwards"}}/>
+        <img src="/pirates-m-f-celebration.png" alt="" style={{position:"absolute",left:"50%",bottom:"-380px",transform:"translateX(-50%)",width:ipadTour(PD_PIRATE_W),height:"auto",pointerEvents:"none",filter:"drop-shadow(0 8px 16px rgba(0,0,0,0.6))",animation:"pdPiratesRise 0.7s cubic-bezier(.34,1.56,.64,1) 0.1s forwards, pdPiratesJig 1.0s ease 1.0s 3 forwards, pdPiratesOut 0.6s ease-in 4.4s forwards"}}/>
       </div>}
 
       {perfectDayAchieved&&!showPirateDance&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
-        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(32)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(340),width:"90%",margin:"20px auto"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(pdAir(32))}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(340),width:"90%",margin:"20px auto"}}>
           {/* Title row: PERFECT DAY! 🌈 + PotOfGold inline */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:6,flexWrap:"nowrap"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:0,marginBottom:pdAir(6),flexWrap:"nowrap"}}>
             <div style={{fontSize:ipadTour(22),fontWeight:"bold",whiteSpace:"nowrap"}} className="perfect-text">PERFECT DAY! 🌈</div>
             <PotOfGold size={ipadTour(48)}/>
           </div>
           {/* Bonus inline accent under title — hidden for Guests since they
               do not receive the +2,000 PD bonus or streak bonuses. The
               upsell popup after Now/Later/Tomorrow tells them about it. */}
-          {!isGuest&&<div style={{fontSize:ipadTour(14),color:"#fda085",fontWeight:"bold",marginBottom:10}}>Bonus: +2,000 pts</div>}
+          {!isGuest&&<div style={{fontSize:ipadTour(14),color:"#fda085",fontWeight:"bold",marginBottom:pdAir(10)}}>Bonus: +2,000 pts</div>}
           {/* Tagline - shrunk font size so the 10 rotating taglines fit 1-2 lines naturally */}
-          <div style={{fontSize:ipadTour(12),color:"#f5f0e8",marginBottom:14,lineHeight:1.5,fontStyle:"italic"}}>"{congratsMsg}"</div>
+          <div style={{fontSize:ipadTour(12),color:"#f5f0e8",marginBottom:pdAir(14),lineHeight:1.5,fontStyle:"italic"}}>"{congratsMsg}"</div>
           {/* Stats - 2 rows (was 4) with dot separators */}
-          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:`${ipadTour(10)}px ${ipadTour(12)}px`,fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.6,marginBottom:ipadTour(10)}}>
+          <div style={{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:`${ipadTour(10)}px ${ipadTour(12)}px`,fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.6,marginBottom:ipadTour(pdAir(10))}}>
             <div>🏆 {playerName||"You"} · {getShortDate()}</div>
             <div style={{color:"rgba(255,255,255,0.85)"}}>Score: {totalScore} pts · 💰 Lifetime: {lifetimePoints.toLocaleString()} pts</div>
           </div>
@@ -6485,12 +6510,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             </div>
           )}
           {/* Tracking note - brightened, no bold */}
-          <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.9)",lineHeight:1.5,marginTop:12,marginBottom:14}}>Perfect Days are tracked daily toward your total — but every one is worth celebrating!</div>
+          <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.9)",lineHeight:1.5,marginTop:pdAir(12),marginBottom:pdAir(14)}}>Perfect Days are tracked daily toward your total — but every one is worth celebrating!</div>
           {/* Action buttons - Leaderboard + Share Perfect Day side by side
               v59: Leaderboard button is LOCKED for Guests. Dimmed colors,
               🔒 icon, tap → Guest Upsell modal. Visible reminder of what
               they're missing. */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:6}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:pdAir(6),marginBottom:pdAir(6)}}>
             <button className="ll-btn" onClick={()=>{
               if (isGuest) { setPerfectDayAchieved(false); setShowGuestUpsell(true); return; }
               markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard');

@@ -31,7 +31,7 @@ REQUIRED=(
   # Mascot / game art
   "pirate-cheer.png"
   "pirate-captain-female.png"
-  "perfect-day-pirates.png"
+  "pirates-m-f-celebration.png"
   "great-word-pirate.png"
   "wotd-pirate.png"
   "Speech_Bubble.png"

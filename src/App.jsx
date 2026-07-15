@@ -4692,34 +4692,70 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (!isGuest && user) await updatePlayerName(user.id, playerName);
   };
 
+  // ── v223: Finishing Flourish share BLOCK. Was a flat list of repetitive lines buried in the
+  // stats stack; now a rule-bounded block so v1.2's flagship feature reads as a feature.
+  // Shape (Daryl's sketch, Option A):
+  //     ____________________________
+  //     🏴‍☠️ FINISHING FLOURISH BONUS
+  //     L1 · QUARTZ · 500pts
+  //     L3 · JUKEBOXES · 6,500pts
+  //     ____________________________
+  // Rules chosen over box-drawing chars (┏━┓): those only hold their shape in a MONOSPACE font,
+  // and SMS/email render proportional — the borders would misalign, and some Android/Gmail
+  // clients show tofu boxes for them. Rules render identically everywhere. Matters more with
+  // Android on the roadmap.
+  // The block's BOTTOM rule IS the pre-existing divider before "Check it out" — do NOT add a
+  // second one in the return strings or they'll double up.
+  // Header hoisted so rows don't repeat "Finishing Flourish Bonus" 5×. v224: header says
+  // "BONUS" in full — v223 dropped it for width, but Daryl: the WORD isn't the point-grabber,
+  // the word's LENGTH is, and "Bonus" is what names the payload. It's the feature's name; the
+  // header is the one place it must appear in full. Also keeps the header consistent with the
+  // no-finisher line below, which always said "Finishing Flourish Bonus". Rows show the WORD (not
+  // "x letters") per Daryl — the finishing word is the brag. Score format: "500pts", no space,
+  // no plus sign (Daryl, v223).
+  // Both builders MUST call this — never inline it twice.
+  const buildFFBlock = useCallback(() => {
+    const ffEntries = submittedRef.current.filter(s => s.valid && s.finisher > 0).sort((a,b)=>a.level-b.level);
+    const RULE = "____________________________";
+    if (!ffEntries.length) {
+      // No-finisher case: Daryl — keep the exact pre-v1.2 wording, now inside the block.
+      // Trailing "~" is INTENTIONAL. Do not "fix" it.
+      return `\n${RULE}\n🏴‍☠️ Finishing Flourish Bonus — Not today, but tomorrow offers great promise!~\n${RULE}`;
+    }
+    const rows = ffEntries.map(s => `\nL${s.level} · ${s.word} · ${s.finisher.toLocaleString()}pts`).join("");
+    return `\n${RULE}\n🏴‍☠️ FINISHING FLOURISH BONUS${rows}\n${RULE}`;
+  }, []);
+
   const getPerfectDayShareText = useCallback(() => {
     const allValid = submittedRef.current.filter(s => s.valid);
-    // CRITICAL: exclude loot words from share — score/length would expose a level's loot letter
-    // to other players today. Each day's Loot Letters must remain a mystery.
-    const shareableWords = allValid.filter(s => !s.loot);
+    // v222: loot words are now INCLUDED in Best/Longest. The old exclusion dated from when the
+    // loot letter was HIDDEN — a shared word's score/length could have exposed it. The app now
+    // REVEALS the loot letter on every level (min. 2 tiles carry it), so the secret is WHICH tile
+    // is live, not which letter. A shared word can't give that away. The filter was guarding a
+    // secret that no longer exists — and it was silently deleting players' best words from their
+    // own share posts (player reports via Daryl). The `loot` flag stays on entries; the History
+    // page still badges loot words with 💥.
+    const shareableWords = allValid;
     const bestWord = shareableWords.reduce((b, s) => !b || s.score > b.score ? s : b, null);
     const longestW = shareableWords.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
     const sharer = playerName ? `${playerName} had a 🌈🏆 Perfect Day on LetterLoot!` : "🌈🏆 PERFECT DAY on LetterLoot!";
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
     const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts` : "";
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
-    // v202 (share step 3): Finishing Flourish Bonus lines — one per level a finisher was earned (read
-    // off submittedRef entries tagged with finisher>0), sorted by level; else the "not today" line.
-    const ffEntries = submittedRef.current.filter(s => s.valid && s.finisher > 0).sort((a,b)=>a.level-b.level);
-    const ffLines = ffEntries.length
-      ? ffEntries.map(s => `\n🏴‍☠️ Finishing Flourish Bonus — L${s.level} · ${s.word.length} letters · ${s.finisher.toLocaleString()} pts`).join("")
-      : `\n🏴‍☠️ Finishing Flourish Bonus — Not today, but tomorrow offers great promise!~`;
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\n____________________________\nCheck it out — ${getShareUrlLabel()}\n${getShareUrl()}\n🌈🏆`;
-  }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails]);
+    // v223: FF block (rule-bounded, header + one row per level). See buildFFBlock above.
+    const ffLines = buildFFBlock();
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${bonusLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\nCheck it out — ${getShareUrlLabel()}\n${getShareUrl()}\n🌈🏆`;
+  }, [playerName, perfectDayStreakBonus, wotd, wotdFoundDetails, buildFFBlock]);
 
   // Non-Perfect-Day "day's results" share (item 6, added v72). Mirrors the Perfect Day
   // builder but without the Perfect Day framing — for players who want to share their
   // progress even when they didn't get a Perfect Day. Includes levels reached, score,
-  // total time, WoD status, best-scoring word, longest word. Keeps the loot-word
-  // exclusion so each day's Loot Letters aren't leaked.
+  // total time, WoD status, best-scoring word, longest word. v222: loot words are INCLUDED
+  // (see the note in getPerfectDayShareText — the loot letter is revealed on every level now,
+  // so including a loot word leaks nothing). Both builders MUST stay identical here.
   const getDayResultsShareText = useCallback(() => {
     const allValid = submittedRef.current.filter(s => s.valid);
-    const shareableWords = allValid.filter(s => !s.loot);
+    const shareableWords = allValid;
     const bestWord = shareableWords.reduce((b, s) => !b || s.score > b.score ? s : b, null);
     const longestW = shareableWords.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
     const sharer = playerName ? `${playerName} had a Great Day on LetterLoot today!` : "My LetterLoot results today!";
@@ -4728,14 +4764,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const wotdLine = wotdFoundDetails
       ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts`
       : `\n🎯 Word of the Day: not found today`;
-    // v202 (share step 3): Finishing Flourish Bonus lines — one per level earned (from submittedRef),
-    // sorted by level; else the "not today" line. Same treatment as the Perfect Day builder.
-    const ffEntries = submittedRef.current.filter(s => s.valid && s.finisher > 0).sort((a,b)=>a.level-b.level);
-    const ffLines = ffEntries.length
-      ? ffEntries.map(s => `\n🏴‍☠️ Finishing Flourish Bonus — L${s.level} · ${s.word.length} letters · ${s.finisher.toLocaleString()} pts`).join("")
-      : `\n🏴‍☠️ Finishing Flourish Bonus — Not today, but tomorrow offers great promise!~`;
-    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\n____________________________\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
-  }, [playerName, level, wotd, wotdFoundDetails]);
+    // v223: FF block — SAME helper as the Perfect Day builder. Never inline this twice.
+    const ffLines = buildFFBlock();
+    return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
+  }, [playerName, level, wotd, wotdFoundDetails, buildFFBlock]);
 
   // v74 (Option A): triggerFarewell passes the precomputed day-results share text up to
   // the App-level Farewell screen, so it can offer Text/Email/Copy without needing

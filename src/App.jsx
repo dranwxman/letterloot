@@ -206,6 +206,16 @@ const PD_PIRATE_BOTTOM = 28;
 // is good). Raise for more air, lower for less. Note ipadTour() scales on top of this.
 const PD_MODAL_AIR = 1.5;
 const pdAir = (n) => Math.round(n * PD_MODAL_AIR);
+// ── v221: STANDALONE Loot Letter celebration size. TUNING KNOB — one number, on-device.
+// The card was full-bleed on iPhone: the container pads 20px/side, then `width:"100%"` took
+// every remaining pixel, then the card added its own ~32px padding on top → no margins, and a
+// tall stack (42px emoji + title + letter tile + 3 text rows) that crowded the screen.
+// Fix = width 90% + this proportional shrink. The scale MUST live on a separate wrapper: the
+// card's own wotdPop animation drives `transform`, so an inline transform on the card itself
+// gets overridden (learned in v200 with the co-fire card).
+// ⚠️ This applies to the STANDALONE path ONLY. When the Finishing Flourish overlay is up, the
+// co-fire card keeps its LOCKED values (scale 0.4, nudge ipadTour(150)) — untouched here.
+const LOOT_SCALE = 0.85;
 
 // Speech-bubble text auto-fit. History: v114 shrink-only w/ 8px floor; v115 capped the
 // shrink to a few px (which is what created the ceiling problem); v166 replaced both with
@@ -6218,8 +6228,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               chest body, below the gold coins (gold-on-gold would camouflage it). translateY is applied
               BEFORE scale so the nudge is in real screen pixels. Both numbers are tunable on-device:
               nudge = how far down onto the chest; 0.4 = size. */}
-          <div style={finisherOverlay?{transform:`translateY(${ipadTour(150)}px) scale(0.4)`,transformOrigin:"center center"}:{}}>
-          <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 4s forwards",maxWidth:ipadIntro(340),width:"100%"}}>
+          <div style={finisherOverlay?{transform:`translateY(${ipadTour(150)}px) scale(0.4)`,transformOrigin:"center center"}:{transform:`scale(${LOOT_SCALE})`,transformOrigin:"center center"}}>
+          <div style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"3px solid #00e676",borderRadius:22,padding:`${ipadIntro(24)}px ${ipadIntro(32)}px`,boxShadow:"0 0 80px rgba(246,211,101,0.9),0 0 30px rgba(0,230,118,0.6),0 12px 40px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",textAlign:"center",animation:"wotdPop 4s forwards",maxWidth:ipadIntro(340),width:"90%",margin:"0 auto"}}>
             <div style={{fontSize:ipadIntro(42),marginBottom:6}}>💥✨</div>
             <div style={{fontSize:ipadIntro(18),color:"#1a1a2e",letterSpacing:4,fontWeight:"bold",marginBottom:10}}>💥 LOOT LETTER! 💥</div>
             {/* Big tile-style display of today's actual Loot Letter */}

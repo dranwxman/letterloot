@@ -337,10 +337,82 @@ const IPAD13_TILE_WIDTH_SCALE_BY_LEVEL = { 1: 2.7, 2: 2.7, 3: 2.55, 4: 2.6, 5: 2
 // the board grows to 10 rows. Curve refined after iPhone 17 Pro Max smoke test
 // showed L3-L5 had room to grow comfortably.
 const IPHONE_TILE_SCALE_BY_LEVEL = { 1: 1.45, 2: 1.30, 3: 1.20, 4: 1.10, 5: 1.05 };
+// ── v230: NARROW-iPHONE TIER ────────────────────────────────────────────────────────────────
+// The table above was tuned on the iPhone 17 Pro Max (vw440) — see its own comment, "Curve refined
+// after iPhone 17 Pro Max smoke test". There was NO iPhone device tier, unlike iPad which got
+// isLargeIpad() for exactly this reason (Item 18).
+// MEASURED on Daryl's PHYSICAL iPhone Air (vw375 vh812), July 17 2026, via the v229 probe:
+//   L1 boardBottom 769 →  43px headroom  OK
+//   L2 boardBottom 772 →  40px headroom  OK
+//   L3 boardBottom 803 →   9px headroom  barely
+//   L4 boardBottom 808 →   4px headroom  barely
+//   L5 boardBottom 828 →  -16px          CLIPPED
+// Only L5 actually clipped; L3/L4 were one font/OS change away.
+// (Yesterday's "all levels overflow" was the PAGE scrolling — the End Game bar + Create Account
+// button sit ~121px BELOW the board — not the board being cut off. The v229 BOARDOVER metric
+// separated those two questions.)
+// Fixed chrome eats 304-335px = 37-41% of an 812px viewport BEFORE a single tile, which is why a
+// curve tuned on a bigger phone doesn't survive here. Past-us's line-325 warning was right.
+// These values are DERIVED, not guessed: current scale x the factor needed to leave ~40px of
+// headroom on the Air. L1/L2 barely move (already had it); L3/L4/L5 tighten.
+// TUNE ON-DEVICE, ONE NUMBER AT A TIME.
+const IPHONE_NARROW_TILE_SCALE_BY_LEVEL = { 1: 1.46, 2: 1.30, 3: 1.12, 4: 1.02, 5: 0.94 };
+// iPhone Air reports vw375; iPhone 17 Pro Max reports vw440. 400 sits cleanly between.
+// Mirrors the isIpadWidth()/isLargeIpad() pattern.
+const isNarrowIphone = () => typeof window !== "undefined" && window.innerWidth < 400;
+// ── v227 INSTRUMENTATION (TEMPORARY — strip once the numbers are captured) ──────────
+// WHY: the iPhone board overflows on Daryl's iPhone Air (all levels), but fits perfectly on the
+// iPhone 17 Pro Max simulator. Same code, same build. The chrome is IDENTICAL on both screens, so
+// the line-325 "it's probably fixed chrome" guess does NOT hold here — the DEVICE says tile scale.
+// Root suspicion (to be CONFIRMED by these numbers, not assumed): IPHONE_TILE_SCALE_BY_LEVEL was
+// tuned on the 17 Pro Max ("Curve refined after iPhone 17 Pro Max smoke test showed L3-L5 had room
+// to grow comfortably") and there is NO iPhone device tier — unlike iPad, which got isLargeIpad()
+// precisely because one set of numbers didn't fit two sizes (Item 18).
+// This readout reports the REAL geometry so the fix is arithmetic instead of another guess.
+// Item 14 precedent: four modelled diagnoses failed; one instrumented number solved it at once.
+const useBoardMetrics = (boardRef, level, enabled) => {
+  const [m, setM] = useState(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const measure = () => {
+      try {
+        const vh = window.innerHeight;
+        const vw = window.innerWidth;
+        const board = boardRef.current;
+        if (!board) return;
+        const bRect = board.getBoundingClientRect();
+        // Chrome above the board = everything from viewport top to the board's top edge.
+        const chromeTop = Math.round(bRect.top);
+        const boardH = Math.round(bRect.height);
+        const boardBottom = Math.round(bRect.bottom);
+        // Everything below the board (End Game bar + Create Account button) — measured from the
+        // board's parent's remaining children rather than assumed.
+        const doc = document.documentElement;
+        const pageH = Math.round(doc.scrollHeight);
+        const overflow = Math.round(pageH - vh);
+        // v229: boardFits is the question that actually matters — does the board's bottom edge
+        // clear the viewport? OVER (pageH - vh) counts the whole page including the End Game bar
+        // and Create Account button below the board, so a small OVER can still mean the BOARD is
+        // fully visible. These are different questions and yesterday's screenshots conflated them.
+        const boardOver = Math.round(boardBottom - vh); // >0 = board itself is cut off
+        setM({ vh, vw, chromeTop, boardH, boardBottom, pageH, overflow, boardOver, level });
+      } catch {}
+    };
+    measure();
+    const t = setTimeout(measure, 400); // after fonts/layout settle
+    window.addEventListener("resize", measure);
+    return () => { clearTimeout(t); window.removeEventListener("resize", measure); };
+  }, [boardRef, level, enabled]);
+  return m;
+};
+
 const ipadTile = (base, level = 1) => {
   if (!isIpadWidth()) {
-    // iPhone path: apply per-level iPhone scale
-    const phoneScale = IPHONE_TILE_SCALE_BY_LEVEL[level] || 1.00;
+    // iPhone path: apply per-level iPhone scale.
+    // v230: narrow iPhones (Air vw375, mini, SE-class) get their own curve — see the note above
+    // IPHONE_NARROW_TILE_SCALE_BY_LEVEL. Must stay in lockstep with ipadTileW below or tiles
+    // stop being square.
+    const phoneScale = (isNarrowIphone() ? IPHONE_NARROW_TILE_SCALE_BY_LEVEL[level] : IPHONE_TILE_SCALE_BY_LEVEL[level]) || 1.00;
     return Math.round(base * phoneScale);
   }
   // v125: 13" iPad gets its own larger height tier; 768-999 (11"/standard) keeps the 11" tune.
@@ -354,7 +426,8 @@ const ipadTile = (base, level = 1) => {
 const ipadTileW = (base, level = 1) => {
   if (!isIpadWidth()) {
     // iPhone path: apply per-level iPhone scale (same curve as height for symmetric tiles)
-    const phoneScale = IPHONE_TILE_SCALE_BY_LEVEL[level] || 1.00;
+    // v230: narrow-iPhone tier — MUST mirror ipadTile above exactly, or tiles stop being square.
+    const phoneScale = (isNarrowIphone() ? IPHONE_NARROW_TILE_SCALE_BY_LEVEL[level] : IPHONE_TILE_SCALE_BY_LEVEL[level]) || 1.00;
     return Math.round(base * phoneScale);
   }
   // v125: 13" iPad gets its own larger width tier; 768-999 (11"/standard) keeps the 11" tune.
@@ -3367,6 +3440,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const decayInfo = lifetimeData.current;
 
   const ss = useRef(loadLocalSession()).current;
+  // v225: DATE-ROLLOVER GUARD. `ss` above is a useRef — it evaluates loadLocalSession() ONCE at
+  // mount and never again. loadLocalSession() DOES date-check correctly
+  // (`if (data.savedDate !== getTodayKey()) return null`), but on iOS/Android the app is usually
+  // SUSPENDED, not killed: leave a game open overnight, resume in the morning, and the component
+  // never remounts — so the date check never re-runs and yesterday's board is still on screen with
+  // no way to start today's game (Daryl, July 16, stranded on yesterday's L2). A cold launch was
+  // always fine; a resume was not.
+  // We capture the mount day here and compare on every resume. See the visibilitychange effect.
+  const mountedDayRef = useRef(getTodayKey());
+  // v228 INSTRUMENTATION (TEMPORARY): board geometry probe. DEBUG_MODE only.
+  // The ref is declared here; the HOOK CALL lives further down, AFTER `level` is declared.
+  // v227 BUG (fixed here): the hook was called at this line and passed `level` — but `level` is a
+  // `const [level] = useState(...)` declared ~143 lines BELOW. const/let are hoisted but NOT
+  // initialized, so touching one before its declaration throws
+  //   ReferenceError: Cannot access 'level' before initialization
+  // at RENDER time, on every screen, before anything paints → white screen on all devices.
+  // Babel parsed it clean because a TDZ violation is a RUNTIME error, not a syntax error.
+  const boardMeasureRef = useRef(null);
+  const [dayRolledOver, setDayRolledOver] = useState(false);
   // ── Word of the Day: precompute from all 5 levels' potential tiles ──
   // ── Word of the Day: load from cache synchronously, compute lazily in background ──
   const wotdData = useRef(getCachedWordOfTheDay() || null);
@@ -3522,6 +3614,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     return generateLevelTiles(1, 0, rng, bp);
   });
   const tileCountRef = useRef(ss?.tileCount || 42);
+  // v228: board geometry probe — called HERE, safely after `level` (above) is initialized.
+  // Hook order is still unconditional (no early returns between GameScreen's start and this line),
+  // so the Rules of Hooks are satisfied.
+  const boardMetrics = useBoardMetrics(boardMeasureRef, level, DEBUG_MODE);
   const levelResetCount = useRef(0);
   // #18b: per-level clean-clear flag for the Cloud Time Leaderboard. True while the
   // CURRENT level has had no reset/re-do/buy (UNDO is OK — PD-safe, so time-safe too).
@@ -4236,6 +4332,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const showSavedIndicator = useCallback(() => { setSavedIndicator(true); setTimeout(() => setSavedIndicator(false), 2000); }, []);
 
   useEffect(() => {
+    // v226: same dead-board guard as the visibilitychange saver below — and this one is the
+    // PRIMARY leak. It fires on every change to level/tiles, so it runs the instant the last tile
+    // of L5 is used, writing the finished board into ll_session right after the game-end path
+    // cleared it. No backgrounding required. Guarding only the visibility save would have left
+    // this open and looked like a partial fix.
+    // Board state, NOT ll_completed_today — that flag stays set through a second game (see ~3990).
+    const boardIsDead = level >= 5 && tiles.filter(t => !t.used).length === 0;
+    if (boardIsDead) return;
     saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current });
     showSavedIndicator();
     scheduleSyncToCloud();
@@ -4245,7 +4349,30 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
+        // v226: DO NOT resurrect a DEAD board. Player report (July 16): finished L5 with
+        // REWRITTEN, got the FF bonus, came back later and was dropped back on L5 with that same
+        // last word waiting to be spelled again.
+        // Cause: this save fired unconditionally on hide. The game-end path DOES call
+        // clearLocalSession() — but then the player backgrounds the app (or the share sheet
+        // triggers visibilitychange) and THIS handler writes the finished board straight back into
+        // ll_session. On next launch showIntro (~3703) sees "same day AND level > 1" and restores
+        // it. The clear was correct; the save undid it.
+        // The guard is the BOARD STATE, not ll_completed_today — see the May 2026 note at ~3990:
+        // that flag stays set while the player is mid-SECOND game, so guarding on it would kill
+        // saves for the whole second game. `level >= 5 && remaining === 0` is the same dead-board
+        // test used there, and it's true only when there is genuinely nothing to come back to.
+        const boardIsDead = level >= 5 && tiles.filter(t => !t.used).length === 0;
+        if (boardIsDead) return;
         saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current });
+      } else if (getTodayKey() !== mountedDayRef.current) {
+        // v225: came back from the background and the DATE CHANGED. Everything date-keyed in this
+        // app was read at mount — the session, the Word of the Day cache, stats/streak keys. Fixing
+        // only the session would leave a half-rolled-over state (today's board, yesterday's WoD),
+        // which is worse than the bug. So: show the player what happened, then hard reload on
+        // dismiss. The reload re-runs every date-keyed initializer together, and
+        // loadLocalSession()'s existing date guard then correctly discards yesterday's save.
+        // Daryl chose this (Option C + modal): "It won't happen very often."
+        setDayRolledOver(true);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -6228,6 +6355,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 </div>
                 <button onClick={dismissLevelWelcome} style={{pointerEvents:"auto",padding:`${isIpadWidth()?10:7}px ${isIpadWidth()?22:16}px`,borderRadius:10,background:"rgba(250,243,220,0.92)",color:"#1a1208",fontFamily:"Georgia,serif",fontWeight:"bold",fontStyle:"italic",fontSize:isIpadWidth()?19:14,border:"2px solid #2a1c0a",boxShadow:"0 3px 10px rgba(0,0,0,0.4)",cursor:"pointer",whiteSpace:"nowrap"}}>Tap to Dismiss Map</button>
               </div>
+              {/* v231: GUEST-ONLY account prompt on the level map. Daryl: "There's plenty of room on
+                  the Level Map page... they will stick out like a sore thumb. But only in guest play."
+                  WHY HERE: the in-flow button at the bottom of the game screen (~7104) is COMPLETELY
+                  INVISIBLE without scrolling on a narrow iPhone — measured pageOver 111-141px on the
+                  Air, and the button sits ~121px below the board. A conversion element below the fold
+                  is effectively absent. The level map is a natural pause, has empty space, and a guest
+                  passes through it on every level.
+                  PLACEMENT: deliberately NOT a third child of the flex column above — see the v134
+                  note there. That column is bounded 20%..60% precisely so the text and dismiss button
+                  can't collide, and so the stack stays clear of the flashing L1 coin at ~63%. Adding
+                  a child would grow the stack downward and re-break it. This sits in its own absolute
+                  band well below the coin instead.
+                  NOT added to the end-of-game screens: those already have a full benefits panel
+                  (~6495), a streak upsell (~6442), and a leaderboard nudge (~5867). */}
+              {isGuest&&<div style={{position:"absolute",left:0,right:0,bottom:"6%",display:"flex",justifyContent:"center",pointerEvents:"none"}}>
+                <button onClick={(e)=>{e.stopPropagation();onSignUpRequest?.();}} style={{pointerEvents:"auto",padding:`${isIpadWidth()?12:9}px ${isIpadWidth()?26:18}px`,borderRadius:12,border:"none",background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontWeight:"bold",fontSize:isIpadWidth()?18:13,boxShadow:"0 4px 18px rgba(124,58,237,0.65)",cursor:"pointer"}}>
+                  ☁️ Create Account to Save Progress
+                </button>
+              </div>}
             </div>
           </div>
         );
@@ -6518,6 +6664,33 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {/* v91: Perfect Day pirate+leprechaun DANCE celebration — full-screen overlay that
           plays first (rise → dance → sparkles), auto-dismisses after ~5.2s, revealing the
           stats modal beneath. zIndex above the PD modal (9500). */}
+      {/* v225: DAY-ROLLOVER MODAL. Fires when the app RESUMES from the background on a later
+          calendar day than it mounted (see the visibilitychange effect). z-index 9999 — above
+          every celebration and overlay, because the board behind it belongs to yesterday and must
+          not be playable. No dismiss-without-reload path on purpose: there is nothing valid to go
+          back to. The reload re-runs every date-keyed initializer together (session, WoD, stats),
+          and loadLocalSession()'s date guard then discards yesterday's save on its own. */}
+      {/* v227 INSTRUMENTATION (TEMPORARY — strip after capture). Reports REAL measured geometry so
+          the iPhone board-overflow fix is arithmetic, not a guess. Daryl: screenshot this on the
+          iPhone Air at EACH level (1-5), and once on the 17 Pro Max sim for the known-good
+          comparison. OVER = how many px the page exceeds the viewport = the exact overflow. */}
+      {DEBUG_MODE&&boardMetrics&&<div style={{position:"fixed",top:64,left:4,zIndex:10000,background:"rgba(0,0,0,0.94)",color:"#0f0",fontFamily:"monospace",fontSize:11,lineHeight:1.45,padding:"5px 7px",borderRadius:4,pointerEvents:"none",border:"1px solid #0f0"}}>
+        L{boardMetrics.level} vw{boardMetrics.vw} vh{boardMetrics.vh}<br/>
+        chromeTop {boardMetrics.chromeTop}<br/>
+        boardH {boardMetrics.boardH}<br/>
+        boardBot {boardMetrics.boardBottom}<br/>
+        pageH {boardMetrics.pageH}<br/>
+        <span style={{color:boardMetrics.overflow>0?"#fa0":"#0f0"}}>pageOver {boardMetrics.overflow}</span><br/>
+        <span style={{color:boardMetrics.boardOver>0?"#f55":"#0f0",fontWeight:"bold"}}>BOARDOVER {boardMetrics.boardOver}</span>
+      </div>}
+      {dayRolledOver&&<div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(10,8,30,0.94)",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(32)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid #f6d365",maxWidth:ipadTour(340),width:"90%",margin:"0 auto"}}>
+          <div style={{fontSize:ipadTour(42),marginBottom:ipadTour(8)}}>🌅</div>
+          <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginBottom:ipadTour(14)}}>A New Day Has Dawned!</div>
+          <div style={{fontSize:ipadTour(15),color:"#f5f0e8",lineHeight:1.5,marginBottom:ipadTour(22)}}>Yesterday's voyage has ended, and fresh tiles await ye. Time to set sail on today's hunt!</div>
+          <button onClick={()=>window.location.reload()} style={{background:"linear-gradient(135deg,#f6d365,#fda085)",border:"none",borderRadius:14,padding:`${ipadTour(14)}px ${ipadTour(28)}px`,fontSize:ipadTour(16),fontWeight:"bold",color:"#2d1b69",cursor:"pointer",width:"100%"}}>⚓ Start Today's Game</button>
+        </div>
+      </div>}
       {showPirateDance&&<div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(10,8,30,0.92)",overflow:"hidden",animation:"pdFlash 1.4s ease"}}>
         {/* sparkles scattered around the dancers */}
         {Array.from({length:18}).map((_,i)=>(
@@ -6920,7 +7093,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             </div>
           </div>
 
-          <div style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative"}}>
+          <div ref={boardMeasureRef} style={{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"6px 4px",border:"1px solid rgba(255,255,255,0.18)",position:"relative"}}>
             {paused&&<div style={{position:"absolute",inset:0,borderRadius:12,background:"rgba(0,0,0,0.82)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:5,backdropFilter:"blur(2px)"}}>
               <div style={{fontSize:40,marginBottom:8}}>⏸️</div>
               <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365",letterSpacing:2}}>Paused</div>

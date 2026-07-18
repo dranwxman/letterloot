@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = true;
+const DEBUG_MODE = false;
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.

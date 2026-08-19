@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false;
+const DEBUG_MODE = true; // v273 dev cycle OPEN (Aug 19) — admin auto-clear + FF board; flip false pre-archive
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
@@ -1201,7 +1201,19 @@ function selectWordOfTheDay(allLevelTiles) {
   for (const len of LENGTH_PRIORITY) {
     const tier = byLength[len];
     if (!tier || tier.length === 0) continue;
-    const shuffled = [...tier].sort(() => rng() - 0.5);
+    // v251 CROSS-PLATFORM FIX: this was `[...tier].sort(() => rng() - 0.5)`, which is
+    // NOT a shuffle. A random comparator gives inconsistent answers, so the result depends
+    // on the JS engine's sort implementation (comparison count and order). WebKit (iOS) and
+    // V8 (Android) differ, so the same seed produced DIFFERENT words on different platforms
+    // — observed Jul 23 2026: iPhone+iPad "REMINISCE" vs Android "WASHBOARD", same account,
+    // same date, same build. Fisher-Yates performs a fixed sequence of swaps driven only by
+    // rng(), so every engine produces an identical result from an identical seed. Same idiom
+    // already used by buildPool() at ~line 771.
+    const shuffled = [...tier];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
     for (const word of shuffled) {
       for (const tiles of allLevelTiles) {
         if (canSpellWordFromTiles(word, tiles)) {
@@ -1281,7 +1293,7 @@ async function validateWord(word) {
     return wordCache[key];
   }
   if (wordCache[key] !== undefined) return wordCache[key];
-  if (!navigator.onLine) { wordCache[key] = { valid: false, source: "offline" }; return wordCache[key]; }
+  if (!navigator.onLine) { return { valid: false, source: "offline" }; } // v261 #6: NOT cached — an offline moment must not condemn a word for the whole day
   const fetchWithTimeout = (url, ms = 6000) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), ms);
@@ -1312,9 +1324,17 @@ async function validateWord(word) {
     await new Promise(r => setTimeout(r, 1000));
     result = await tryMW();
   }
-  // If still timing out, use common words fallback so game stays playable
+  // If still timing out, accept known-common words so the game stays playable — but a word
+  // we simply COULDN'T CHECK must never be reported as invalid (v261 #6, Chelsea Jul 31:
+  // degraded wifi turned VOLT/MANY/GLAZE into "Not a valid word!" and CACHED the lie for
+  // the rest of the day). Unknown-under-timeout returns an honest lookup-failure verdict,
+  // deliberately UNCACHED so the very next submit retries for real.
   if (result.source === "timeout") {
-    result = { valid: COMMON_WORDS.has(key), source: "fallback" };
+    if (COMMON_WORDS.has(key)) {
+      result = { valid: true, source: "fallback" };
+    } else {
+      return { valid: null, source: "timeout" };
+    }
   }
   // Secondary check: if MW rejected, ask Free Dictionary API.
   // If Free Dict accepts, mark as likelyValid so we offer to report it.
@@ -2230,15 +2250,24 @@ function updateLocalStats(updates) {
     stats.longWordBonuses[key] = (stats.longWordBonuses[key]||0) + 1;
   }
   if (updates.perfectDay) {
-    stats.perfectDaysAllTime += 1;
+    // v249 DOUBLE-PAY FIX: detect a repeat PD for TODAY *before* recording this one.
+    // perfectDaysWeek[todayKey] is the per-date counter, so >0 here means a PD was already
+    // banked today (including one synced down from another device via the cloud merge).
+    // lastPerfectDate === todayKey is the same signal from the other direction. On a repeat we
+    // do NOT touch perfectDaysAllTime or consecutivePerfectDays — a PD is once per day, per
+    // account, so a second PD the same day must not inflate the lifetime count or the streak
+    // (observed before this fix: streak jumped 13→14 on a same-day second PD from another device).
+    const pdAlreadyToday = ((stats.perfectDaysWeek || {})[todayKey] || 0) > 0
+      || stats.lastPerfectDate === todayKey;
     stats.perfectDaysWeek[todayKey] = (stats.perfectDaysWeek[todayKey]||0) + 1;
-    // Track consecutive perfect days
-    if (stats.lastPerfectDate === yesterdayKey) {
-      stats.consecutivePerfectDays = (stats.consecutivePerfectDays || 0) + 1;
-    } else if (stats.lastPerfectDate === todayKey) {
-      // Same day - keep current streak
-    } else {
-      stats.consecutivePerfectDays = 1;
+    if (!pdAlreadyToday) {
+      stats.perfectDaysAllTime += 1;
+      // Track consecutive perfect days
+      if (stats.lastPerfectDate === yesterdayKey) {
+        stats.consecutivePerfectDays = (stats.consecutivePerfectDays || 0) + 1;
+      } else {
+        stats.consecutivePerfectDays = 1;
+      }
     }
     stats.lastPerfectDate = todayKey;
   }
@@ -2343,11 +2372,90 @@ function addLocalPerfectTime(name, seconds) {
   board.perfect = board.perfect.slice(0, 10);
   saveLocalTimeLeaderboard(board); return board;
 }
-function saveLocalSession(state) { try { localStorage.setItem("ll_session", JSON.stringify({ ...state, savedDate: getTodayKey() })); } catch {} }
-function loadLocalSession() {
-  try { const data = JSON.parse(localStorage.getItem("ll_session") || "null"); if (!data || data.savedDate !== getTodayKey()) return null; return data; } catch { return null; }
+// v253: `owner` scopes the session to the account (Supabase user.id) or "guest".
+// On resume, showIntro only restores a session whose owner matches the current
+// signed-in identity — stops Player B landing on Player A's mid-game board after
+// a same-device account switch (remaining-work item 4). Callers pass owner explicitly.
+// v254: sessions are now stored under PER-OWNER KEYS ("ll_session__<owner>") instead of
+// one shared slot. Rationale (found via Daryl's account-switch test, Jul 25): with a
+// single slot, Player B's play OVERWRITES Player A's saved session — the v253 owner
+// check then correctly refuses B's session for A, but A's own state is already gone,
+// forcing a cloud restore that can't fully reconstruct (no level_complete in the cloud
+// row). Per-owner keys mean each identity keeps its own session across switches.
+function sessionKeyFor(owner) { return "ll_session__" + (owner || "guest"); }
+function saveLocalSession(state, owner) {
+  try {
+    const own = owner || getCurrentOwnerSync();
+    localStorage.setItem(sessionKeyFor(own), JSON.stringify({ ...state, savedDate: getTodayKey(), owner: own }));
+  } catch {}
 }
-function clearLocalSession() { try { localStorage.removeItem("ll_session"); } catch {} }
+// v253: read the currently signed-in Supabase user id SYNCHRONOUSLY from the persisted
+// auth session, so module-level session loading can owner-scope without waiting on React
+// state. Supabase persists to `sb-<ref>-auth-token` by default. Returns "guest" when no
+// session is present. Ref is the project ref used throughout this file.
+function getCurrentOwnerSync() {
+  try {
+    const raw = localStorage.getItem("sb-zcevszxmoggmcmvyxjtn-auth-token");
+    if (!raw) return "guest";
+    const parsed = JSON.parse(raw);
+    const uid = parsed?.user?.id || parsed?.currentSession?.user?.id;
+    return uid || "guest";
+  } catch { return "guest"; }
+}
+function loadLocalSession() {
+  try {
+    const owner = getCurrentOwnerSync();
+    // v254: per-owner key first.
+    let data = JSON.parse(localStorage.getItem(sessionKeyFor(owner)) || "null");
+    let fromLegacy = false;
+    // Legacy fallback (pre-v254 single-slot "ll_session"): honor it ONLY if its stamped
+    // owner matches the current identity (missing owner = pre-v253 = treated as guest).
+    if (!data) {
+      const legacy = JSON.parse(localStorage.getItem("ll_session") || "null");
+      if (legacy && (legacy.owner || "guest") === owner) { data = legacy; fromLegacy = true; }
+    }
+    if (!data || data.savedDate !== getTodayKey()) return null;
+    // v253 account-scoping: never hand back a session owned by a different identity.
+    // (With per-owner keys this is belt-and-suspenders, but it still guards the legacy path.)
+    const sessOwner = data.owner || "guest";
+    if (sessOwner !== owner) return null;
+    // v258 FINDING-4 INVARIANT (Aug6a): the session and TODAY'S word history must AGREE
+    // about what was played today. The word-history store (ll_daily_history) runs its own
+    // date logic and has been correct at every boundary the session layer fumbled (Aug 3:
+    // session reset, history intact; Aug 6: session claimed L1 complete / 11,453, history
+    // said "No words yet"). A session that claims real play — submitted words or a positive
+    // score — while today's word log is EMPTY is self-evidently laundered state from another
+    // day. Self-repair: discard it (and delete the blob) so the player falls through to an
+    // honest fresh start instead of a chimera. LOCAL-ONLY by design: cloud restores are
+    // legitimately cross-device (history lives per-device), and the cloud-side laundering
+    // writes are already killed by the v256 day-guard.
+    const claimsPlay = (Array.isArray(data.submitted) && data.submitted.length > 0) || (data.totalScore || 0) > 0;
+    if (claimsPlay) {
+      const hist = JSON.parse(localStorage.getItem("ll_daily_history") || "null");
+      const histIsToday = !!(hist && hist.date === getTodayKey());
+      const histWordCount = histIsToday
+        ? (hist.games || []).reduce((n, g) => n + (Array.isArray(g) ? g.length : 0), 0)
+        : 0;
+      if (histWordCount === 0) {
+        if (DEBUG_MODE) console.log("[INVARIANT] session claims play today (" +
+          ((data.submitted || []).length) + " words, score " + (data.totalScore || 0) +
+          ") but today's word history is empty — laundered session discarded");
+        localStorage.removeItem(sessionKeyFor(owner));
+        if (fromLegacy) localStorage.removeItem("ll_session");
+        return null;
+      }
+    }
+    return data;
+  } catch { return null; }
+}
+// v254: clears the CURRENT identity's session (per-owner key) AND the legacy single-slot
+// key, so stale pre-v254 data can't resurrect through the fallback above.
+function clearLocalSession() {
+  try {
+    localStorage.removeItem(sessionKeyFor(getCurrentOwnerSync()));
+    localStorage.removeItem("ll_session");
+  } catch {}
+}
 function getAllTimeStats() { try { return JSON.parse(localStorage.getItem("ll_alltime") || '{"words":0,"score":0}'); } catch { return {words:0,score:0}; } }
 function saveAllTimeStats(stats) { try { localStorage.setItem("ll_alltime", JSON.stringify(stats)); } catch {} }
 
@@ -2419,7 +2527,7 @@ function getShareUrlLabel() {
   return platform === "ios" ? "Download free on the App Store:" : "Play free at:";
 }
 
-function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats, onViewLeaderboard, onPlayAgain, onShareResults, isGuest }) {
+function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewStats, onViewLeaderboard, onPlayAgain, onShareResults, isGuest, perfectDay }) {
   // v87 (C+): feedback state for the "Share LetterLoot with a friend" copy action.
   const [inviteCopied, setInviteCopied] = useState(false);
   return (
@@ -2428,7 +2536,10 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewSta
       <div style={{position:"relative",zIndex:1,display:"flex",flexDirection:"column",alignItems:"center",width:"100%",maxWidth:ipadW(360)}}>
         <div style={{textAlign:"center",marginBottom:20}}><LetterLootLogo titleFontSize={ipadTour(32)} boxPadding={`${ipadTour(10)}px ${ipadTour(28)}px`}/></div>
         <div style={{textAlign:"center",width:"100%"}}>
-          <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginBottom:14}}>Great effort today! 🎉</div>
+          {/* v260 #3/#5: the farewell finally KNOWS when the day was Perfect. A PD player was
+              previously sent off with "Great effort" + "no Perfect Day chance today" — reading
+              as denial of the day they just banked. Copy by Daryl, Aug 11. */}
+          <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginBottom:14}}>{perfectDay ? "🌈🏆 PERFECT DAY!" : "Great effort today! 🎉"}</div>
           <div style={{background:"rgba(255,255,255,0.07)",border:"1px solid rgba(255,255,255,0.18)",borderRadius:14,padding:ipadIntro(14),marginBottom:16,width:"100%"}}>
             <div style={{fontSize:ipadIntro(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:0.5,marginBottom:6}}>Highest scoring word:</div>
             <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#a78bfa",letterSpacing:3,marginBottom:4}}>{bestWord||"—"}</div>
@@ -2438,14 +2549,21 @@ function FarewellScreen({ totalScore, bestWord, bestWordScore, onDone, onViewSta
             <div style={{fontSize:ipadTour(30),fontWeight:"bold",color:"#f6d365"}}>{totalScore||0}</div>
           </div>
           <div style={{fontSize:ipadIntro(13),color:"#ffffff",lineHeight:1.6,fontWeight:"bold",marginBottom:14}}>
-            Try again? Replay for a higher score, but no Perfect Day chance today.
+            {perfectDay ? "Perfect Day booty be yers, matey! Play on fer more gold if ye like \u2014 the treasure keeps stackin\u2019!" : "Try again? Replay for a higher score, but no Perfect Day chance today."}
           </div>
           {/* v64 (May 26): Simplified — Now + Later only. Tomorrow removed. */}
+          {/* v267 Option A (Daryl, Aug 12): the PD modal already asked Now/Later — a PD
+              farewell must not re-ask (the "double Later" gauntlet). One warm send-off;
+              same-day return lands on the finished-day Welcome with replay available. */}
+          {perfectDay ? (
+            <button onClick={onDone} style={{width:"100%",padding:ipadChrome(13),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadChrome(15),fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif",marginBottom:14}}>⚓ See ye next voyage!</button>
+          ) : (<>
           <div style={{fontSize:ipadIntro(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",letterSpacing:1.5,marginBottom:6}}>PLAY AGAIN</div>
           <div style={{display:"flex",gap:6,marginBottom:14}}>
             <button onClick={()=>onPlayAgain && onPlayAgain("now")} style={{flex:1,padding:`${ipadChrome(10)}px ${ipadChrome(4)}px`,borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadChrome(12),fontWeight:"bold",border:"none",cursor:"pointer",fontFamily:"Georgia,serif"}}>✏️ Now</button>
             <button onClick={()=>onPlayAgain && onPlayAgain("later")} style={{flex:1,padding:`${ipadChrome(10)}px ${ipadChrome(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.35),rgba(59,130,246,0.25))",border:"1px solid rgba(96,165,250,0.7)",color:"#dbeafe",fontSize:ipadChrome(12),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>🌅 Later</button>
           </div>
+          </>)}
           {/* Secondary row: Leaderboard / Stats / Close */}
           <div style={{display:"flex",gap:6,marginBottom:10}}>
             <button onClick={onViewLeaderboard} style={{flex:1,padding:`${ipadChrome(9)}px ${ipadChrome(4)}px`,borderRadius:11,background:isGuest?"rgba(255,255,255,0.05)":"linear-gradient(135deg,rgba(246,211,101,0.25),rgba(253,160,133,0.2))",border:isGuest?"1px solid rgba(255,255,255,0.18)":"1px solid rgba(246,211,101,0.6)",color:isGuest?"rgba(255,255,255,0.55)":"#fef3c7",fontSize:ipadChrome(11),fontWeight:"bold",cursor:"pointer",fontFamily:"Georgia,serif"}}>{isGuest?<span><span style={{filter:"grayscale(0.6)",opacity:0.55}}>🏆</span> Leaders <span style={{color:"rgba(167,139,250,0.85)"}}>🔒</span></span>:"🏆 Leaders"}</button>
@@ -2487,7 +2605,9 @@ function AuthScreen({ onGuest, onLogin }) {
   //  3. Returning signed-in player who explicitly signed out → "welcome" mode too (v57 fix: previously
   //     defaulted to "login" which hid the Guest button. Now everyone sees the full menu including
   //     "Play as Guest" — they can tap "Sign In" to reach the login form if they want.)
-  const hasSignedInBefore = !!(localStorage.getItem("ll_name") || localStorage.getItem("ll_session"));
+  // v254: sessions now live under per-owner keys (ll_session__<owner>); prefix-scan so
+  // returning guests are still recognized. Legacy "ll_session" is covered by the prefix.
+  const hasSignedInBefore = !!(localStorage.getItem("ll_name") || Object.keys(localStorage).some(k => k.startsWith("ll_session")));
   const hasPlayedAsGuestBefore = localStorage.getItem("ll_guest_returning") === "1";
   const isReturningGuest = !hasSignedInBefore && hasPlayedAsGuestBefore;
   const [mode, setMode] = useState("welcome");
@@ -2624,6 +2744,7 @@ function AdminScreen({ onExit }) {
   const [pw, setPw] = useState("");
   const [pwError, setPwError] = useState("");
   const [data, setData] = useState(null);
+  const [showDecided, setShowDecided] = useState(false); // v273: decisions-drawer toggle
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
   const [selectedTab, setSelectedTab] = useState("overview");
@@ -2651,7 +2772,7 @@ function AdminScreen({ onExit }) {
       const recentSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= twoWeeksAgoNum);
       const weekSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= weekAgoNum);
       const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
-      const wordReports = await adminQuery('word_reports', '*', '&order=reported_at.desc&limit=50').catch(()=>[]);
+      const wordReports = await adminQuery('word_reports', '*', '&order=reported_at.desc&limit=200').catch(()=>[]); // v273: widened so the pending view can't be crowded out by decided rows (split client-side)
       // Build top 25 longest words and top word scores from ALL daily sessions
       // (one entry per player per day they had a record-worthy word — multi-entry per player allowed)
       const allSessions = await adminQuery('daily_sessions', 'player_id,date_key,longest_word_today,top_word,top_word_score', '&limit=2000').catch(()=>[]);
@@ -2847,10 +2968,14 @@ function AdminScreen({ onExit }) {
 
         {/* Word Reports */}
         <div style={{background:'rgba(251,113,133,0.04)',borderRadius:14,padding:14,marginBottom:10,border:'1px solid rgba(251,113,133,0.2)'}}>
-          <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📝 REPORTED WORDS ({(data?.wordReports||[]).length})</div>
-          {!(data?.wordReports?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No words reported yet</div>:
+          {/* v273 (Daryl, Aug 19): AUTO-CLEAR — decided words leave the review list the moment
+              they're approved/rejected; only PENDING shows here. Recent decisions live behind
+              the toggle below, each with an Undo back to pending (the safety net: once decided
+              rows auto-hide, a mis-tap needs a one-tap way back). */}
+          <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📝 REPORTED WORDS — PENDING ({(data?.wordReports||[]).filter(r=>!r.status||r.status==='pending').length})</div>
+          {!((data?.wordReports||[]).filter(r=>!r.status||r.status==='pending').length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No words awaiting review 🎉</div>:
           <table style={tbl}><thead><tr><th style={th}>Word</th><th style={th}>Reported by</th><th style={th}>When</th><th style={th}>Status</th><th style={th}>Action</th></tr></thead><tbody>
-            {(data.wordReports||[]).map((r,i)=>(
+            {(data.wordReports||[]).filter(r=>!r.status||r.status==='pending').map((r,i)=>(
               <tr key={i}>
                 <td style={{...td,color: r.status==='rejected'?'rgba(255,255,255,0.3)':'#fda4af',fontWeight:'bold',letterSpacing:2,textDecoration:r.status==='rejected'?'line-through':'none'}}>{r.word}</td>
                 <td style={td}>{r.player_name||'Guest'}</td>
@@ -2903,6 +3028,33 @@ function AdminScreen({ onExit }) {
               </tr>
             ))}
           </tbody></table>}
+          {(() => {
+            const decided = (data?.wordReports||[]).filter(r=>r.status==='approved'||r.status==='rejected').slice(0,20);
+            if (!decided.length) return null;
+            return (<div style={{marginTop:10}}>
+              <button onClick={()=>setShowDecided(v=>!v)} style={{padding:'4px 10px',borderRadius:8,border:'1px solid rgba(255,255,255,0.2)',background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.6)',fontSize:10,cursor:'pointer'}}>{showDecided?'▾ Hide recent decisions':`▸ Show recent decisions (${decided.length})`}</button>
+              {showDecided && <table style={{...tbl,marginTop:8}}><thead><tr><th style={th}>Word</th><th style={th}>Decision</th><th style={th}>When</th><th style={th}></th></tr></thead><tbody>
+                {decided.map((r,i)=>(
+                  <tr key={'d'+i}>
+                    <td style={{...td,color:r.status==='rejected'?'rgba(255,255,255,0.35)':'#6ee7b7',letterSpacing:2,textDecoration:r.status==='rejected'?'line-through':'none'}}>{r.word}</td>
+                    <td style={{...td,fontSize:10,color:r.status==='approved'?'#6ee7b7':'rgba(255,255,255,0.35)'}}>{r.status==='approved'?'✓ Approved':'✗ Rejected'}</td>
+                    <td style={{...td,color:'rgba(255,255,255,0.4)',fontSize:10}}>{new Date(r.reported_at).toLocaleString()}</td>
+                    <td style={td}><button onClick={async()=>{
+                      try{
+                        const res = await fetch(`${ADMIN_SUPABASE_URL}/rest/v1/word_reports?id=eq.${r.id}`,{
+                          method:'PATCH',
+                          headers:{apikey:ADMIN_ANON_KEY,Authorization:`Bearer ${ADMIN_ANON_KEY}`,'Content-Type':'application/json',Prefer:'return=minimal'},
+                          body:JSON.stringify({status:'pending'})
+                        });
+                        if(!res.ok){const errText=await res.text().catch(()=>'');alert('Undo failed: '+res.status+'\n'+errText);return;}
+                        loadData(); /* silent: no player email on undo — the eventual re-decision notifies */
+                      }catch(e){alert('Undo error: '+e.message);}
+                    }} style={{padding:'3px 8px',borderRadius:6,border:'1px solid rgba(246,211,101,0.5)',background:'rgba(246,211,101,0.12)',color:'#f6d365',fontSize:10,fontWeight:'bold',cursor:'pointer'}}>↩ Undo</button></td>
+                  </tr>
+                ))}
+              </tbody></table>}
+            </div>);
+          })()}
           <div style={{fontSize:9,color:'rgba(255,255,255,0.4)',marginTop:8,fontStyle:'italic'}}>Approved words automatically added to live game whitelist</div>
         </div>
 
@@ -3163,7 +3315,15 @@ export default function App() {
         // gameplay saves misattribute their records to "Guest" (the phantom-Guest
         // leaderboard-entry bug). A signed-in session must never be treated as guest.
         localStorage.removeItem("ll_guest");
-        setUser(session.user); setAuthState("playing");
+        // v271 ROOT FIX (Chelsea's foreground clock rewind, Aug 14): iOS fires SIGNED_IN on
+        // every foreground TOKEN REFRESH, and setUser(session.user) minted a NEW object for
+        // the SAME person — so every effect keyed on [user] (the full launch restore, the
+        // saver) re-ran MID-SESSION: clock rewound to the cloud's last snapshot, timer
+        // stopped, first-tap gate re-armed (probe-convicted: "CLOUD RESTORE applying timers"
+        // on every foreground). Same identity now keeps the SAME object — no state change,
+        // no re-fire. A genuinely different account still swaps normally.
+        setUser(prev => (prev && session.user && prev.id === session.user.id) ? prev : session.user);
+        setAuthState("playing");
       }
       if (event === "SIGNED_OUT") {
         // Don't kick the user to auth if they're viewing a Farewell screen — they're
@@ -3284,6 +3444,11 @@ export default function App() {
           "ll_show_mascots"
         ];
         keysToClear.forEach(k => { try { localStorage.removeItem(k); } catch {} });
+        // v254: sessions are per-owner keys (ll_session__<owner>) — sweep them all here.
+        // "Wipe local storage entirely so no remnants persist" is this block's contract,
+        // and the deleted account's key is unreachable after signOut() (getCurrentOwnerSync
+        // would already read "guest"), so a targeted remove can't work — sweep by prefix.
+        try { Object.keys(localStorage).filter(k => k.startsWith("ll_session")).forEach(k => localStorage.removeItem(k)); } catch {}
       } catch {}
       setAuthState("auth");
       // Brief delay so the auth screen renders before the alert
@@ -3654,7 +3819,29 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [tab, setTab] = useState(initialTab || "play");
   const [confetti, setConfetti] = useState(false);
   const [rainbowConfetti, setRainbowConfetti] = useState(false);
-  const [levelComplete, setLevelComplete] = useState(ss?.levelComplete || false);
+  // v246 Bug-B FIX: don't seed levelComplete=true from a FINISHED local session. ss.levelComplete
+  // is true both for a legit mid-game between-levels resume AND for a dead finished L5 board. For
+  // the latter we're deliberately showing the intro (replayable) and must NOT carry the completed
+  // flag into the fresh start, or it re-triggers the completed-state UI. A finished game =
+  // (levelComplete on L5) or perfectDay; in that case seed false. Mid-game (L1-4) resume unaffected.
+  // v266 ROOT FIX (the historic resurrection taproot): ss.perfectDay is the ELIGIBILITY
+  // flag — TRUE throughout every clean run — not "PD earned." Treating it as "finished"
+  // zeroed levelComplete on every clean-run resume, so a level finished below L5 came back
+  // as a dead live-looking board (limbo). Historically masked by the cloud restore's
+  // clean-sweep inference winning ties; v257's stricter tie-breaker (correctly) unmasked it.
+  // Finished means the dead L5 board, full stop.
+  const ssLocalFinished = ss && (ss.levelComplete === true && (ss.level || 1) >= 5);
+  const [levelComplete, setLevelComplete] = useState(() => {
+    if (ssLocalFinished) return false;
+    if (ss?.levelComplete === true) return true;
+    // v266 local clean-sweep inference (mirror of v254 Fix B, same Jul-25 rule: completion
+    // on every level ⟺ clean sweep): a sub-L5 session with every tile used IS a completed
+    // level, even if levelComplete was saved false — self-heals sessions written during
+    // the limbo window.
+    const t = ss?.tiles || [];
+    if ((ss?.level || 1) < 5 && t.length > 0 && t.every(x => x && x.used)) return true;
+    return false;
+  });
   // (v104) Mascot Celebrations toggle. ONE runtime preference, persisted in ll_show_mascots
   // (defaults ON). EVERY mascot moment (Level Clear now; WoD/Great Word/Pirate Hint/Streak Bonus
   // later — item #16) routes through the showMascotCelebrations() gate below, so there is exactly
@@ -3709,8 +3896,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // button at the base of the tile board — lets a player end their day and share their
   // results anytime, without needing the game to detect they're "stuck".
   const [showEndGameConfirm, setShowEndGameConfirm] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const pausedRef = useRef(false);
+  // v257 #7 fix (piece 1): the paused flag persists in the local session — a game paused at
+  // close relaunches PAUSED with the clock frozen, killing the Aug3a sub-defect (b) silent
+  // time bleed (paused game returning RUNNING). Cloud rows carry no paused column; this is
+  // deliberately local-only per the #7 spec.
+  const [paused, setPaused] = useState(ss?.paused === true);
+  const pausedRef = useRef(ss?.paused === true);
   useEffect(() => { pausedRef.current = paused; }, [paused]);
   const [musicOn, setMusicOn] = useState(false);
   const [statsData, setStatsData] = useState(() => getLocalStats());
@@ -3718,6 +3909,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [showNameInput, setShowNameInput] = useState(false);
   const [perfectDay, setPerfectDay] = useState(ss?.perfectDay ?? true);
   const perfectDayRef = useRef(ss?.perfectDay ?? true);
+  // v249 DOUBLE-PAY FIX: "has THIS ACCOUNT already banked a Perfect Day today?" A PD is a
+  // once-per-day, per-ACCOUNT achievement — not per-device. Daryl's rule: if you're signed in,
+  // the day's PD follows the account to any device. v248 guarded on local stats alone
+  // (lastPerfectDate === today), which fails across devices: a PD earned on the phone leaves the
+  // iPad's local stats unaware, so the guard passed and the bonus paid a SECOND time (observed:
+  // +15,000 and streak 13→14 on a same-day iPad PD after a phone PD). Seeded here from local
+  // stats, then OR'd with the cloud session at init (see setPdBankedFromCloud below) so the
+  // account-level truth wins regardless of which device is playing.
+  const pdAlreadyBankedTodayRef = useRef((() => {
+    try {
+      const s = getLocalStats();
+      const t = getTodayKey();
+      return s.lastPerfectDate === t || ((s.perfectDaysWeek || {})[t] || 0) > 0;
+    } catch { return false; }
+  })());
+  // v256 #8 FIX (Layer C refs): cloudRowCompletedTodayRef = today's cloud row is already a
+  // finished game (derived in init from completed/finished/swept signals). playerActedRef =
+  // the player actually played THIS session (first word submit or explicit new-game start).
+  // Together they let syncToCloud refuse to clobber a settled day with an unplayed board.
+  const cloudRowCompletedTodayRef = useRef(false);
+  const playerActedRef = useRef(false);
   const setPerfectDaySync = useCallback((val) => { perfectDayRef.current = val; setPerfectDay(val); }, []);
   // Stale Perfect Day on launch fix (May 15, 2026):
   // Once the player has dismissed the Perfect Day modal today, set a localStorage flag.
@@ -3733,6 +3945,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   }, []);
   const [showRepeatPerfect, setShowRepeatPerfect] = useState(false);
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
+  // v259 #10a FIX: longest-word bookkeeping must complete IN THE SAME INSTANT as the submit.
+  // The Finishing Flourish word ends the game, and the game-completion cloud sync fires in
+  // that same handler tick — before React commits setLongestWordToday — so the row shipped
+  // with a STALE longest (Aug 8 proof: top_word = 28-letter ANTIDISESTABLISHMENTARIANISM,
+  // longest_word_today = 22-letter prior word; no later save ever corrects a finished game).
+  // The ref is the source of truth for every save payload; state remains for rendering.
+  const longestWordTodayRef = useRef(ss?.longestWordToday || "");
   const [longestWordAllTime, setLongestWordAllTime] = useState(localStorage.getItem("ll_longest") || "");
   const [perfectDayAchieved, setPerfectDayAchieved] = useState(false);
   // v91: full-screen two-pirate (male + female) jig celebration that plays BEFORE the Perfect
@@ -3778,15 +3997,60 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [shareLLCopied, setShareLLCopied] = useState(false);
   const [showIntro, setShowIntro] = useState(() => {
     try {
-      const sess = JSON.parse(localStorage.getItem("ll_session") || "null");
+      // v254: read via loadLocalSession() — it resolves the PER-OWNER key (with legacy
+      // fallback), date-checks, and owner-scopes at the source. A foreign identity's
+      // session comes back null here, so the explicit owner check below is now
+      // belt-and-suspenders rather than the primary wall.
+      const sess = loadLocalSession();
       const d = new Date();
       const todayKey = d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
       // Stale Perfect Day on launch fix (May 15, 2026):
       // If the player completed and acknowledged a Perfect Day today, show Welcome screen
       // on re-launch (not the stale completed-game state that triggered the modal). They
       // can decide from Welcome whether to play another round or just check stats.
+      // v263 #4 FIX (Test-1 failure, Aug 11): a LIVE same-day session outranks the
+      // pd-acknowledged rule below — otherwise every relaunch after a banked PD routes
+      // Welcome \u2192 PLAY NOW \u2192 Ready \u2192 (L1 map) OVER a live replay, and the Welcome Back
+      // screen never gets its moment. Ruling (a): Welcome Back REPLACES the Welcome
+      // screen for these resumes, so a live owned session seeds showIntro FALSE and the
+      // Welcome Back overlay fronts the restored board instead.
+      const ownerNow = getCurrentOwnerSync();
+      // v264: perfectDay here is ELIGIBILITY (true during any clean run), not "earned" —
+      // only the dead L5 board marks a session finished. (Same conflation as the
+      // welcomeBack initializer; both fixed together.)
+      const liveOwned = sess && (sess.owner || "guest") === ownerNow && sess.savedDate === todayKey &&
+        !(sess.levelComplete === true && (sess.level || 1) >= 5) &&
+        ((sess.submitted && sess.submitted.length > 0) || (sess.totalScore || 0) > 0 || (sess.level || 1) > 1 || sess.levelComplete === true);
+      if (liveOwned) return false;
       const pdAcknowledged = localStorage.getItem("ll_pd_acknowledged_today") === todayKey;
       if (pdAcknowledged) return true;
+      // v246 Bug-B FIX (local second source): a FINISHED game is NOT an "active game to
+      // resume". The check below treated any level>1 local session as resumable, so a completed
+      // L5 board (level 5) skipped the intro and dropped the player onto the dead board — the
+      // second source behind the resurrection (the cloud-restore guard alone wasn't enough).
+      // A finished local session (levelComplete on L5, or perfectDay) should show the intro/
+      // Welcome screen instead, exactly like pdAcknowledged above — replayable, per Daryl's
+      // locked decision. Fields (levelComplete, perfectDay) are what saveLocalSession writes.
+      const localFinished = sess && sess.savedDate === todayKey &&
+        ((sess.levelComplete === true && (sess.level || 1) >= 5) || sess.perfectDay === true);
+      if (localFinished) return true;
+      // v253 account-scoping (remaining-work item 4): a session belongs to the account
+      // (owner === user.id) or to "guest". If the CURRENT identity doesn't match the saved
+      // owner, this is not our game to resume — show intro / fresh game. Sessions saved
+      // before v253 have no owner field; treat missing owner as "guest" so pre-upgrade
+      // guest sessions still resume (accounts had cloud restore anyway).
+      const currentOwner = getCurrentOwnerSync();
+      const sessOwner = sess ? (sess.owner || "guest") : "guest";
+      if (sess && sessOwner !== currentOwner) return true; // not ours → intro
+      // v253 Fix 1: a level completed BELOW L5 (finished a level, queued for the next,
+      // quit) must resume to its Level-Complete modal — the "Play Level N+1" screen —
+      // NOT the dead board. levelComplete===true with level<5 is exactly that state.
+      // The modal (render ~7000) shows whenever levelComplete is true; seeding showIntro
+      // false lets it surface. Timer needs no special handling: restored totalTime shows,
+      // and the existing first-tap-starts-clock logic runs when they open Level N+1.
+      const localSubL5Complete = sess && sess.savedDate === todayKey &&
+        sess.levelComplete === true && (sess.level || 1) < 5;
+      if (localSubL5Complete) return false; // resume straight to the complete modal
       // Restore if: same day AND (has submitted words OR is on level > 1)
       const hasActiveGame = sess && sess.savedDate === todayKey && (
         (sess.submitted && sess.submitted.length > 0) || (sess.level && sess.level > 1)
@@ -3794,6 +4058,40 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       return !hasActiveGame;
     } catch { return true; }
   });
+  // ═══════════════════════════════════════════════════════════════
+  // v262 #4 — WELCOME-BACK RESUME FLOW (Daryl's three rulings, Aug 11):
+  //  (a) same-day resume shows a dedicated Welcome Back screen (replaces the plain drop
+  //      onto the board / the old Welcome for these paths);
+  //  (b) a level-completed-below-L5 resume gets finish-line copy, then the existing
+  //      Level-Complete modal flow untouched beneath;
+  //  (c) resumes NEVER re-show the Loot Letter card (it lives in the submit line) —
+  //      see resumeSkipLootRef in dismissLevelWelcome.
+  // Routing rule: "initiated" = at least one word submitted ON the current level (or
+  // level score already banked). Initiated → straight back to the live board. Not
+  // initiated → the Level-N map/Good-Luck page (minus Loot card), then the board.
+  // ═══════════════════════════════════════════════════════════════
+  const [welcomeBack, setWelcomeBack] = useState(() => {
+    try {
+      if (!ss) return null;
+      const d = new Date();
+      const tk = d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+      if (ss.savedDate !== tk) return null;
+      const lvl = ss.level || 1;
+      // v264 FIX: session.perfectDay is the ELIGIBILITY flag — TRUE throughout every clean
+      // run — not "PD earned." Reading it as "finished" classified every healthy live game
+      // as a finished day and stood the Welcome Back card down (Test-1b failure, Aug 11).
+      // A finished day is the dead board alone: L5 complete.
+      const finished = (ss.levelComplete === true && lvl >= 5);
+      if (finished) return null; // finished days keep the replayable Welcome (locked decision)
+      const played = (ss.submitted && ss.submitted.length > 0) || (ss.totalScore || 0) > 0 || lvl > 1 || ss.levelComplete === true;
+      if (!played) return null; // pristine session — no ceremony needed
+      const swept = (() => { const t = ss.tiles || []; return t.length > 0 && t.every(x => x && x.used); })();
+      if ((ss.levelComplete === true || swept) && lvl < 5) return { level: lvl, variant: "finish" }; // v266: sweep inference — matches the levelComplete seed
+      const initiated = (ss.submitted || []).some(s => s && s.level === lvl) || (ss.levelScore || 0) > 0;
+      return { level: lvl, variant: initiated ? "return" : "chart" };
+    } catch { return null; }
+  });
+  const resumeSkipLootRef = useRef(false);
   const CONGRATS_MSGS = [
     "Pure perfection. Every tile, every level, every word. You made it look easy.",
     "Five levels. Zero shortcuts. Today, your brain was unstoppable.",
@@ -3807,6 +4105,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     "Five levels down, not a single buyout or retry. That’s not luck — that’s mastery."
   ];
   const [congratsMsg] = useState(() => CONGRATS_MSGS[Math.floor(Math.random() * CONGRATS_MSGS.length)]);
+  // v250: message shown on a SAME-DAY REPEAT Perfect Day. Acknowledges the achievement (per
+  // Daryl's decision) while the modal itself awards NO streak bonus (bonus block is gated on
+  // perfectDayStreakBonus > 0, which stays 0 on a repeat). Level/all-tiles/Finishing-Flourish
+  // points still accrue normally during the game — only the once-per-day streak bonus is withheld.
+  const repeatPdMsg = "Another flawless voyage, Cap'n! Today's Perfect Day streak treasure be already in yer hold — but keep plunderin'!";
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [perfectDayStreakBonus, setPerfectDayStreakBonus] = useState(0);
   const [showStreakBonus, setShowStreakBonus] = useState(false);
@@ -3874,6 +4177,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       setTab("play");
       setShowGuestUpsell(true);
     } else {
+      // v260 #3: the farewell replaces GameScreen entirely, so this is a FRESH mount and
+      // showIntro starts true \u2014 which early-returns the Welcome screen and swallows the
+      // requested tab (the "Leaders \u2192 Welcome" misroute). Suppress the intro ONLY for
+      // leaderboard/stats routes \u2014 v267 SCOPE FIX: v260 suppressed it for ALL routes,
+      // which sent the farewell's Later to a bare board instead of Welcome (Aug 12).
+      if (initialTab === "leaderboard" || initialTab === "stats") setShowIntro(false);
       setTab(initialTab);
     }
     onTabConsumed?.();
@@ -4068,7 +4377,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       // start a fresh game / play around. The Welcome screen / fresh game flow handles
       // them from here.
       const acknowledged = localStorage.getItem("ll_pd_acknowledged_today") === getTodayKey();
-      if (acknowledged) return;
+      if (acknowledged) {
+        // v260 #3 hardening: with the intro suppressed by farewell tab routes, an acknowledged
+        // PD + dead board could otherwise render the dead board itself. Route to Welcome.
+        const rem0 = tiles.filter(t => !t.used).length;
+        if (level >= 5 && rem0 === 0) setShowIntro(true);
+        return;
+      }
       const completedToday = localStorage.getItem("ll_completed_today") === getTodayKey();
       const remaining = tiles.filter(t => !t.used).length;
       const boardEmpty = level >= 5 && remaining === 0;
@@ -4119,6 +4434,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const nextLoopRef = useRef(0);
   const clearedLevelsRef = useRef({});
   const syncTimerRef = useRef(null);
+  // v257 #7 (piece 3): tracks the last level pushed to the cloud so the primary saver can
+  // detect a level TRANSITION (immediate sync) vs ordinary play (debounced sync). Seeded
+  // with the session's mount level so launch never registers as a transition.
+  const lastSyncedLevelRef = useRef(ss?.level || 1);
 
   const availableTiles = tiles.filter(t => !t.used);
   const vowelsRemaining = availableTiles.filter(t => VOWELS.has(t.letter)).length;
@@ -4215,18 +4534,77 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             perfectDaysAllTime: Math.max(cloudStats.perfectDaysAllTime||0, localStats.perfectDaysAllTime||0),
             consecutivePerfectDays: Math.max(cloudStats.consecutivePerfectDays||0, localStats.consecutivePerfectDays||0),
             longestStreak: Math.max(cloudStats.longestStreak||0, localStats.longestStreak||0),
+            lastPerfectDate: (dateKeyToNum(localStats.lastPerfectDate) >= dateKeyToNum(cloudStats.lastPerfectDate)) ? localStats.lastPerfectDate : cloudStats.lastPerfectDate,
           };
           setStatsData(mergedStats);
           saveLocalStats(mergedStats);
+          // v249 DOUBLE-PAY FIX (account-level, cross-device): mergedStats is the account's true
+          // picture (cloud vs local, most-recent lastPerfectDate wins — line above). If it shows a
+          // PD already banked for today, mark it so the bonus block refuses a second payout even
+          // though THIS device's local stats may know nothing about it (e.g. PD earned on the
+          // phone, second PD attempted on the iPad). Set before the restore gate so a skipped
+          // dead-board restore can't bypass it. Never cleared to false here — only ever raised —
+          // so a stale/empty cloud read cannot un-bank a PD this device already recorded.
+          try {
+            const tKey = getTodayKey();
+            if (mergedStats.lastPerfectDate === tKey ||
+                ((mergedStats.perfectDaysWeek || {})[tKey] || 0) > 0) {
+              pdAlreadyBankedTodayRef.current = true;
+            }
+          } catch {}
           setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
         }
-        if (dailySession && dailySession.level != null && !justResetRef.current) {
+        // v249 DOUBLE-PAY FIX: today's cloud daily_sessions row is the most direct account-level
+        // signal that a PD is already banked for today. Checked here, OUTSIDE/BEFORE the restore
+        // gate below, so it still applies when the dead-board restore is skipped.
+        if (dailySession && dailySession.perfect_day === true) {
+          pdAlreadyBankedTodayRef.current = true;
+        }
+        // v243 Bug-B FIX (cloud-restore side): a FINISHED final-level game must NOT be
+        // restored as a board. The old gate below only asked "is cloud further along than
+        // local?" — a completed L5 cloud row (level 5 > local level 1) passed and dropped the
+        // player onto a dead finished board (the cross-launch / cross-account resurrection).
+        // The v241 boardIsDead guard only protected the LOCAL SAVE path; the CLOUD RESTORE
+        // path had no such guard. Here we treat a completed final level (level_complete && L5+)
+        // as "day's game is over" and skip the board restore entirely, so the player falls
+        // through to a fresh, REPLAYABLE start (Daryl's locked decision: finished day = play
+        // again, not a locked done-state). Stats/points/badges still sync above (separate
+        // block). Mid-game completes on L1-4 (level done, awaiting Next-Level advance) are NOT
+        // skipped — only the truly-finished final level is. Mirrors the local boardIsDead shape.
+        // v245 Bug-B FIX (corrected fields, confirmed by v244 on-device probe): the cloud
+        // daily_sessions row has NO level_complete field. The real completion signals are
+        // `completed` (row-level game-done flag) and `perfect_day`. A finished final-level
+        // board = (completed===true OR perfect_day===true) AND level>=5. Guard on those.
+        const cloudBoardIsFinished = dailySession && (dailySession.completed === true || dailySession.perfect_day === true) && (dailySession.level || 1) >= 5;
+        // v255 Fix B: the `completed` half of the guard above was HALF-DEAD until v255 —
+        // the column was never written (see the v255 Fix A note in syncToCloud), so only
+        // Perfect-Day L5 finishes were protected from dead-board resurrection. A player who
+        // finished L5 WITHOUT a PD (swept the board but missed WoD / forfeited PD) and then
+        // restored from cloud (second device, or lost local session) got the finished board
+        // back. Same clean-sweep rule as the sub-L5 inference (Daryl, Jul 25: completion on
+        // EVERY level ⟺ all tiles used; tiles remaining = failed clear): a restored L5 row
+        // whose tiles are ALL used is a finished game → skip the board restore → replayable
+        // Welcome (Daryl's locked decision). Also covers all pre-v255 rows, which can never
+        // have completed:true.
+        const cloudL5Swept = dailySession && (dailySession.level || 1) >= 5 &&
+          (dailySession.tiles || []).length > 0 && dailySession.tiles.every(t => t.used);
+        // v256 #8 FIX (Layer C): remember that today's cloud row is a settled, finished game.
+        // Re-derived (not just raised) on every init so an account switch can't carry a stale
+        // true. syncToCloud consults this before writing — see the Layer C guard there.
+        cloudRowCompletedTodayRef.current = !!(dailySession && (dailySession.completed === true || cloudBoardIsFinished || cloudL5Swept));
+        if (dailySession && dailySession.level != null && !justResetRef.current && !cloudBoardIsFinished && !cloudL5Swept) {
           // Only restore cloud session if it's further along than local session
           const localLevel = ss?.level || 1;
           const localSubmitted = ss?.submitted?.length || 0;
           const cloudLevel = dailySession.level || 1;
           const cloudSubmitted = (dailySession.submitted || []).length;
-          const useCloud = cloudLevel > localLevel || (cloudLevel === localLevel && cloudSubmitted >= localSubmitted);
+          const useCloud = cloudLevel > localLevel || (cloudLevel === localLevel && cloudSubmitted > localSubmitted);
+          // v257 #7 fix (piece 4): the tie-breaker above was >= — a TIE on level and word
+          // count handed the day to the CLOUD, whose timers are frozen at the last word
+          // submission, silently discarding the local save's fresher timers (the background
+          // save was working all along; arbitration threw its work away — reconciles the
+          // Aug3a "exists but evidently not persisting" mystery). Local is this device's own
+          // at-least-as-fresh snapshot; cloud now wins only when STRICTLY further along.
           if (useCloud) {
             // Hard cap on cloud level
             const safeCloudLevel = (!ENABLE_BONUS_LEVELS && cloudLevel > 5) ? 5 : cloudLevel;
@@ -4242,10 +4620,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             // in progress with PD intact" — local is the source of truth in that case.
             // Cloud only overrides when it confirms a true Perfect Day.
             if (dailySession.perfect_day === true) setPerfectDaySync(true);
-            setLongestWordToday(dailySession.longest_word_today || "");
+            longestWordTodayRef.current = dailySession.longest_word_today || ""; setLongestWordToday(longestWordTodayRef.current);
+            TPROBE("CLOUD RESTORE applying timers: cloud lvlT=" + (dailySession.level_time || 0) + " totT=" + (dailySession.total_time || 0) + " (overwrites local seed)");
             levelTimeRef.current = dailySession.level_time || 0; totalTimeRef.current = dailySession.total_time || 0;
             setLevelTime(dailySession.level_time || 0); setTotalTime(dailySession.total_time || 0);
             if (dailySession.level_complete) { setLevelComplete(true); restoredComplete = true; }
+            // v254 Fix B (cloud second source, found via Daryl's account-switch test Jul 25):
+            // the cloud row has NO level_complete field (v245 probe), so a level finished
+            // below L5 restored as a live-looking board with the last word — not the
+            // "Level N Complete / Play Level N+1" modal. RULE (Daryl, Jul 25): on EVERY
+            // level, completion ⟺ clean sweep of all tiles; an unsuccessful end leaves
+            // tiles UNUSED. So restored tiles all used + level<5 IS the completion signal.
+            // L5 stays excluded: a swept L5 = game over, handled by the cloudBoardIsFinished
+            // guard above (finished day → replayable intro, Daryl's locked decision).
+            // NOTE: this inference rests on the clean-sweep rule — if a future feature ever
+            // completes an L1-4 level without sweeping, add a real level_complete column.
+            const restoredTiles = dailySession.tiles || [];
+            if (safeCloudLevel < 5 && restoredTiles.length > 0 && restoredTiles.every(t => t.used)) {
+              setLevelComplete(true); restoredComplete = true;
+            }
             if (dailySession.undo_used) setUndoUsed(true);
           }
         }
@@ -4277,9 +4670,33 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     init();
   }, [user, isGuest]);
 
-  const syncToCloud = useCallback(async () => {
+  const syncToCloud = useCallback(async (snapshotDay) => {
     if (isGuest || !user) return;
     const todayKey = getTodayKey();
+    // v256 #8 FIX, Layers A+B (frozen-timer laundering): scheduled syncs carry the day they
+    // were CAPTURED (snapshotDay, stamped in scheduleSyncToCloud). iOS freezes a pending
+    // 3-second sync timer on suspend and fires it on resume — even the next morning — so a
+    // stale timer used to write yesterday's board under today's date_key (confirmed in the
+    // Aug 10 SQL pulls: four corrupted rows, all level_score 0, PD/completed sticky-true but
+    // level/score/time from a dead session). If the day changed since capture, the snapshot
+    // describes a game that no longer exists — discard it. Direct calls (leaderboard refresh,
+    // name change, game-end) pass no snapshotDay and are unaffected by this guard.
+    if (snapshotDay && snapshotDay !== todayKey) {
+      if (DEBUG_MODE) console.log("[SYNCGUARD] snapshot day " + snapshotDay + " != today " + todayKey + " — sync discarded");
+      return;
+    }
+    // v256 #8 FIX, Layer C (a settled day never downgrades): if today's cloud row is already
+    // a finished game and the player has NOT actually played this session, local state is an
+    // unplayed fresh board (the finished-day restore is deliberately skipped — Daryl's locked
+    // replayable-Welcome decision) and writing it would clobber the finished row. This was the
+    // relaunch/cross-device downgrade in the Aug 10 pulls, and the suspected #3
+    // leaderboard-round-trip downgrade shares this exit. Nothing truthful to write → skip.
+    // playerActedRef flips on first word submit or an explicit new-game start, after which
+    // saves flow normally — replays remain fully supported.
+    if (cloudRowCompletedTodayRef.current && !playerActedRef.current) {
+      if (DEBUG_MODE) console.log("[SYNCGUARD] cloud row already completed for " + todayKey + " and no play this session — sync skipped");
+      return;
+    }
     // Compute top scoring word of all submitted words this game
     const validWords = submittedRef.current.filter(s => s.valid);
     const topEntry = validWords.reduce((best, s) => !best || s.score > best.score ? s : best, null);
@@ -4297,8 +4714,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         level, totalScore: totalRef.current, levelScore: levelScoreRef.current,
         tiles, submitted: submittedRef.current, perfectDay: cloudPerfectDay,
         tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
-        totalTime: totalTimeRef.current, longestWordToday, levelComplete, newBestTime, undoUsed,
+        totalTime: totalTimeRef.current, longestWordToday: longestWordTodayRef.current, levelComplete, newBestTime, undoUsed,
         gameIndex: gameIndexRef.current, wotdFound: wotdFound,
+        // v255 Fix A: the cloud `completed` column was NEVER written — supabase.js line 144
+        // does `session.completed || false` and App.jsx never passed the field, so every row
+        // ever written has completed:false (this also explains the July23d "completed=false
+        // on PD rows" mystery). gameIsComplete (the ll_completed_today check, computed above)
+        // is exactly the right value and was already sitting here unused by the payload.
+        completed: gameIsComplete,
         topWord: topEntry?.word || "", topWordScore: topEntry?.score || 0,
       }),
       saveGameState(user.id, (() => {
@@ -4317,17 +4740,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
           currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
           lastStreakDate: statsData.lastStreakDate, badges: liveBadges,
-          stats: {...statsData, playerName: playerNameRef.current || playerName}, timeRecords: timeLeaderboard,
+          stats: {...getLocalStats(), playerName: playerNameRef.current || playerName}, timeRecords: timeLeaderboard,
         };
       })()),
     ]);
   }, [user, isGuest, level, tiles, longestWordToday, badgeStore, statsData, timeLeaderboard, playerName, levelComplete, newBestTime, undoUsed]);
 
+  // v256 #8 FIX: the scheduled timer routes through a ref so a woken stale timer calls the
+  // LATEST syncToCloud (reading current state), never a frozen old closure — and it carries
+  // the day it was scheduled so the Layers A+B day-guard above can veto it after a rollover.
+  const syncToCloudRef = useRef(null);
+  useEffect(() => { syncToCloudRef.current = syncToCloud; }, [syncToCloud]);
   const scheduleSyncToCloud = useCallback(() => {
     if (isGuest || !user) return;
     clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(syncToCloud, 3000);
-  }, [syncToCloud, isGuest, user]);
+    const snapshotDay = getTodayKey(); // Layer A: the day is stamped at CAPTURE time, not fire time
+    syncTimerRef.current = setTimeout(() => { if (syncToCloudRef.current) syncToCloudRef.current(snapshotDay); }, 3000);
+  }, [isGuest, user]);
 
   const showSavedIndicator = useCallback(() => { setSavedIndicator(true); setTimeout(() => setSavedIndicator(false), 2000); }, []);
 
@@ -4338,16 +4767,53 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // cleared it. No backgrounding required. Guarding only the visibility save would have left
     // this open and looked like a partial fix.
     // Board state, NOT ll_completed_today — that flag stays set through a second game (see ~3990).
-    const boardIsDead = level >= 5 && tiles.filter(t => !t.used).length === 0;
+    const unusedCount = tiles.filter(t => !t.used).length;
+    // v241 Bug-B FIX: the old guard (all tiles used) missed a Finishing-Flourish clear, which ends
+    // the game with tiles still on the board — so the finished board was saved as in-progress.
+    // Also treat the board as dead when the game is genuinely COMPLETE (levelComplete true on L5).
+    // Safe against the "second game same day" case: a fresh game resets levelComplete to false, so
+    // the second game saves normally.
+    const boardIsDead = level >= 5 && (unusedCount === 0 || levelComplete === true);
+    // v233 FFLEAK PROBE (TEMPORARY, DEBUG_MODE only): B-bug diagnosis. Logs the exact
+    // board/flag state at the instant this save effect fires on an L5 board, BEFORE the
+    // dead-board guard returns. Goal: see why an FF-completed board slips past boardIsDead
+    // and gets written into ll_session. Read-only — no behavior change.
+    if (DEBUG_MODE && level >= 5) {
+      console.log("[FFLEAK]",
+        "level=" + level,
+        "totalTiles=" + tiles.length,
+        "unusedCount=" + unusedCount,
+        "boardIsDead=" + boardIsDead,
+        "perfectDay=" + perfectDayRef.current,
+        "levelComplete=" + levelComplete,
+        "submittedLen=" + (submittedRef.current ? submittedRef.current.length : "null"),
+        "lastSubmitted=" + (submittedRef.current && submittedRef.current.length ? submittedRef.current[submittedRef.current.length - 1] : "none"),
+        "completedTodayFlag=" + (localStorage.getItem("ll_completed_today") === getTodayKey()),
+        "willSave=" + (!boardIsDead)
+      );
+    }
     if (boardIsDead) return;
-    saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current });
+    saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday: longestWordTodayRef.current, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current, paused: pausedRef.current }, user?.id);
     showSavedIndicator();
-    scheduleSyncToCloud();
+    // v257 #7 fix (piece 3): a LEVEL TRANSITION is a moment that matters — sync the cloud
+    // NOW, not after the 3-second debounce. Advancing into a level and closing inside the
+    // debounce window left the cloud ignorant of the new level entirely (Variant B: Mack x2,
+    // Daryl Aug 3 — "no level-5 row ever existed"). This effect runs post-commit, so the
+    // closures here are fresh; lastSyncedLevelRef starts at the mount level so app launch
+    // itself never counts as a transition (and so can't race the cloud restore).
+    if (level !== lastSyncedLevelRef.current) {
+      lastSyncedLevelRef.current = level;
+      clearTimeout(syncTimerRef.current);
+      if (syncToCloudRef.current) syncToCloudRef.current();
+    } else {
+      scheduleSyncToCloud();
+    }
   }, [level, tiles, badgeStore, streak, longestWordToday, levelComplete, newBestTime, undoUsed]);
 
   // Save immediately when user switches away (text message, other app, etc.)
   useEffect(() => {
     const handleVisibilityChange = () => {
+      TPROBE(document.hidden ? "BACKGROUND (hidden)" : "FOREGROUND (visible)");
       if (document.hidden) {
         // v226: DO NOT resurrect a DEAD board. Player report (July 16): finished L5 with
         // REWRITTEN, got the FF bonus, came back later and was dropped back on L5 with that same
@@ -4361,9 +4827,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         // that flag stays set while the player is mid-SECOND game, so guarding on it would kill
         // saves for the whole second game. `level >= 5 && remaining === 0` is the same dead-board
         // test used there, and it's true only when there is genuinely nothing to come back to.
-        const boardIsDead = level >= 5 && tiles.filter(t => !t.used).length === 0;
+        // v241 Bug-B FIX: same broadened guard as the primary saver above. Use levelCompleteRef
+        // (always-current) here rather than the closure value, since this handler can fire long
+        // after the completing render. (v254 comment correction, per Daryl: completion on EVERY
+        // level — L5 included, with or without a Finishing Flourish — means a clean sweep of all
+        // tiles. Tiles remaining = failed clear. The old note here claimed an "FF clear" could
+        // complete L5 with tiles remaining; that was wrong. The OR-guard below is still correct:
+        // when levelCompleteRef is true, remaining is 0 anyway — the flag just survives render lag.)
+        const boardIsDead = level >= 5 && (tiles.filter(t => !t.used).length === 0 || levelCompleteRef.current === true);
         if (boardIsDead) return;
-        saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current });
+        saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday: longestWordTodayRef.current, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current, paused: pausedRef.current }, user?.id);
+        // v257 #7 fix (piece 2): backgrounding is a moment that matters — push the snapshot
+        // (current timers included, read from refs) to the CLOUD immediately, inside iOS's
+        // few seconds of background grace. Previously only the local save ran here and the
+        // cloud rode a 3-second debounce that dies with the process — so a close after
+        // backgrounding left the cloud at the last word-submission snapshot (the #7 timer
+        // revert and the Variant-B "no L5 row ever existed" void). Best-effort by nature;
+        // the pending debounce is cancelled so no frozen stale timer survives (belt for the
+        // v256 day-guard's suspenders).
+        clearTimeout(syncTimerRef.current);
+        if (syncToCloudRef.current) syncToCloudRef.current();
       } else if (getTodayKey() !== mountedDayRef.current) {
         // v225: came back from the background and the DATE CHANGED. Everything date-keyed in this
         // app was read at mount — the session, the Word of the Day cache, stats/streak keys. Fixing
@@ -4385,17 +4868,23 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // calls startTimer() — fixing the recurrent "timer moving before any taps" leak
     // at its root instead of patching individual callers. The tile-tap handler clears
     // awaitingFirstTap, after which startTimer() (via the fair-timer effect) runs.
-    if (awaitingFirstTapRef.current) return;
+    if (awaitingFirstTapRef.current) { TPROBE("startTimer BLOCKED (first-tap gate)"); return; }
     if (timerRef.current) return;
     timerRef.current = setInterval(() => { levelTimeRef.current += 1; totalTimeRef.current += 1; setLevelTime(levelTimeRef.current); setTotalTime(totalTimeRef.current); }, 1000);
+    TPROBE("startTimer STARTED");
   }, []);
-  const stopTimer = useCallback(() => { clearInterval(timerRef.current); timerRef.current = null; }, []);
+  const stopTimer = useCallback(() => { clearInterval(timerRef.current); timerRef.current = null; TPROBE("stopTimer"); }, []);
+  // v270 TIMER PROBE (Chelsea field report, Aug 14: mid-game clock "back down to 00:00" +
+  // day total under wall-clock). Console-only, DEBUG-gated, reads refs — never setState.
+  function TPROBE(tag) { if (DEBUG_MODE) try { console.log("[TPROBE] " + tag + " | lvlT=" + levelTimeRef.current + " totT=" + totalTimeRef.current + " paused=" + pausedRef.current + " gate=" + awaitingFirstTapRef.current + " interval=" + (timerRef.current ? "RUNNING" : "stopped")); } catch {} }
+  useEffect(() => { TPROBE("MOUNT seed | ss.levelTime=" + (ss && ss.levelTime || 0) + " ss.totalTime=" + (ss && ss.totalTime || 0) + " ss.paused=" + !!(ss && ss.paused)); }, []);
   // v79 CENTRAL FIX: resetLevelTimer now also stops the clock AND arms the first-tap
   // gate. Every level-entry/reset path calls resetLevelTimer(), so doing the freeze
   // here guarantees the timer stays at 0 until the player's first tap — regardless of
   // which path (handleNextLevel, doLevelReset, buy, fresh game) triggered the new level.
   // This replaces the fragile per-caller gate-arming that kept leaking.
   const resetLevelTimer = useCallback(() => {
+    TPROBE("resetLevelTimer (level entry: LEVEL clock -> 0, gate arming)");
     levelTimeRef.current = 0; setLevelTime(0);
     stopTimer();
     setAwaitingFirstTap(true); awaitingFirstTapRef.current = true;
@@ -4432,8 +4921,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       showIntro, showReadyScreen, awaitingFirstTap, tab, startTimer, stopTimer]);
 
   const handlePause = () => {
-    if (paused) { setPaused(false); startTimer(); if (musicOn) startMusic(); }
-    else { setPaused(true); stopTimer(); stopMusic(); }
+    if (paused) { TPROBE("RESUME from pause"); setPaused(false); startTimer(); if (musicOn) startMusic(); }
+    else {
+      TPROBE("PAUSE pressed");
+      setPaused(true); stopTimer(); stopMusic();
+      // v257 #7 fix (piece 1): Pause is a moment that matters — save NOW, locally and to the
+      // cloud, with paused:true persisted so a relaunch returns paused. Previously nothing
+      // saved on Pause at all (saves fired only on word submission — Daryl's Hawaii
+      // experiments, Aug3a). The immediate cloud sync also cancels any pending debounce so
+      // no stale frozen timer survives the pause.
+      saveLocalSession({ level, tiles, totalScore: totalRef.current, levelScore: levelScoreRef.current, submitted: submittedRef.current, badges: badgeStore.lifetime, streak, perfectDay: perfectDayRef.current, longestWordToday: longestWordTodayRef.current, tileCount: tileCountRef.current, levelTime: levelTimeRef.current, totalTime: totalTimeRef.current, levelComplete, newBestTime, undoUsed, gameIndex: gameIndexRef.current, paused: true }, user?.id);
+      if (!isGuest && user) { clearTimeout(syncTimerRef.current); if (syncToCloudRef.current) syncToCloudRef.current(); }
+    }
   };
 
   const startMusic = useCallback(() => {
@@ -4711,7 +5210,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // today. Once a player has reset a level / re-done / bought a level today, "Start New Game"
     // starts non-PD-eligible for the rest of the day — you get one clean shot at Perfect Day.
     const pdForfeitedToday = (() => { try { return localStorage.getItem("ll_pd_forfeited_today") === getTodayKey(); } catch { return false; } })();
-    setPerfectDaySync(!pdForfeitedToday); setPerfectDayAchieved(false); setLongestWordToday("");
+    setPerfectDaySync(!pdForfeitedToday); setPerfectDayAchieved(false); longestWordTodayRef.current = ""; setLongestWordToday("");
     setShowRepeatPerfect(false); setNewBestTime(false); setFinisherBonusEarned(0);
     setUndoUsed(false); setLastValidEntry(null); setShowUndoConfirm(false);
     setBonusRetryUsed(false); setShowBonusUnsuccessful(false); setShowBonusRestart(false); setShowBonusNo(false); setBonusRestartChoice(null);
@@ -4735,6 +5234,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         }
       }
     } catch {}
+    TPROBE("FULL RESET (fresh game): BOTH clocks -> 0");
     stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
     setLevelTime(0); setTotalTime(0);
     // v77 FIX: do NOT startTimer() here — this fresh-game reset routes to the Welcome/
@@ -4745,6 +5245,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     gameIndexRef.current += 1;
     clearLocalSession();
     justResetRef.current = true;
+    playerActedRef.current = true; // v256 #8 Layer C: explicit new game — replays after a finished day must save
     // After reset, drop to Welcome OR directly to Ready, never both.
     // Setting both causes a double-prompt: Welcome → Let's Go → Ready → Let's Go again.
     if (skipReady) {
@@ -4902,7 +5403,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // a temporal-dead-zone reference in the useCallback dependency array.
   const triggerFarewell = useCallback(() => {
     const bestEntry = submittedRef.current.filter(s => s.valid).reduce((best, s) => !best || s.score > best.score ? s : best, null);
-    onFarewell({ totalScore: totalRef.current, bestWord: bestEntry?.word || "", bestWordScore: bestEntry?.score || 0, shareText: getDayResultsShareText() });
+    // v260 #3/#5: tell the farewell whether today\u2019s PD is banked. getLocalStats() is
+    // updated synchronously at award time, so this is stale-closure-proof.
+    let pdBanked = false;
+    try { const s = getLocalStats(); const t = getTodayKey(); pdBanked = s.lastPerfectDate === t || ((s.perfectDaysWeek || {})[t] || 0) > 0; } catch {}
+    if (pdAlreadyBankedTodayRef.current) pdBanked = true;
+    onFarewell({ totalScore: totalRef.current, bestWord: bestEntry?.word || "", bestWordScore: bestEntry?.score || 0, shareText: getDayResultsShareText(), perfectDay: pdBanked });
   }, [onFarewell, getDayResultsShareText]);
 
   // Unified share helper (added May 25, 2026): opens the iOS native Share Sheet
@@ -5057,7 +5563,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
       const res = await fetch(`${base}/best_times?select=player_id,player_name,slot,seconds,date&limit=2000`, { headers: hdrs, signal: ctrl.signal }).finally(() => clearTimeout(timer));
-      const rows = res.ok ? await res.json() : [];
+      if (!res.ok) return null; // v259 #10b: a REJECTED response is a failure, not "no times yet" - surface the honest could-not-load message instead of an empty board (#6 principle: never report OUR failure as THEIR absence)
+      const rows = await res.json();
       // Filter out any blank/Guest names defensively (mirrors the score board's guard).
       const clean = rows.filter(r => {
         const n = (r.player_name || "").trim().toLowerCase();
@@ -5131,6 +5638,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const handleSubmit = async () => {
     if (currentWord.length < 3 || validating || paused) return;
     if (!online) { showFlash({ word: "No internet connection!", score: 0, valid: false }, 2000); return; }
+    playerActedRef.current = true; // v256 #8 Layer C: real play this session — the settled-day sync guard lifts
     setValidating(true);
     // Hard safety timeout — if validation hangs for any reason, force-clear after 15s
     const safetyTimer = setTimeout(() => {
@@ -5146,10 +5654,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       return;
     }
     clearTimeout(safetyTimer);
-    if (result.source === "timeout") {
-      showFlash({ word: "Dictionary lookup timed out — try again.", score: 0, valid: false }, 3000);
-      setShake(true); setTimeout(() => setShake(false), 500);
-      setSelected([]); setValidating(false); return;
+    if (result.source === "timeout" || result.valid === null) {
+      // v261 #6: OUR failure, not their word. Attempt is NOT consumed — no rejection recorded,
+      // no streak reset, and the tiles stay selected so Submit retries the same word instantly.
+      showFlash({ word: "\uD83D\uDCE1 Can't reach the dictionary \u2014 please check connection", score: 0, valid: false, lookupFail: true }, 3000);
+      setValidating(false); return;
     }
     const valid = result.valid;
     const isMedical = result.source === "medical";
@@ -5286,7 +5795,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         ...(score > 200 ? { infinityScore: score } : {}),
       });
       setStatsData(updated);
-      if (currentWord.length > (longestWordToday.length||0)) { setLongestWordToday(currentWord); }
+      if (currentWord.length > (longestWordTodayRef.current.length||0)) { longestWordTodayRef.current = currentWord; setLongestWordToday(currentWord); } // v259 #10a: ref updates synchronously so the game-ending FF word is never missed by the completion sync
       if (currentWord.length > (longestWordAllTime.length||0)) { setLongestWordAllTime(currentWord); localStorage.setItem("ll_longest", currentWord); }
       if (isMedical) awardBadge("medical_word");
       const validCount = newSubmitted.filter(s => s.valid).length;
@@ -5398,6 +5907,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           setTimeout(() => setLevelComplete(true), 1200);
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
+          // v241 Bug-B FIX: Level 5 completion must set levelComplete=true, exactly as levels 1–4
+          // do (see the `if (level < 5)` branch above). Without this, a finished L5 game — including
+          // a Finishing-Flourish clear that leaves tiles on the board — was saved to ll_session with
+          // levelComplete:false, so the same-day restore treated it as in-progress and dropped the
+          // player back onto the finished board (re-awarding points). Setting it true here makes the
+          // save guard and the restore path both recognise the game as done and route to the
+          // Perfect Day / Play Again summary instead. Set the ref immediately too, so the
+          // visibilitychange save guard (which reads the ref) is correct without a one-render gap.
+          setLevelComplete(true);
+          levelCompleteRef.current = true;
+          // v241 Bug-B FIX (part 2 — the core fix): clear the stale ll_session. On a Finishing
+          // Flourish the board IS fully cleared (all tiles used), but the completion sequence is
+          // deferred up to 10s behind the finisher overlay. The empty-board save is blocked by the
+          // dead-board guard, so the save that REMAINS in storage is the one from just BEFORE the
+          // final word — when the FF's letters were still unused. Nothing overwrote or cleared it,
+          // so on same-day re-open that pre-final-word snapshot restores and the already-used FF
+          // letters RE-APPEAR on an L5 board. Clearing the session here removes that snapshot so
+          // there is nothing to resurrect. The Play Again / Perfect Day summary reads
+          // ll_completed_today, not ll_session, so nothing is lost.
+          clearLocalSession();
           // ── Game completion badges ──
           awardBadge("first_word"); // First Loot — first complete game
           awardBadge("level_5"); // Diamond Looter — completed Level 5
@@ -5424,20 +5953,47 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 const freshStats = getLocalStats();
                 const yKey = getYesterdayKey();
                 const wasPDYesterday = freshStats.lastPerfectDate === yKey;
-                const alreadyPDToday = freshStats.lastPerfectDate === getTodayKey();
+                const alreadyPDToday = freshStats.lastPerfectDate === getTodayKey() || pdAlreadyBankedTodayRef.current === true;
                 // If already PD today (replay): keep existing streak. Else if yesterday: increment. Else: reset to 1.
                 const newStreakCount = alreadyPDToday
                   ? (freshStats.consecutivePerfectDays || 1)
                   : (wasPDYesterday ? (freshStats.consecutivePerfectDays || 0) + 1 : 1);
                 const perfStreak = newStreakCount;
                 const streakBonus = 1000 + (perfStreak * 1000);
-                setPerfectDayStreakBonus(streakBonus);
-                setStreakBonusCount(perfStreak);
-                totalRef.current += streakBonus; setTotalScore(totalRef.current);
-                lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
-                // Show streak bonus first — PD screen shows when player taps Continue
-                triggerHaptic("heavy");
-                setTimeout(() => setShowStreakBonus(true), 1200);
+                // v249 DOUBLE-PAY FIX (supersedes v248's local-only guard): a Perfect Day is a
+                // once-per-day, per-ACCOUNT achievement. v248 guarded on alreadyPDToday alone —
+                // local stats only — which failed across devices: PD on the phone, then a same-day
+                // PD on the iPad paid the bonus a SECOND time (+15,000) and pushed the streak
+                // 13→14, because the iPad's local stats had no record of the phone's PD. We now
+                // OR in pdAlreadyBankedTodayRef, which is raised at init from the merged
+                // cloud+local stats AND from today's cloud daily_sessions perfect_day flag — so
+                // the account-level truth applies on whatever device is playing, as long as the
+                // player is signed in. (This whole block is already !isGuest.) On a repeat we skip
+                // the payout AND the streak modal — showing "+15,000" while awarding 0 would be
+                // its own bug. The Perfect Day celebration itself still shows.
+                const pdRepeatToday = alreadyPDToday || pdAlreadyBankedTodayRef.current === true;
+                if (!pdRepeatToday) {
+                  setPerfectDayStreakBonus(streakBonus);
+                  setStreakBonusCount(perfStreak);
+                  totalRef.current += streakBonus; setTotalScore(totalRef.current);
+                  lifetimeRef.current += streakBonus; setLifetimePoints(lifetimeRef.current);
+                  // Show streak bonus first — PD screen shows when player taps Continue
+                  triggerHaptic("heavy");
+                  setTimeout(() => setShowStreakBonus(true), 1200);
+                  // Bank it immediately so any further PD this session is treated as a repeat,
+                  // without waiting for a stats/cloud round-trip.
+                  pdAlreadyBankedTodayRef.current = true;
+                } else {
+                  // v250: SAME-DAY REPEAT Perfect Day — acknowledge it (Daryl's decision) but award
+                  // NO streak bonus. Force the bonus to 0 so the repeat modal's bonus block (gated
+                  // on perfectDayStreakBonus > 0) stays hidden, then show the existing
+                  // showRepeatPerfect modal (which already carries the "tracked daily / still worth
+                  // celebrating" line and awards nothing). Level/all-tiles/Finishing-Flourish points
+                  // still stand — only the once-per-day streak bonus is withheld.
+                  setPerfectDayStreakBonus(0);
+                  triggerHaptic("medium");
+                  setTimeout(() => setShowRepeatPerfect(true), 600);
+                }
                 // ── Check bonus level unlock ──
                 if (ENABLE_BONUS_LEVELS) {
                   const newConsecutive = getConsecutivePerfectDays({...statsData, perfectDaysAllTime: (statsData.perfectDaysAllTime||0)+1});
@@ -5627,7 +6183,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const lvl = levelAnnounceNum;
     setLevelAnnounceNum(null);
     if (lvl != null) {
-      fireLootAnnounce(lvl);
+      // v262 #4(c): resumes skip the Loot Letter card — it's already in the submit line.
+      if (!resumeSkipLootRef.current) fireLootAnnounce(lvl);
+      resumeSkipLootRef.current = false;
       if (wotd && !wotdFound) showWotdReminderWithPause();
     }
   };
@@ -5923,7 +6481,16 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           setEditingProfile(false);
           // Only reset if game is truly finished (all tiles used on level 5)
           const allUsed = tiles.every(t => t.used);
-          const gameComplete = allUsed && level === 5;
+          // v247 Bug-B FIX (the real root cause): PLAY NOW only reset to a fresh Level 1 when
+          // `allUsed` (every tile consumed) AND level===5. But a FINISHED game — especially a
+          // Perfect Day won without clearing every tile — leaves tiles on the board, so allUsed
+          // is false, gameComplete was false, the reset was SKIPPED, and PLAY NOW just showed the
+          // Ready prompt over the STALE finished board (the resurrection). A game is "complete"
+          // when it's board-cleared on L5 (allUsed) OR the loaded session was already finished
+          // (ssLocalFinished = levelComplete-on-L5 or Perfect Day, computed once at mount from the
+          // saved session). Using ssLocalFinished — NOT the live perfectDayRef, which defaults true
+          // and would misfire on a fresh in-progress L5. Mid-game (L1-4) untouched: level===5 required.
+          const gameComplete = level === 5 && (allUsed || levelComplete === true || ssLocalFinished === true);
           if (gameComplete) {
             const rng = seededRandom(getDailySeed());
             const bp = getBonusPositions(42, getBonusCount(1), rng);
@@ -5938,8 +6505,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             // v100 (item #2c): respect the per-day PD forfeit flag here too — starting another
             // game today via PLAY NOW must not re-open a Perfect Day shot once forfeited.
             const pdForfeitedToday2 = (() => { try { return localStorage.getItem("ll_pd_forfeited_today") === getTodayKey(); } catch { return false; } })();
-            setPerfectDaySync(!pdForfeitedToday2); setLongestWordToday("");
+            setPerfectDaySync(!pdForfeitedToday2); longestWordTodayRef.current = ""; setLongestWordToday("");
             setUndoUsed(false); setLastValidEntry(null);
+            TPROBE("FULL RESET (PLAY NOW replay): BOTH clocks -> 0");
             stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
             setLevelTime(0); setTotalTime(0);
             // v77 FIX: no startTimer() here — routes to Ready prompt; clock stays frozen
@@ -5962,7 +6530,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{marginTop:18,width:"100%",background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:14,padding:"14px 16px",textAlign:"center"}}>
             <div style={{fontSize:10,color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
             <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:6,fontFamily:"Georgia,serif"}}>{wotd}</div>
-            <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",lineHeight:1.5}}>
+            <div style={{fontSize:wotdFound?15:11,fontWeight:wotdFound?"bold":"normal",color:wotdFound?"#4ade80":"rgba(255,255,255,0.6)",lineHeight:1.5}}>{/* v268: found-it line bigger/bolder (Daryl, Aug 12) */}
               {wotdFound ? "✓ You found it! +1,000 pts" : "Find & spell it during today's game for a 1,000 pt bonus!"}
             </div>
           </div>
@@ -6097,7 +6665,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{position:"absolute",top:ipadIntro(3),left:showMascotsPref?ipadIntro(23):ipadIntro(3),width:ipadIntro(22),height:ipadIntro(22),borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
           </div>
         </div>
-        <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; fireLevelStartSequence(1); }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
+        <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; fireLevelStartSequence(level); /* v263 #4: announce the ACTUAL level — hardcoded 1 mislabeled resumed games */ }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
           Let's Go! 🎯
         </button>
       </div>
@@ -6443,7 +7011,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
       {flash&&<div style={{position:"fixed",top:"40%",left:"50%",zIndex:9997,animation:"pop 0.3s ease forwards",background:flash.valid?(flash.medical?"rgba(0,150,200,0.97)":"rgba(30,160,70,0.97)"):"rgba(190,30,30,0.96)",borderRadius:18,padding:`${ipadTour(14)}px ${ipadTour(30)}px`,boxShadow:"0 6px 28px rgba(0,0,0,0.7)",textAlign:"center"}}>
         <div style={{fontSize:ipadTour(20),fontWeight:"bold",letterSpacing:3,color:"#fff"}}>{flash.word}</div>
-        <div style={{fontSize:flash.valid?ipadTour(16):ipadTour(13),color:"#fff",marginTop:4}}>{flash.valid&&flash.score>0?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}`:flash.valid?"":("Not a valid word!")}</div>
+        <div style={{fontSize:flash.valid?ipadTour(16):ipadTour(13),color:"#fff",marginTop:4}}>{flash.valid&&flash.score>0?`+${flash.score} pts ${flash.medical?"🩺 Medical":flash.collegiate?"📖":""}`:flash.valid?"":(flash.lookupFail?"Tap Submit to retry":"Not a valid word!")}</div>
       </div>}
 
       {showShareMenu && renderShareMenu()}
@@ -6733,7 +7301,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:pdAir(6),marginBottom:pdAir(6)}}>
             <button className="ll-btn" onClick={()=>{
               if (isGuest) { setPerfectDayAchieved(false); setShowGuestUpsell(true); return; }
-              markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setTab('leaderboard');
+              markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setPerfectDayAchieved(false); setLevelComplete(false); setTab('leaderboard'); // v260 #3: clear levelComplete so the L5-Complete modal can't zombie over the leaderboard
             }} style={{padding:`${ipadTour(11)}px ${ipadTour(6)}px`,borderRadius:12,background:isGuest?"rgba(255,255,255,0.04)":"rgba(246,211,101,0.18)",border:isGuest?"1px solid rgba(255,255,255,0.15)":"1px solid rgba(246,211,101,0.6)",color:isGuest?"rgba(255,255,255,0.5)":"#fef3c7",fontSize:ipadTour(12),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>
               {isGuest?<span><span style={{filter:"grayscale(0.6)",opacity:0.55}}>🏆</span> Leaderboard <span style={{color:"rgba(167,139,250,0.85)"}}>🔒</span></span>:"🏆 Leaderboard"}
             </button>
@@ -6753,7 +7321,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.7)",marginBottom:6}}>Want to play again?</div>
             <div style={{display:"flex",gap:6}}>
               <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
-              <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setShowIntro(true); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#dbeafe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
+              <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setLevelComplete(false); triggerFarewell(); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#dbeafe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
             </div>
           </div>
         </div>
@@ -6763,7 +7331,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(32)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(340),width:"90%",margin:"20px auto"}}>
           <div style={{display:"flex",justifyContent:"center",marginBottom:4}}><RainbowPot size={ipadTour(130)}/></div>
           <div style={{fontSize:ipadTour(24),fontWeight:"bold",marginTop:8}} className="perfect-text">PERFECT DAY!</div>
-          <div style={{fontSize:ipadTour(13),color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{congratsMsg}"</div>
+          <div style={{fontSize:ipadTour(13),color:"#f5f0e8",marginTop:10,lineHeight:1.7,fontStyle:"italic"}}>"{repeatPdMsg}"</div>
           {perfectDayStreakBonus > 0 && (
             <div style={{marginTop:10,background:"linear-gradient(135deg,rgba(246,211,101,0.2),rgba(253,160,133,0.15))",borderRadius:12,padding:"10px",border:"1px solid rgba(246,211,101,0.5)",textAlign:"center"}}>
               <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f6d365"}}>+{perfectDayStreakBonus.toLocaleString()} pts 🌈🏆</div>
@@ -6785,7 +7353,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           </div>
           <button className="ll-btn" onClick={()=>{
             if (isGuest) { setShowRepeatPerfect(false); setShowGuestUpsell(true); return; }
-            markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setTab('leaderboard');
+            markPDAcknowledged(); setLeaderboardFromPerfectDay(true); setShowRepeatPerfect(false); setLevelComplete(false); setTab('leaderboard'); // v260 #3: clear levelComplete so the L5-Complete modal can't zombie over the leaderboard
           }} style={{marginTop:12,width:"100%",padding:ipadTour(11),borderRadius:14,background:isGuest?"rgba(255,255,255,0.04)":"rgba(246,211,101,0.15)",border:isGuest?"1px solid rgba(255,255,255,0.15)":"1px solid rgba(246,211,101,0.5)",color:isGuest?"rgba(255,255,255,0.5)":"#f6d365",fontSize:ipadTour(13),fontWeight:"bold"}}>
             {isGuest?<span><span style={{filter:"grayscale(0.6)",opacity:0.55}}>🏆</span> Check Leaderboard <span style={{color:"rgba(167,139,250,0.85)"}}>🔒</span></span>:"🏆 Check Leaderboard"}
           </button>
@@ -6799,11 +7367,30 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {/* v64 (May 26): Simplified — Now + Later only. Tomorrow removed. */}
           <div style={{display:"flex",flexDirection:"row",gap:6}}>
             <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
-            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); setShowIntro(true); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
+            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); setLevelComplete(false); triggerFarewell(); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
           </div>
         </div>
       </div>}
 
+      {welcomeBack && <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(6,4,24,0.96)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}>
+        <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(34)}px ${ipadTour(30)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(246,211,101,0.45)",maxWidth:ipadTour(330),width:"90%"}}>
+          <div style={{fontSize:ipadTour(34),marginBottom:8}}>{welcomeBack.variant==="finish"?"\u2693":"\uD83C\uDF0A"}</div>
+          <div style={{fontSize:ipadTour(24),fontWeight:"bold",color:"#f6d365",marginBottom:10}}>Welcome Back{playerName?`, ${playerName}`:""}!</div>
+          <div style={{fontSize:ipadTour(17),fontWeight:"bold",color:"rgba(255,255,255,0.95)",lineHeight:1.55,marginBottom:20}}>{/* v265: bigger, bolder — Daryl: the message should land */}
+            {welcomeBack.variant==="finish" ? `Level ${welcomeBack.level} be conquered \u2014 let\u2019s get this finished!`
+             : welcomeBack.variant==="return" ? `Yer Level ${welcomeBack.level} voyage awaits, right where ye left it.`
+             : `Ready to chart Level ${welcomeBack.level}, matey?`}
+          </div>
+          <button className="ll-btn" onClick={()=>{
+            const wb = welcomeBack; setWelcomeBack(null);
+            if (wb.variant === "chart") { resumeSkipLootRef.current = true; fireLevelStartSequence(wb.level); }
+            // "return": straight to the live board. "finish": the Level-Complete modal is
+            // already rendered beneath this overlay \u2014 dismissing reveals it (existing flow).
+          }} style={{width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(18),fontWeight:"bold",border:"none"}}>
+            {welcomeBack.variant==="finish"?"\u2693 Finish the Day":welcomeBack.variant==="return"?`\u2693 Return to Level ${welcomeBack.level}`:`\u2693 Set Sail \u2014 Level ${welcomeBack.level}`}
+          </button>
+        </div>
+      </div>}
       {levelComplete&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(36)}px ${ipadTour(32)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(320),width:"90%"}}>
           {/* v94: celebrating pirate with a per-level entrance animation + level-specific saying */}

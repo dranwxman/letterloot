@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = true; // v273 dev cycle OPEN (Aug 19) — admin auto-clear + FF board; flip false pre-archive
+const DEBUG_MODE = false; // v277 SHIP BUILD (v1.6.2) — admin auto-clear + Ruling B resume consistency; cycle closed Aug 19
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
@@ -4092,6 +4092,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     } catch { return null; }
   });
   const resumeSkipLootRef = useRef(false);
+  // v275: set the moment the player declares resume intent (Resume tap or WB "Return to
+  // Level N"). The ASYNC launch restore finishes its network fetches seconds after mount
+  // and then arms the first-tap gate + stops the clock — which RACED a fast intent tap and
+  // froze the clock over a running timer (Daryl's static-00:17 find, Aug 19). The init's
+  // arming site now yields to declared intent; consumed one-shot.
+  const resumeIntentRef = useRef(false);
   const CONGRATS_MSGS = [
     "Pure perfection. Every tile, every level, every word. You made it look easy.",
     "Five levels. Zero shortcuts. Today, your brain was unstoppable.",
@@ -4599,6 +4605,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           const cloudLevel = dailySession.level || 1;
           const cloudSubmitted = (dailySession.submitted || []).length;
           const useCloud = cloudLevel > localLevel || (cloudLevel === localLevel && cloudSubmitted > localSubmitted);
+          TPROBE("ARBITRATION | localLvl=" + localLevel + " localSub=" + localSubmitted + " cloudLvl=" + cloudLevel + " cloudSub=" + cloudSubmitted + " -> " + (useCloud ? "CLOUD WINS" : "LOCAL KEPT"));
           // v257 #7 fix (piece 4): the tie-breaker above was >= — a TIE on level and word
           // count handed the day to the CLOUD, whose timers are frozen at the last word
           // submission, silently discarding the local save's fresher timers (the background
@@ -4660,7 +4667,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       // (covers every restore path) UNLESS the level is already complete (awaiting Next-Level
       // advance, which arms its own gate). The gate clears on first tile tap.
       const alreadyComplete = restoredComplete || ss?.levelComplete === true;
-      if (!alreadyComplete) {
+      // v275 RACE FIX: if the player already declared resume intent (Resume tap or WB
+      // "Return to Level N") before this async init finished, do NOT freeze the clock they
+      // just started — honor the intent and restart the timer over any restore side effects.
+      if (resumeIntentRef.current) {
+        resumeIntentRef.current = false;
+        if (!alreadyComplete && !pausedRef.current) startTimer();
+      } else if (!alreadyComplete) {
         stopTimer();
         setAwaitingFirstTap(true); awaitingFirstTapRef.current = true;
       }
@@ -4876,8 +4889,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const stopTimer = useCallback(() => { clearInterval(timerRef.current); timerRef.current = null; TPROBE("stopTimer"); }, []);
   // v270 TIMER PROBE (Chelsea field report, Aug 14: mid-game clock "back down to 00:00" +
   // day total under wall-clock). Console-only, DEBUG-gated, reads refs — never setState.
-  function TPROBE(tag) { if (DEBUG_MODE) try { console.log("[TPROBE] " + tag + " | lvlT=" + levelTimeRef.current + " totT=" + totalTimeRef.current + " paused=" + pausedRef.current + " gate=" + awaitingFirstTapRef.current + " interval=" + (timerRef.current ? "RUNNING" : "stopped")); } catch {} }
-  useEffect(() => { TPROBE("MOUNT seed | ss.levelTime=" + (ss && ss.levelTime || 0) + " ss.totalTime=" + (ss && ss.totalTime || 0) + " ss.paused=" + !!(ss && ss.paused)); }, []);
+  function TPROBE(tag) { if (DEBUG_MODE) try {
+    const line = new Date().toISOString().slice(11,23) + " " + tag + " | lvlT=" + levelTimeRef.current + " totT=" + totalTimeRef.current + " paused=" + pausedRef.current + " gate=" + awaitingFirstTapRef.current + " interval=" + (timerRef.current ? "RUNNING" : "stopped");
+    console.log("[TPROBE] " + line);
+    // v276 FLIGHT RECORDER: cold-launch probe lines fire before the Inspector can attach and
+    // die with the process — so they also land in a localStorage ring buffer (last 60) that
+    // SURVIVES the kill. Dump after any relaunch: JSON.parse(localStorage.ll_tprobe_log)
+    const buf = JSON.parse(localStorage.getItem("ll_tprobe_log") || "[]");
+    buf.push(line); while (buf.length > 60) buf.shift();
+    localStorage.setItem("ll_tprobe_log", JSON.stringify(buf));
+  } catch {} }
+  useEffect(() => { TPROBE("MOUNT seed | ss=" + (ss ? "PRESENT" : "NULL") + " ss.level=" + (ss && ss.level || 0) + " ss.submitted=" + (ss && ss.submitted && ss.submitted.length || 0) + " ss.levelTime=" + (ss && ss.levelTime || 0) + " ss.totalTime=" + (ss && ss.totalTime || 0) + " ss.paused=" + !!(ss && ss.paused) + " owner=" + (typeof getCurrentOwnerSync === "function" ? getCurrentOwnerSync() : "?")); }, []);
   // v79 CENTRAL FIX: resetLevelTimer now also stops the clock AND arms the first-tap
   // gate. Every level-entry/reset path calls resetLevelTimer(), so doing the freeze
   // here guarantees the timer stays at 0 until the player's first tap — regardless of
@@ -4921,7 +4943,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       showIntro, showReadyScreen, awaitingFirstTap, tab, startTimer, stopTimer]);
 
   const handlePause = () => {
-    if (paused) { TPROBE("RESUME from pause"); setPaused(false); startTimer(); if (musicOn) startMusic(); }
+    if (paused) {
+      TPROBE("RESUME from pause");
+      // v274 RULING B (Daryl, Aug 19: "time is a competitive category — requires consistency"):
+      // an explicit Resume tap IS the intent the first-tap gate was waiting for. Previously a
+      // cold relaunch (iOS killed the app during a long absence) re-armed the gate, so Resume
+      // left the clock frozen until a tile tap — while a quick warm return resumed instantly.
+      // Same player action now behaves identically regardless of what iOS did in between.
+      awaitingFirstTapRef.current = false; setAwaitingFirstTap(false);
+      resumeIntentRef.current = true; // v275: survives a late-arriving init (see resumeIntentRef)
+      setPaused(false); startTimer(); if (musicOn) startMusic();
+    }
     else {
       TPROBE("PAUSE pressed");
       setPaused(true); stopTimer(); stopMusic();
@@ -7384,6 +7416,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <button className="ll-btn" onClick={()=>{
             const wb = welcomeBack; setWelcomeBack(null);
             if (wb.variant === "chart") { resumeSkipLootRef.current = true; fireLevelStartSequence(wb.level); }
+            // v274 RULING B: "Return to Level N" is declared intent — the clock starts the
+            // moment the live board appears. Exception: a session restored PAUSED keeps its
+            // frozen clock until Resume (which now also clears the gate). Fresh games and
+            // the "chart" new-level path keep the first-tap gate untouched.
+            if (wb.variant === "return" && !pausedRef.current) {
+              awaitingFirstTapRef.current = false; setAwaitingFirstTap(false);
+              resumeIntentRef.current = true; // v275: survives a late-arriving init
+              startTimer();
+            }
             // "return": straight to the live board. "finish": the Level-Complete modal is
             // already rendered beneath this overlay \u2014 dismissing reveals it (existing flow).
           }} style={{width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(18),fontWeight:"bold",border:"none"}}>

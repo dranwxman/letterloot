@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v277 SHIP BUILD (v1.6.2) — admin auto-clear + Ruling B resume consistency; cycle closed Aug 19
+const DEBUG_MODE = true; // v300 dev cycle OPEN — 1.8: WoD card XL text, grown-WoD sayings, SF WoD cards, foundBonus restore fix. Flip false pre-archive. (Aug 23)
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
@@ -142,27 +142,43 @@ function vcDangerState(v, c, tilesRemaining) {
 // v171: Daryl's lines, verbatim. No emoji. Each carries the +1,000 itself, which is why the
 // panel needs no separate points row. Lengths run 46-61 chars, so the panel breathes a little
 // differently day to day (Daryl: "2 or 3 lines is fine").
+// v298 (Malleable WoD): "+1,000" hard-codes replaced by a {BONUS} slot — the bonus now varies
+// (1,000 base + 200 per letter beyond the WoD's length), so pickWotdSaying(bonus) fills the
+// real amount. Daryl's wording otherwise verbatim (ruling A, Aug 23).
 const WOTD_SAYINGS = [
-  "The Word o' the Day be YOURS \u2014 +1,000 doubloons!",
-  "Ye found the day's treasure \u2014 +1,000 to yer hoard!",
-  "Struck gold, ye clever devil \u2014 +1,000 doubloons be yers!",
-  "That be the very word \u2014 +1,000 bits conferred.",
-  "The daily prize is best \u2014 +1,000 in the chest!",
-  "Word o' the Day plundered'll keep us afloat longer \u2014 +1,000!",
-  "A captain's find to keep us from a bind \u2014 +1,000 to yer name!",
+  "The Word o' the Day be YOURS \u2014 +{BONUS} doubloons!",
+  "Ye found the day's treasure \u2014 +{BONUS} to yer hoard!",
+  "Struck gold, ye clever devil \u2014 +{BONUS} doubloons be yers!",
+  "That be the very word \u2014 +{BONUS} bits conferred.",
+  "The daily prize is best \u2014 +{BONUS} in the chest!",
+  "Word o' the Day plundered'll keep us afloat longer \u2014 +{BONUS}!",
+  "A captain's find to keep us from a bind \u2014 +{BONUS} to yer name!",
+];
+// v300 (Malleable WoD): separate rotation when the player GREW the word beyond the listed WoD —
+// the find is bigger and better than asked, so the line should say so. Same daily-seeded pick.
+// Drafts pending Kim's copy pass (Daryl, Aug 23).
+const WOTD_GROWN_SAYINGS = [
+  "Ye GREW the Word o' the Day \u2014 +{BONUS} fer yer bigger bounty!",
+  "The day's word, stretched to fit more gold \u2014 +{BONUS} doubloons!",
+  "Not just found \u2014 EXPANDED! +{BONUS} to yer hoard!",
+  "A longer word, a heavier chest \u2014 +{BONUS} fer the haul!",
+  "Ye took the day's treasure and built upon it \u2014 +{BONUS}!",
+  "Bigger word, bigger bounty \u2014 +{BONUS} doubloons be yers!",
+  "The Cap'n asked fer one word \u2014 ye brought back MORE! +{BONUS}!",
 ];
 // Rotate on DAYS-SINCE-EPOCH, not getDailySeed(). getDailySeed() is YYYYMMDD, which jumps by
 // 70 across a 31-day month boundary (20260731 -> 20260801) — and 70 % 7 == 0, so the same
 // saying would repeat two days running every such rollover. Epoch-days increments by exactly 1
 // per day, so the cycle never stalls. (Consequence, by design: with 7 sayings on a 7-day cycle
 // each line lands on the same weekday each week.)
-function pickWotdSaying() {
+function pickWotdSaying(bonus = 1000, grew = false) {
   // LOCAL midnight, not UTC: Date.now()/86400000 would flip the saying at 5pm Pacific,
   // out of step with getTodayKey() and every other date-keyed thing in the app.
   const d = new Date();
   const dayIdx = Math.floor(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 86400000);
   const n = WOTD_SAYINGS.length;
-  return WOTD_SAYINGS[((dayIdx % n) + n) % n];
+  const pool = grew ? WOTD_GROWN_SAYINGS : WOTD_SAYINGS;
+  return pool[((dayIdx % n) + n) % n].replace("{BONUS}", bonus.toLocaleString("en-US"));
 }
 
 function pickGreatWordSaying(sessionIdx) {
@@ -1242,16 +1258,36 @@ function getCachedWordOfTheDay() {
   } catch {}
   return null;
 }
+// v299 (Malleable WoD rule A): the WoD is a ROOT MINIMUM. The root = the WoD minus ONE common
+// grammatical ending (longest match first), stripped from the END only, and never below 5
+// letters (short WoDs keep their full form as the root). A played word counts if it is valid,
+// CONTAINS the root as a contiguous block, and is AT LEAST as long as the listed WoD.
+// SURPRISED -> root SURPRIS: SURPRISING/UNSURPRISING/SURPRISES/UNSURPRISED all count;
+// SURPRISE fails (shorter than 9); SURREPTITIOUS fails (no SURPRIS block).
+const WOTD_STRIP_ENDINGS = ["ING","EST","ED","ER","ES","S","D"];
+function wotdRoot(w) {
+  const W = (w || "").toUpperCase();
+  for (const e of WOTD_STRIP_ENDINGS) {
+    if (W.endsWith(e) && W.length - e.length >= 5) return W.slice(0, W.length - e.length);
+  }
+  return W;
+}
+function isWotdMatch(playedWord, wotdWord) {
+  if (!playedWord || !wotdWord) return false;
+  const P = playedWord.toUpperCase(), W = wotdWord.toUpperCase();
+  return P.length >= W.length && P.includes(wotdRoot(W));
+}
 function saveCachedWordOfTheDay(word) {
   try { localStorage.setItem("ll_wotd", JSON.stringify({ date: getTodayKey(), word, found: false, version: WOTD_CACHE_VERSION })); } catch {}
 }
-function markWordOfTheDayFound(level, score) {
+function markWordOfTheDayFound(level, score, bonus = 1000) {
   try {
     const cached = getCachedWordOfTheDay();
     if (cached) {
       cached.found = true;
       cached.foundLevel = level;
       cached.foundScore = score;
+      cached.foundBonus = bonus; // v299: varies with word length now
       cached.version = WOTD_CACHE_VERSION;
       localStorage.setItem("ll_wotd", JSON.stringify(cached));
     }
@@ -1828,6 +1864,10 @@ function VisualTour({ onDone }) {
             <div style={{fontSize:ipadTour(14),color:'#6ee7b7',fontWeight:'bold',marginBottom:ipadTour(4)}}>✨ Loot Letters</div>
             <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Every level hides one Loot Letter — a single tile worth 5× its normal value. We'll tell you which letter it is, but not which tile holds it. Use it in a word to pocket the bonus.</div>
           </div>
+          <div style={{background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.4)',borderRadius:12,padding:ipadTour(11)}}>
+            <div style={{fontSize:ipadTour(14),color:'#a78bfa',fontWeight:'bold',marginBottom:ipadTour(4)}}>🎯 Word of the Day</div>
+            <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Each day names one word to hunt — and it's a root minimum: spell it OR any longer word containing it. Worth 1,000 pts, plus 200 pts per extra letter. Once per day, and required for a Perfect Day.</div>
+          </div>
           <div style={{background:'rgba(246,211,101,0.12)',border:'1px solid rgba(246,211,101,0.45)',borderRadius:12,padding:ipadTour(11)}}>
             <div style={{fontSize:ipadTour(14),color:'#ff4444',fontWeight:'bold',marginBottom:ipadTour(4)}}>🦜 Finishing Flourish Bonus</div>
             <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Use a 5+ letter word as your final, board-clearing word to pocket a Finishing Flourish Bonus — treasure that grows with every extra letter. The longer that finishing word, the bigger the haul!</div>
@@ -1839,6 +1879,14 @@ function VisualTour({ onDone }) {
           <div style={{background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.4)',borderRadius:12,padding:ipadTour(11)}}>
             <div style={{fontSize:ipadTour(14),color:'#c4b5fd',fontWeight:'bold',marginBottom:ipadTour(4)}}>🏴‍☠️ Pirate Celebrations</div>
             <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Our pirate crew cheers your big moments — clearing a level, a great word, a Perfect Day. Want them on or off? Toggle <strong style={{color:'#c4b5fd'}}>Show Mascot Celebrations</strong> on the "Ready?" screen before each game begins.</div>
+          </div>
+          <div style={{background:'rgba(246,211,101,0.12)',border:'1px solid rgba(246,211,101,0.45)',borderRadius:12,padding:ipadTour(11)}}>
+            <div style={{fontSize:ipadTour(14),color:'#f6d365',fontWeight:'bold',marginBottom:ipadTour(4)}}>🔭 The Spyglass</div>
+            <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>Unsure a word be in the LL dictionary? Tap the blue <strong style={{color:'#f6d365'}}>🔭 SCOUT</strong> chip beside yer staged word to scout it before ye commit yer tiles. The game clock keeps runnin' — certainty costs time, matey! Words we don't know can be sent to the Cap'n fer review.</div>
+          </div>
+          <div style={{background:'rgba(167,139,250,0.12)',border:'1px solid rgba(167,139,250,0.4)',borderRadius:12,padding:ipadTour(11)}}>
+            <div style={{fontSize:ipadTour(14),color:'#c4b5fd',fontWeight:'bold',marginBottom:ipadTour(4)}}>🏴‍☠️ Flourish Leaderboard</div>
+            <div style={{fontSize:ipadTour(12),color:'rgba(245,240,232,0.9)',lineHeight:1.55}}>The longest board-clearing Finishing Flourish words across all Looters. Find it under the <strong style={{color:'#c4b5fd'}}>🏴‍☠️ Flourish</strong> tab on the Leaderboard. Registered players only.</div>
           </div>
         </div>
       )
@@ -1896,7 +1944,7 @@ function VisualTour({ onDone }) {
           </div>
           <div style={{background:'rgba(255,255,255,0.07)',border:'1.5px solid rgba(255,255,255,0.2)',borderRadius:14,padding:ipadTour(14),fontSize:ipadTour(13),color:'#f5f0e8',lineHeight:2,textAlign:'left',marginBottom:ipadTour(10)}}>
             ✨ Clear all 5 levels — no buying or repeating<br/>
-            🎯 Find the Word of the Day<br/>
+            🎯 Find the Word of the Day — or any longer word containing it!<br/>
             🎉 Experience the big bonuses at Rainbow's End!<br/>
             <strong style={{color:'#f6d365'}}>Streaks increase your bonuses!</strong>
           </div>
@@ -1998,15 +2046,23 @@ function VisualTour({ onDone }) {
       <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(12)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(40)}px`,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
         <div style={{width:'100%',maxWidth:ipadW(560),minHeight:'calc(100vh - var(--ll-safe-top, 0px) - '+ipadIntroPad(60)+'px)',display:'flex',flexDirection:'column'}}>
           <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:ipadIntroPad(18),border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)',flex:1,display:'flex',flexDirection:'column'}}>
-            <div style={{textAlign:'center',fontSize:uT(17),fontWeight:'bold',color:'#f6d365',marginBottom:uT(16)}}>📢 What's New in v1.2</div>
+            <div style={{textAlign:'center',fontSize:uT(17),fontWeight:'bold',color:'#f6d365',marginBottom:uT(16)}}>📢 What's New in v1.7</div>
 
-            {/* v205/v213: FEATURED Finishing Flourish — enlarged, STRONGER border, bold red title. */}
+            {/* v293: FEATURED Spyglass (1.7). */}
             <div style={{background:"rgba(246,211,101,0.16)",border:"2.5px solid rgba(246,211,101,0.85)",borderRadius:14,padding:uT(18),boxShadow:"0 0 28px rgba(246,211,101,0.35)"}}>
               <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-                <span style={{fontSize:uT(24)}}>🏴‍☠️</span>
-                <span style={{fontSize:uT(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>Finishing Flourish Bonus</span>
+                <span style={{fontSize:uT(24)}}>🔭</span>
+                <span style={{fontSize:uT(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>The Spyglass</span>
               </div>
-              <div style={{fontSize:uT(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Use a 5+ letter word as your final, board-clearing word to pocket a Finishing Flourish Bonus — treasure that grows with every extra letter. The longer that finishing word, the bigger the haul!</div>
+              <div style={{fontSize:uT(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Not sure a word's in the LL dictionary? Tap the blue <strong style={{color:'#7cc4ff'}}>🔭 SCOUT</strong> chip beside yer built word to check it — without committing yer tiles. The clock keeps runnin', so certainty costs time, matey!</div>
+            </div>
+            {/* v293: Flourish Leaderboard card (1.7). */}
+            <div style={{background:"rgba(167,139,250,0.14)",border:"2px solid rgba(167,139,250,0.7)",borderRadius:14,padding:uT(14),boxShadow:"0 0 18px rgba(167,139,250,0.25)",marginTop:uT(12)}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+                <span style={{fontSize:uT(20)}}>🏴‍☠️</span>
+                <span style={{fontSize:uT(18),color:"#c4b5fd",fontWeight:"bold"}}>Flourish Leaderboard</span>
+              </div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.95)",lineHeight:1.55}}>New leaderboard tab: the longest board-clearing Finishing Flourish words, across all Looters. Registered players only — and the board starts fresh from 1.7, so get yer name up there first!</div>
             </div>
 
             {/* v209/v213: Tour note CENTERED in the gap — bigger font, STRONGER border. */}
@@ -2017,7 +2073,8 @@ function VisualTour({ onDone }) {
             {/* v204/v213: pared v1.1 recap — bigger font, STRONGER border. Keeps its live V/C demo. */}
             <div style={{background:"rgba(255,255,255,0.05)",border:"1.5px solid rgba(255,255,255,0.28)",borderRadius:12,padding:uT(16),marginBottom:uT(14)}}>
               <div style={{fontSize:uT(13),letterSpacing:1,color:"rgba(245,240,232,0.7)",fontWeight:"bold",marginBottom:uT(11),textTransform:"uppercase"}}>Still worth knowing</div>
-              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>✨ <strong style={{color:"#6ee7b7"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>🦜 <strong style={{color:"#ff4444"}}>Finishing Flourish Bonus</strong> — clear the board with a 5+ letter word for bonus treasure; longer = bigger haul.</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>✨ <strong style={{color:"#6ee7b7"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
               <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Pirate Celebrations</strong> — cheers for big moments (toggle on or off on the "Ready?" screen).</div>
               <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>⚠️ <strong style={{color:"#7cc4ff"}}>Vowel / Consonant Alert</strong> — the letter boxes pulse when your balance gets risky.</div>
               <div style={{display:'flex',justifyContent:'center',gap:uT(20),padding:`${uT(12)}px 0 ${uT(2)}px`}}>
@@ -3739,7 +3796,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
     try {
       const cached = getCachedWordOfTheDay();
-      return cached?.foundLevel ? { level: cached.foundLevel, score: cached.foundScore } : null;
+      return cached?.foundLevel ? { level: cached.foundLevel, score: cached.foundScore, bonus: cached.foundBonus || 1000 } : null;
     } catch { return null; }
   });
   // If no cached WoD, compute it in background after mount so it doesn't block the UI
@@ -4134,10 +4191,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // v203: key bumped v11→v12 for the v1.2 What's New (Finishing Flourish Bonus). Returning players
     // who dismissed the v1.1 screen have ll_whatsnew_v11_seen set; the new key means they see the
     // v1.2 screen once, then it's marked seen. Each version release bumps this suffix.
-    try { return localStorage.getItem("ll_whatsnew_v12_seen") !== "1"; } catch { return false; }
+    try { return localStorage.getItem("ll_whatsnew_v17_seen") !== "1"; } catch { return false; }
   });
   const dismissWhatsNew = () => {
-    try { localStorage.setItem("ll_whatsnew_v12_seen", "1"); } catch {}
+    try { localStorage.setItem("ll_whatsnew_v17_seen", "1"); } catch {}
     setShowWhatsNew(false);
   };
   const [leaderboardFromPerfectDay, setLeaderboardFromPerfectDay] = useState(false);
@@ -4355,7 +4412,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       }
       else if (debugAction === "show-whatsnew") {
         // v205 DEBUG: jump straight to the one-time "What's New" popup. It normally only appears
-        // once (gated by the ll_whatsnew_v12_seen flag on the Ready screen), so force both gates:
+        // once (gated by the ll_whatsnew_v17_seen flag on the Ready screen), so force both gates:
         // showReadyScreen + showWhatsNew. Does NOT clear the seen-flag, so this is view-only and
         // doesn't change whether a real player would see it.
         setShowIntro(false);
@@ -4484,6 +4541,46 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const tileRows = [];
   for (let i = 0; i < tiles.length; i += 7) tileRows.push(tiles.slice(i, i + 7));
   const currentWord = selected.map(id => tiles.find(t => t.id === id)?.letter).join("");
+  // ═══ v279 SPYGLASS (relocated: v278 anchored this block BEFORE selected/currentWord existed — the dep array read selected.length eagerly → TDZ ReferenceError → white screen at launch. Declaration order matters even for hooks.) (Daryl + player request, Aug 20): double-tap the staged word to check
+  // it against the LL dictionary BEFORE committing tiles — the FF-doubt scenario. Rules
+  // (Daryl's rulings): any word length; binary verdict only, NO score preview; the game
+  // clock KEEPS RUNNING (time is the collateral — "reinforces competitive fairness");
+  // blocked while paused (a frozen-clock check would dodge the fee); rejected words get
+  // "Submit fer Review" into the existing word_reports pipeline, zero game impact. ═══
+  const [spyglass, setSpyglass] = useState(null); // null | {word, status:'checking'|'valid'|'invalid'|'error', reported}
+  // v295: double-tap route removed (ruling A) — the SCOUT 🔭 chip is the sole access.
+  const [spyHint, setSpyHint] = useState(false);
+  const openSpyglass = async () => {
+    if (!currentWord || currentWord.length < 3 || validating || pausedRef.current) return;
+    const w = currentWord;
+    localStorage.setItem("ll_spyglass_used", "1"); setSpyUsed(true); setSpyHint(false);
+    setSpyglass({ word: w, status: "checking", reported: false });
+    try {
+      const r = await validateWord(w);
+      setSpyglass(s => s && s.word === w ? { ...s, status: r.valid === true ? "valid" : (r.valid === null || r.source === "timeout") ? "error" : "invalid" } : s);
+    } catch { setSpyglass(s => s && s.word === w ? { ...s, status: "error" } : s); }
+  };
+  const spyglassReport = async () => {
+    if (!spyglass || spyglass.reported) return;
+    try {
+      const { error } = await supabase.from("word_reports").insert({ word: spyglass.word.toLowerCase(), player_name: playerName || "Guest", email: user?.email || null });
+      if (!error) setSpyglass(s => s ? { ...s, reported: true } : s);
+    } catch {}
+  };
+  // v280 (Daryl's D): the hint re-appears at the first staged word of EVERY session until
+  // the player actually uses the Spyglass once — then retires forever. The permanent 🔭
+  // glyph in the word row remains the always-on affordance (v295: sole access — double-tap removed).
+  const spyHintShownThisSessionRef = useRef(false);
+  const [spyUsed, setSpyUsed] = useState(() => !!localStorage.getItem("ll_spyglass_used"));
+  useEffect(() => {
+    if (selected.length >= 3 && !localStorage.getItem("ll_spyglass_used") && !spyHintShownThisSessionRef.current) {
+      spyHintShownThisSessionRef.current = true;
+      setSpyHint(true);
+      const t = setTimeout(() => setSpyHint(false), 10000);
+      return () => clearTimeout(t);
+    }
+  }, [selected.length]);
+
   // v109: the DISPLAYED running score hides the loot 5x (so the loot tile can't be
   // identified by watching the counter). currentScoreReal keeps the 5x for scoring on submit.
   const currentScore = calcWordScore(selected, tiles, true);
@@ -5070,7 +5167,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (!next) { handOff(); return; }
     celebrationActiveRef.current = true;
     if (next.kind === "wotd") {
-      setWotdCelebration(true);
+      setWotdCelebration(next.payload || true); // v298: object { bonus } (or true from legacy paths)
       setConfetti(true); setTimeout(() => setConfetti(false), next.dwellMs);
     } else if (next.kind === "loot") {
       setLootCelebration(next.payload);
@@ -5260,7 +5357,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       if (cachedWotd) {
         setWotdFound(cachedWotd.found || false);
         if (cachedWotd.found && cachedWotd.foundLevel) {
-          setWotdFoundDetails({ level: cachedWotd.foundLevel, score: cachedWotd.foundScore });
+          // v300: include foundBonus — without it a relaunch showed "+1,000" for a grown find.
+          setWotdFoundDetails({ level: cachedWotd.foundLevel, score: cachedWotd.foundScore, bonus: cachedWotd.foundBonus || 1000 });
         } else {
           setWotdFoundDetails(null);
         }
@@ -5554,12 +5652,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       // weekSessions: fetch all, filter client-side using numeric date comparison
       // (server-side date_key=gte is unreliable due to lexicographic comparison
       // bugs e.g. "2026-5-10" < "2026-5-3")
-      const [gsRes, todayRes, weekRes, wotdAllRes, allWordSessionsRes] = await Promise.all([
+      const [gsRes, todayRes, weekRes, wotdAllRes, allWordSessionsRes, ffWordsRes] = await Promise.all([
         fetchWithAbort(`${base}/game_state?select=player_id,player_name,lifetime_points,current_streak,longest_streak,stats,badges&order=lifetime_points.desc&limit=100`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,longest_word_today,wotd_found,top_word,top_word_score&date_key=eq.${(()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();})()}&limit=100`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,total_score,perfect_day,wotd_found,longest_word_today,top_word,top_word_score&limit=2000`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,wotd_found&wotd_found=eq.true&limit=2000`),
         fetchWithAbort(`${base}/daily_sessions?select=player_id,date_key,longest_word_today,top_word,top_word_score&limit=2000`),
+        // v291: Flourish board feed — longest board-clearing words (ff_words, written in v287).
+        // Server-sorted length desc, created_at asc (Daryl's tie-break ruling, Aug 21).
+        fetchWithAbort(`${base}/ff_words?select=player_id,date_key,level,word,length,score,created_at&order=length.desc,created_at.asc&limit=500`),
       ]);
       const gsRaw = gsRes.ok ? await gsRes.json() : [];
       // v59: Filter out Guest entries from the leaderboard. Per spec, Guest
@@ -5578,7 +5679,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       const weekSessions = allWeekRaw.filter(s => dateKeyToNum(s.date_key) >= weekAgoNum);
       const wotdAllSessions = wotdAllRes.ok ? await wotdAllRes.json() : [];
       const allWordSessions = allWordSessionsRes.ok ? await allWordSessionsRes.json() : [];
-      return { gs, todaySessions, weekSessions, wotdAllSessions, allWordSessions };
+      const ffWords = ffWordsRes.ok ? await ffWordsRes.json() : [];
+      return { gs, todaySessions, weekSessions, wotdAllSessions, allWordSessions, ffWords };
     } catch { return null; }
   };
 
@@ -5733,7 +5835,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // v88 (item 17): flag the Word of the Day in History so it gets its own badge,
     // parallel to the Loot Letter. Only the FIRST time the WoD is found counts (matches
     // the wotdFound award gate below), so re-submitting the same word later isn't re-badged.
-    const isWotdWord = !!(valid && wotd && !wotdFound && currentWord.toUpperCase() === wotd.toUpperCase());
+    // v299 (Malleable WoD rule A): root-stem match — see wotdRoot()/isWotdMatch() by the WoD
+    // cache helpers. v298's strict containment missed SURPRISING/UNSURPRISING (no "ED" block).
+    const isWotdWord = !!(valid && wotd && !wotdFound && isWotdMatch(currentWord, wotd));
     // v202 (Finishing Flourish share, step 3, Option A): tag each entry with the LEVEL it was played
     // on and a FINISHER field (points earned if this word cleared the board, else 0). `finisher`
     // starts at 0 here because the real value isn't computed until the board-clear block below;
@@ -5758,19 +5862,20 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       const newLifetime = lifetimeRef.current + score;
       lifetimeRef.current = newLifetime; setLifetimePoints(newLifetime);
       if (isGuest) saveLifetimeData(newLifetime);
-      // ── Word of the Day check — award 1,000 bonus once per day ──
-      if (wotd && !wotdFound && currentWord.toUpperCase() === wotd.toUpperCase()) {
+      // ── Word of the Day check (v299 Malleable WoD rule A) — root-stem match, once per day.
+      // Bonus: 1,000 base + 200 per letter beyond the LISTED WoD's length (Daryl, Aug 23). ──
+      if (wotd && !wotdFound && isWotdMatch(currentWord, wotd)) {
+        const bonus = 1000 + 200 * Math.max(0, currentWord.length - wotd.length);
         setWotdFound(true);
-        setWotdFoundDetails({ level, score });
-        markWordOfTheDayFound(level, score);
-        const bonus = 1000;
+        setWotdFoundDetails({ level, score, bonus });
+        markWordOfTheDayFound(level, score, bonus);
         totalRef.current += bonus; setTotalScore(totalRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
         if (isGuest) saveLifetimeData(lifetimeRef.current);
         // Trigger celebration
         // v164: enqueued, not fired directly. enqueueCelebration() stops the clock now and
         // the drain runs it after the flash clears. Confetti + guarded resume live in the drain.
-        enqueueCelebration("wotd", null, 8000); // v172: 4s -> 8s (Daryl). Loot/Great Word unchanged.
+        enqueueCelebration("wotd", { bonus, grew: currentWord.length > wotd.length }, 8000); // v172: 4s -> 8s (Daryl). v300: bonus + grew flag for the saying.
       }
       const newTiles = tiles.map(t => {
         if (!selected.includes(t.id)) return t;
@@ -5873,6 +5978,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           // pushed to submittedRef just above), so the "Share My Results" builders can list it.
           const _last = submittedRef.current[submittedRef.current.length - 1];
           if (_last && _last.word === currentWord) _last.finisher = finisher;
+          // v285: Longest Flourish board feed. Signed-in players only (guests have no
+          // player_id; board banner says "Registered players only"). Fire-and-forget —
+          // a failed insert must never touch the game. Ties resolved on the board by
+          // created_at asc (Daryl's ruling, Aug 21).
+          if (!isGuest && user?.id) {
+            supabase.from("ff_words").insert({ player_id: user.id, date_key: getTodayKey(), level, word: currentWord.toLowerCase(), length: currentWord.length, score: finisher })
+              .then(({ error }) => { if (error && DEBUG_MODE) console.warn("[FF_WORDS] insert failed", error.message); })
+              .catch(e => { if (DEBUG_MODE) console.warn("[FF_WORDS] insert threw", e?.message); });
+          }
         }
         // ── v198 Finisher step 4: DEFERRED VISIBLE LEVEL-CLEAR SEQUENCE ──────────────
         // Everything the player SEES for a board clear — the BOARD CLEAR! flash, confetti,
@@ -6338,6 +6452,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
   // ── TIPS data (item 10) ────────────────────────────────────
   const TIPS = [
+    // v297: 1.7 features lead the list (Daryl's ruling — Spyglass 1st, Finishing Flourish 2nd).
+    { emoji:"🔭", title:"Scout with the Spyglass", body:"Not sure a word is in the LL dictionary? Tap the blue SCOUT chip beside your built word to check it without committing your tiles. The clock keeps running, so certainty costs time. Words we don't know can be sent to the Cap'n with Submit fer Review." },
+    { emoji:"🦜", title:"Finish with a Flourish", body:"Clear the board with a 5+ letter word to pocket a Finishing Flourish Bonus — the longer the word, the bigger the haul. Your best board-clearing words also land on the new 🏴‍☠️ Flourish leaderboard tab (registered players only)." },
+    { emoji:"🎯", title:"Grow the Word of the Day", body:"The Word of the Day is a root minimum — any valid word containing it counts! Spell a longer form (add a prefix, suffix, or both) and the 1,000-pt bonus grows by 200 pts for every extra letter." },
     { emoji:"👁️", title:"Watch Your Letters", body:"Remaining vowels and consonants are listed in the upper section of each level. Keep a close eye on these as tiles run low." },
     { emoji:"🌈🏆", title:"Perfect Day? Stay Relaxed", body:"Going for a Perfect Day (with rainbows!)? Don't stress the timer. Take your time, think it through, and enjoy the hunt." },
     { emoji:"⚠️", title:"Beware of Q's", body:"Only one U is guaranteed when a Q is present. Use it wisely before it's gone — a stranded Q can cost you the level." },
@@ -6560,10 +6678,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         {/* Word of the Day card */}
         {wotd && (
           <div style={{marginTop:18,width:"100%",background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:14,padding:"14px 16px",textAlign:"center"}}>
-            <div style={{fontSize:10,color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
+            {/* v299: label 10->13 and brighter, bottom line 11->13.5 and 0.6->0.92 white (Daryl:
+                "far too light and small for humans with any visual limitations"), copy updated
+                for the Malleable WoD rule, found-line shows the REAL banked bonus. */}
+            <div style={{fontSize:16,color:"#d8ccfd",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
             <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:6,fontFamily:"Georgia,serif"}}>{wotd}</div>
-            <div style={{fontSize:wotdFound?15:11,fontWeight:wotdFound?"bold":"normal",color:wotdFound?"#4ade80":"rgba(255,255,255,0.6)",lineHeight:1.5}}>{/* v268: found-it line bigger/bolder (Daryl, Aug 12) */}
-              {wotdFound ? "✓ You found it! +1,000 pts" : "Find & spell it during today's game for a 1,000 pt bonus!"}
+            <div style={{fontSize:wotdFound?16:15.5,fontWeight:"bold",color:wotdFound?"#4ade80":"rgba(255,255,255,0.98)",lineHeight:1.5}}>
+              {wotdFound ? `✓ You found it! +${((wotdFoundDetails && wotdFoundDetails.bonus) || 1000).toLocaleString("en-US")} pts` : "Spell it — or any longer form of it! 1,000 pts, +200 per extra letter."}
             </div>
           </div>
         )}
@@ -6635,18 +6756,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         {/* Header */}
         <div style={{textAlign:"center",marginBottom:ipadIntro(18)}}>
           <div style={{fontSize:ipadIntro(11),letterSpacing:2,color:"#a78bfa",fontWeight:"bold",marginBottom:ipadIntro(6)}}>WHAT'S NEW</div>
-          <div style={{fontSize:ipadIntro(22),color:"#f6d365",fontWeight:"bold"}}>Fresh treasure in v1.2</div>
+          <div style={{fontSize:ipadIntro(22),color:"#f6d365",fontWeight:"bold"}}>Fresh treasure in v1.7</div>
           <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.75)",marginTop:ipadIntro(6),lineHeight:1.5}}>A few things have changed since you last played — here's what to look for.</div>
         </div>
         {/* FF featured card */}
         <div style={{display:"flex",flexDirection:"column",gap:ipadIntro(12)}}>
-          {/* v203/v205/v212: FEATURED Finishing Flourish card — enlarged, STRONGER border, bold red title. */}
+          {/* v293: FEATURED Spyglass card (1.7) — gold box, bold red title, Daryl's ruling A. */}
           <div style={{background:"rgba(246,211,101,0.16)",border:"2.5px solid rgba(246,211,101,0.85)",borderRadius:14,padding:`${ipadIntroPad(18)}px ${ipadIntroPad(18)}px`,boxShadow:"0 0 28px rgba(246,211,101,0.35)"}}>
             <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-              <span style={{fontSize:ipadIntro(24)}}>🏴‍☠️</span>
-              <span style={{fontSize:ipadIntro(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>Finishing Flourish Bonus</span>
+              <span style={{fontSize:ipadIntro(24)}}>🔭</span>
+              <span style={{fontSize:ipadIntro(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>The Spyglass</span>
             </div>
-            <div style={{fontSize:ipadIntro(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Use a 5+ letter word as your final, board-clearing word to pocket a Finishing Flourish Bonus — treasure that grows with every extra letter. The longer that finishing word, the bigger the haul!</div>
+            <div style={{fontSize:ipadIntro(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Not sure a word's in the LL dictionary? Tap the blue <strong style={{color:'#7cc4ff'}}>🔭 SCOUT</strong> chip beside yer built word to check it — without committing yer tiles. The clock keeps runnin', so certainty costs time, matey!</div>
+          </div>
+          {/* v293: second card — Flourish Leaderboard (1.7). Slightly smaller than the featured card. */}
+          <div style={{background:"rgba(167,139,250,0.14)",border:"2px solid rgba(167,139,250,0.7)",borderRadius:14,padding:`${ipadIntroPad(14)}px ${ipadIntroPad(16)}px`,boxShadow:"0 0 18px rgba(167,139,250,0.25)"}}>
+            <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
+              <span style={{fontSize:ipadIntro(20)}}>🏴‍☠️</span>
+              <span style={{fontSize:ipadIntro(18),color:"#c4b5fd",fontWeight:"bold"}}>Flourish Leaderboard</span>
+            </div>
+            <div style={{fontSize:ipadIntro(15.5),color:"rgba(245,240,232,0.95)",lineHeight:1.55}}>New leaderboard tab: the longest board-clearing Finishing Flourish words, across all Looters. Registered players only — and the board starts fresh from 1.7, so get yer name up there first!</div>
           </div>
         </div>
         {/* v212: proportional spacer — content distributes down the screen to fill the space. */}
@@ -6658,7 +6787,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         {/* v203/v212: "still worth knowing" recap — bigger font, STRONGER border. */}
         <div style={{background:"rgba(255,255,255,0.05)",border:"1.5px solid rgba(255,255,255,0.28)",borderRadius:12,padding:`${ipadIntroPad(16)}px ${ipadIntroPad(18)}px`}}>
             <div style={{fontSize:ipadIntro(14),letterSpacing:1,color:"rgba(245,240,232,0.7)",fontWeight:"bold",marginBottom:ipadIntro(11),textTransform:"uppercase"}}>Still worth knowing</div>
-            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>✨ <strong style={{color:"#f6d365"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>🦜 <strong style={{color:"#ff4444"}}>Finishing Flourish Bonus</strong> — clear the board with a 5+ letter word for bonus treasure; longer = bigger haul.</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>✨ <strong style={{color:"#f6d365"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
             <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Pirate Celebrations</strong> — cheers for big moments (toggle on or off on the "Ready?" screen).</div>
             <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>⚠️ <strong style={{color:"#7cc4ff"}}>Vowel / Consonant Alert</strong> — the letter boxes pulse when your balance gets risky.</div>
         </div>
@@ -6687,6 +6817,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         <div style={{background:"rgba(255,255,255,0.10)",borderRadius:16,padding:`${ipadIntroPad(18)}px ${ipadIntroPad(22)}px`,border:"2px solid rgba(167,139,250,0.85)",marginBottom:ipadIntro(22),width:"100%",fontSize:ipadIntro(13),color:"rgba(255,255,255,0.92)",lineHeight:2.0}}>
           <div style={{marginBottom:ipadIntro(6)}}>✦ Each level hides one <strong style={{color:"#f6d365"}}>Loot Letter</strong> worth <strong style={{color:"#f6d365"}}>5× its value</strong> — we'll name the letter, but only 1 tile pockets the loot</div>
           <div style={{marginBottom:ipadIntro(6)}}>✦ Game Timer begins with your <strong style={{color:"#f6d365"}}>first letter tapped</strong></div>
+          <div style={{marginBottom:ipadIntro(6)}}>✦ Tap the blue <strong style={{color:"#f6d365"}}>🔭 SCOUT</strong> chip to Spyglass-check yer built word — the clock keeps runnin'!</div>
           <div>✦ Clear all 5 levels + find the Word of the Day to enjoy and share a <span style={{color:"#6ee7b7",fontWeight:"bold"}}>Perfect Day! 🌈🏆</span></div>
           <div style={{marginTop:ipadIntro(6)}}>✦ Toggle <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> below on or off anytime — your choice, every game</div>
         </div>
@@ -6808,7 +6939,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:`${ipadTour(18)}px ${ipadTour(22)}px`,boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:ipadTour(300),width:"100%",textAlign:"center",pointerEvents:"auto"}}>
             <div style={{fontSize:ipadTour(10),color:"#a78bfa",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
             <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:8}}>{wotd}</div>
-            <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.9)",marginBottom:12,lineHeight:1.5}}>Spell it for a <strong style={{color:"#fda085"}}>+1,000 pt bonus!</strong></div>
+            <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.95)",marginBottom:12,lineHeight:1.5}}>Spell it — or any longer form — for <strong style={{color:"#fda085"}}>+1,000 pts, +200 per extra letter!</strong></div>
             <button onClick={dismissWotdReminder} style={{padding:`${ipadTour(8)}px ${ipadTour(22)}px`,borderRadius:11,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",fontFamily:"Georgia,serif",fontSize:ipadTour(12),fontWeight:"bold",cursor:"pointer"}}>Got it ✓</button>
           </div>
         </div>
@@ -6833,7 +6964,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 fixed on the speech bubbles. Off-white on a 22% black scrim holds contrast wherever
                 the gradient lands. (Daryl chose the band over plain off-white.) */}
             <div style={{marginTop:ipadIntro(14),background:"rgba(0,0,0,0.22)",borderRadius:14,padding:`${ipadIntro(10)}px ${ipadIntro(12)}px`}}>
-              <div style={{fontSize:ipadIntro(15),color:"#fdf6e3",fontStyle:"italic",fontWeight:"bold",lineHeight:1.45}}>{pickWotdSaying()}</div>
+              <div style={{fontSize:ipadIntro(15),color:"#fdf6e3",fontStyle:"italic",fontWeight:"bold",lineHeight:1.45}}>{pickWotdSaying((typeof wotdCelebration === "object" && wotdCelebration && wotdCelebration.bonus) || 1000, !!(typeof wotdCelebration === "object" && wotdCelebration && wotdCelebration.grew))}</div>
             </div>
           </div>
         </div>
@@ -7404,6 +7535,28 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         </div>
       </div>}
 
+      {spyglass && <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(6,4,24,0.9)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}} onClick={()=>setSpyglass(null)}>
+        <div onClick={(e)=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:22,padding:`${ipadTour(36)}px ${ipadTour(30)}px`,textAlign:"center",border:"1.5px solid rgba(246,211,101,0.6)",maxWidth:ipadTour(400),width:"94%",boxShadow:"0 12px 48px rgba(0,0,0,0.8)"}}>
+          <div style={{fontSize:ipadTour(44),marginBottom:6,filter:"drop-shadow(0 0 8px rgba(124,196,255,0.6))"}}>🔭</div>
+          <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginBottom:4}}>The Spyglass</div>
+          <div style={{fontSize:ipadTour(15),fontStyle:"italic",color:"#e8e0d0",marginBottom:14}}>Scout yer word before committin' the tiles</div>
+          <div style={{fontSize:ipadTour(24),fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:12}}>{spyglass.word}</div>
+          {spyglass.status==="checking" && <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.75)",marginBottom:12}}>Scoutin' the word…</div>}
+          {spyglass.status==="valid" && <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#6ee7b7",marginBottom:12}}>✓ Accepted in the LL dictionary!</div>}
+          {spyglass.status==="invalid" && (<>
+            <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#fda4af",marginBottom:10}}>✗ Not in the LL dictionary</div>
+            {!spyglass.reported
+              ? <button className="ll-btn" onClick={spyglassReport} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(13),fontWeight:"bold",border:"none",marginBottom:10}}>🏴‍☠️ Submit fer Review</button>
+              : <div style={{fontSize:ipadTour(12),color:"#6ee7b7",fontWeight:"bold",marginBottom:10}}>Sent to the Cap'n fer review!</div>}
+          </>)}
+          {spyglass.status==="error" && (<>
+            <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#fda4af",marginBottom:10}}>📡 Can't reach the dictionary — please check connection</div>
+            <button className="ll-btn" onClick={openSpyglass} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.35)",color:"#fff",fontSize:ipadTour(13),fontWeight:"bold",marginBottom:10}}>Scout Again</button>
+          </>)}
+          {!paused && tab==="play" && <div style={{fontSize:ipadTour(14),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>⏱️ The game clock be runnin'!</div>}
+          <button className="ll-btn" onClick={()=>setSpyglass(null)} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.3)",color:"#f0e8d8",fontSize:ipadTour(13),fontWeight:"bold"}}>Back to the Hunt</button>
+        </div>
+      </div>}
       {welcomeBack && <div style={{position:"fixed",inset:0,zIndex:9600,background:"rgba(6,4,24,0.96)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"Georgia,serif"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(34)}px ${ipadTour(30)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(246,211,101,0.45)",maxWidth:ipadTour(330),width:"90%"}}>
           <div style={{fontSize:ipadTour(34),marginBottom:8}}>{welcomeBack.variant==="finish"?"\u2693":"\uD83C\uDF0A"}</div>
@@ -7699,12 +7852,13 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           </div>
 
           {/* ROW 7: Tap tiles to build a word */}
+          {spyHint && <div style={{textAlign:"center",fontSize:ipadWord(10),color:"#f6d365",fontWeight:"bold",marginBottom:3,animation:"slideUp 0.3s ease"}}>🔭 New! Tap the blue SCOUT chip to scout yer word first</div>}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(255,255,255,0.05)",borderRadius:8,padding:`${ipadWord(4)}px ${ipadWord(8)}px`,marginBottom:3,border:"1.5px solid rgba(255,255,255,0.8)",minHeight:ipadWord(30),animation:shake?"shake 0.4s ease":"none"}}>
             <div style={{display:"flex",gap:3,alignItems:"center",flex:1,flexWrap:"wrap"}}>
               {selected.length===0
                 ?<div style={{color:"rgba(255,255,255,0.6)",fontSize:ipadWord(10),fontStyle:"italic"}}>Tap tiles to build a word…</div>
                 :selected.map(id=>{ const tile=tiles.find(t=>t.id===id); return(
-                  <div key={id} onClick={()=>!validating&&!paused&&setSelected(prev=>prev.filter(i=>i!==id))} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:5,padding:`${ipadWord(3)}px ${ipadWord(6)}px`,fontSize:ipadWord(14),fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>{tile?.letter}</div>
+                  <div key={id} onClick={(e)=>{e.stopPropagation(); if(!validating&&!paused)setSelected(prev=>prev.filter(i=>i!==id));}} style={{background:tile?.bonus==="triple"?"linear-gradient(135deg,#e040fb,#7b1fa2)":tile?.bonus==="double"?"linear-gradient(135deg,#ffd700,#f57c00)":"linear-gradient(135deg,#5c6bc0,#512da8)",borderRadius:5,padding:`${ipadWord(3)}px ${ipadWord(6)}px`,fontSize:ipadWord(14),fontWeight:"bold",color:"#fff",cursor:"pointer",lineHeight:1}}>{tile?.letter}</div>
                 );})
               }
             </div>
@@ -7712,6 +7866,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               <div style={{textAlign:"right",marginLeft:6,flexShrink:0}}>
                 <div style={{fontSize:ipadWord(11),color:"#f6d365",fontWeight:"bold"}}>+{currentScore}{getLongWordBonus(currentWord.length)>0&&<span style={{color:"#6ee7b7",fontSize:ipadWord(9)}}> +{getLongWordBonus(currentWord.length)}!</span>}</div>
                 <div style={{fontSize:ipadWord(7),color:"rgba(255,255,255,0.4)"}}>{currentWord.length} ltrs</div>
+              </div>
+            )}
+            {currentWord.length>=3 && (
+              <div onClick={(e)=>{e.stopPropagation(); openSpyglass();}} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,marginLeft:ipadWord(5),flexShrink:0,background:"linear-gradient(135deg,rgba(124,196,255,0.18),rgba(96,165,250,0.12))",border:"1.5px solid rgba(124,196,255,0.65)",borderRadius:8,padding:`${ipadWord(3)}px ${ipadWord(6)}px`,cursor:"pointer",boxShadow:spyUsed?"none":"0 0 10px rgba(124,196,255,0.55)",animation:spyUsed?"none":"pulse 2.2s ease-in-out infinite"}} title="Spyglass-check this word">
+                <span style={{fontSize:ipadWord(6),color:"#7cc4ff",fontWeight:"bold",letterSpacing:0.5,whiteSpace:"nowrap"}}>SCOUT</span>
+                <span style={{fontSize:ipadWord(15),lineHeight:1}}>🔭</span>
               </div>
             )}
             {/* (v106) Persistent Loot Letter reminder — Option B block pinned at the strip's right edge */}
@@ -8056,7 +8216,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
 
           {/* Category tabs */}
           <div style={{display:"flex",gap:3,marginBottom:6}}>
-            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Word Scores"},{id:"longest",label:"📏 Longest Words"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"times",label:"⏱️ Times"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
+            {[{id:"scores",label:"💰 Scores"},{id:"words",label:"💎 Words"},{id:"longest",label:"📏 Longest"},{id:"flourish",label:"🏴‍☠️ Flourish"},{id:"perfect",label:"🌈🏆 Perfect"},{id:"times",label:"⏱️ Times"},{id:"streaks",label:"🔥 Streaks"}].map(t=>(
               <button key={t.id} className="ll-tab" onClick={()=>setLeaderboardTab(t.id)} style={{flex:1,padding:`${ipadMenu(4)}px ${ipadMenu(2)}px`,borderRadius:10,fontSize:ipadMenu(8),background:leaderboardTab===t.id?"linear-gradient(135deg,#f6d365,#fda085)":"rgba(255,255,255,0.08)",color:leaderboardTab===t.id?"#1a1a2e":"#f0e8d8",fontWeight:leaderboardTab===t.id?"bold":"normal",border:leaderboardTab===t.id?"none":"1px solid rgba(255,255,255,0.2)",whiteSpace:"nowrap",textAlign:"center"}}>
                 {t.label}
               </button>
@@ -8103,7 +8263,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {leaderboardTab!=="times"&&!leaderboardLoading&&!leaderboardData&&<div style={{textAlign:"center",padding:ipadMenu(30),color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic"}}>Could not load leaderboard. Check your connection.</div>}
 
           {leaderboardTab!=="times"&&!leaderboardLoading&&leaderboardData&&(()=>{
-            const { gs=[], todaySessions=[], weekSessions=[], wotdAllSessions=[], allWordSessions=[] } = leaderboardData;
+            const { gs=[], todaySessions=[], weekSessions=[], wotdAllSessions=[], allWordSessions=[], ffWords=[] } = leaderboardData;
             const medal = (i) => i===0?"🥇":i===1?"🥈":i===2?"🥉":`${i+1}.`;
             const isMe = (name) => name === playerName;
             const rowStyle = (name, i) => ({
@@ -8169,7 +8329,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                     <div style={{flex:1}}>
                       {r.word
                         ? <><div style={{fontSize:ipadMenu(13),fontWeight:"bold",color:r.wordColor||"#f093fb",letterSpacing:2}}>{r.word}</div>
-                            <div style={{fontSize:ipadMenu(9),color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}{r.date&&<span style={{color:"rgba(255,255,255,0.35)",marginLeft:6}}>· {formatDateKey(r.date)}</span>}</div></>
+                            <div style={{fontSize:ipadMenu(9),color:isMe(r.name)?"#22d3ee":"rgba(255,255,255,0.4)",marginTop:1}}>{r.name||"Guest"}{isMe(r.name)&&" ← you"}{r.date&&<span style={{fontSize:ipadMenu(11),color:"rgba(255,255,255,0.75)",marginLeft:6}}>· {formatDateKey(r.date)}</span>}{r.level&&<span style={{fontSize:ipadMenu(11),color:"rgba(255,255,255,0.75)",marginLeft:6}}>· L{r.level}</span>}</div></>
                         : <><span style={{fontSize:ipadMenu(12),fontWeight:"bold",color:isMe(r.name)?"#22d3ee":"#f5f0e8"}}>{r.name||"Guest"}</span>
                             {isMe(r.name)&&<span style={{fontSize:ipadMenu(9),color:"#22d3ee",marginLeft:4}}>← you</span>}
                             {r.sub&&<div style={{fontSize:ipadMenu(9),color:"#fda085",marginTop:1}}>{r.sub}</div>}</>
@@ -8177,7 +8337,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                     </div>
                     <div style={{textAlign:"right"}}>
                       <span style={{fontSize:ipadMenu(15),fontWeight:"bold",color:r.valColor||"#f6d365"}}>{r.val}</span>
-                      {r.suffix&&<span style={{fontSize:ipadMenu(9),color:"rgba(255,255,255,0.35)",marginLeft:2}}>{r.suffix}</span>}
+                      {r.suffix&&<span style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.8)",marginLeft:3}}>{r.suffix}</span>}
                     </div>
                   </div>
                 ))}
@@ -8357,6 +8517,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               return <div>{renderRows(rows)}{yourBest}</div>;
             }
 
+            // ── FLOURISH (v291) — longest board-clearing (Finishing Flourish) words ──
+            // Source: ff_words (registered players only; populated from 1.7 onward).
+            // Row layout = Longest tab (Ruling C) + level tag. Ties: length desc, created_at asc.
+            if (leaderboardTab==="flourish") {
+              const ffEmpty = <div style={{textAlign:"center",padding:ipadMenu(20),color:"rgba(255,255,255,0.3)",fontSize:ipadMenu(11),fontStyle:"italic"}}>No Flourishes logged yet — the board fills from 1.7 onward. Registered players only.</div>;
+              const weekAgoNum = dateKeyToNum(weekAgoKey);
+              const inPeriod = (f) => leaderboardPeriod==="daily" ? f.date_key===todayKey
+                              : leaderboardPeriod==="weekly" ? dateKeyToNum(f.date_key)>=weekAgoNum
+                              : true;
+              const rows = ffWords
+                .filter(f=>f.word && f.length>0 && inPeriod(f))
+                .sort((a,b)=>b.length-a.length || (a.created_at||"").localeCompare(b.created_at||""))
+                .slice(0,25)
+                .map(f=>({name: playerNameMap[f.player_id] || 'Guest', word: f.word.toUpperCase(), date: f.date_key, level: f.level, wordColor:"#a78bfa", val:f.length, suffix:"ltrs", valColor:"#22d3ee"}));
+              if (!rows.length) return <div>{ffEmpty}{yourBest}</div>;
+              return <div>{renderRows(rows)}{yourBest}</div>;
+            }
+
             // ── PERFECT DAYS ──
             if (leaderboardTab==="perfect") {
               let rows = [];
@@ -8414,6 +8592,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             </div>
           </div>
 
+          {/* v300: Word of the Day card — Malleable WoD rule (1.8). */}
+          <div style={{background:"rgba(167,139,250,0.12)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
+            <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>🎯</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#a78bfa"}}>Word of the Day</div>
+              <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>Each day names one word to hunt — and it's a root minimum: spell it OR any longer word containing it (SURPRISED counts SURPRISING, UNSURPRISING…). Worth 1,000 pts, plus 200 pts for every letter beyond the listed word. Once per day, and it's required for a Perfect Day.</div>
+            </div>
+          </div>
+
           <div style={{background:"rgba(246,211,101,0.12)",border:"1px solid rgba(246,211,101,0.45)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
             <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>🦜</div>
             <div style={{flex:1}}>
@@ -8435,6 +8622,24 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{flex:1}}>
               <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#c4b5fd"}}>Pirate Celebrations</div>
               <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>Our pirate crew cheers your big moments — clearing a level, a great word, a Perfect Day. Want them on or off? Toggle <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> on the "Ready?" screen before each game begins.</div>
+            </div>
+          </div>
+
+          {/* v296: Spyglass card (1.7) — Menu Special Features page was missed in v284. */}
+          <div style={{background:"rgba(124,196,255,0.1)",border:"1px solid rgba(124,196,255,0.4)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
+            <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>🔭</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#7cc4ff"}}>The Spyglass</div>
+              <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>Not sure a word's in the LL dictionary? Tap the blue <strong style={{color:"#7cc4ff"}}>🔭 SCOUT</strong> chip beside yer built word to check it — without committing yer tiles. The clock keeps runnin', so certainty costs time, matey! Words we don't know can be sent to the Cap'n fer review with <strong style={{color:"#7cc4ff"}}>Submit fer Review</strong>.</div>
+            </div>
+          </div>
+
+          {/* v296: Flourish Leaderboard card (1.7). */}
+          <div style={{background:"rgba(167,139,250,0.12)",border:"1px solid rgba(167,139,250,0.4)",borderRadius:13,padding:`${ipadMenu(14)}px ${ipadMenu(16)}px`,marginBottom:8,display:"flex",gap:13,alignItems:"flex-start"}}>
+            <div style={{fontSize:ipadMenu(26),flexShrink:0,marginTop:1,minWidth:ipadMenu(32),textAlign:"center"}}>🏴‍☠️</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:ipadMenu(13),fontWeight:"bold",marginBottom:5,color:"#c4b5fd"}}>Flourish Leaderboard</div>
+              <div style={{fontSize:ipadMenu(12),color:"rgba(255,255,255,0.95)",lineHeight:1.65}}>The longest board-clearing Finishing Flourish words across all Looters. Find it under the <strong style={{color:"#c4b5fd"}}>🏴‍☠️ Flourish</strong> tab on the Leaderboard. Registered players only — the board starts fresh from 1.7.</div>
             </div>
           </div>
 

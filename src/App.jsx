@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = true; // v300 dev cycle OPEN — 1.8: WoD card XL text, grown-WoD sayings, SF WoD cards, foundBonus restore fix. Flip false pre-archive. (Aug 23)
+const DEBUG_MODE = true; // v303 dev cycle OPEN — 1.8: WoD card XL text, grown-WoD sayings, SF WoD cards, foundBonus restore fix. Flip false pre-archive. (Aug 23)
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
@@ -2396,6 +2396,21 @@ function getDailyHistory() {
   } catch { return { date: getTodayKey(), games: [] }; }
 }
 function saveDailyHistory(history) { try { localStorage.setItem("ll_daily_history", JSON.stringify(history)); } catch {} }
+
+// v302: persistent Finishing Flourish log — local, 30-day retention, guests included.
+// Entry: { date, game, level, word, score, ts }. Written once per FF at award time. The cloud
+// ff_words table (v285, signed-in only) is the long-term record; this covers guests, offline,
+// and the per-game (Game 1 / Game 2) split the cloud row does not carry.
+function getFFLog() { try { const a = JSON.parse(localStorage.getItem("ll_ff_log") || "[]"); return Array.isArray(a) ? a : []; } catch { return []; } }
+function appendFFLog(entry) {
+  try {
+    const cutoff = Date.now() - 30 * 86400000;
+    const log = getFFLog().filter(e => (e.ts || 0) >= cutoff);
+    log.push(entry);
+    localStorage.setItem("ll_ff_log", JSON.stringify(log));
+  } catch {}
+}
+function getTodayFFs() { const k = getTodayKey(); return getFFLog().filter(e => e.date === k).sort((a, b) => (a.game || 0) - (b.game || 0) || a.level - b.level); }
 function appendToDailyHistory(word, score, valid, medical, collegiate, gameIndex, loot=false, wotd=false) {
   const history = getDailyHistory();
   if (!history.games[gameIndex]) history.games[gameIndex] = [];
@@ -3710,6 +3725,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // that deferred sequence closure; the overlay's dismiss (button or 10s auto) invokes it once.
   // Sub-5 clears (no finisher) never touch this — they run the sequence inline as before.
   const pendingBoardClearRef = useRef(null);
+  // v301 (Item 1-B): handle for the 600ms repeat-Perfect-Day modal timer so a full reset can cancel it.
+  const repeatPdTimerRef = useRef(null);
   // (v106) Loot Letter announcement: a brief, self-dismissing INFORMATIONAL popup
   // ("💥 Loot Letter · Level N · X") shown at each level open. NOT a celebration —
   // ungated by showMascotCelebrations(). Auto-clears after 2s; no button. The
@@ -4001,6 +4018,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // intended destinations. Welcome screen has the upsell baked in for Guests.
   }, []);
   const [showRepeatPerfect, setShowRepeatPerfect] = useState(false);
+  // v302 (option C): Today's Summary card — the closing beat of the L5 endgame. Shown after the
+  // Perfect Day modal (or straight after a non-PD finish). afterSummaryRef carries the choice the
+  // player already made on the PD modal (now / later) or 'farewell', for Continue to carry out.
+  const [showDaySummary, setShowDaySummary] = useState(false);
+  const afterSummaryRef = useRef("farewell");
+  const openDaySummary = useCallback((next) => { afterSummaryRef.current = next || "farewell"; setShowDaySummary(true); }, []);
+  // v302: My Flourishes (STATS) — this player's cloud ff_words rows; null = not fetched yet.
+  const [myFFCloud, setMyFFCloud] = useState(null);
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
   // v259 #10a FIX: longest-word bookkeeping must complete IN THE SAME INSTANT as the submit.
   // The Finishing Flourish word ends the game, and the game-completion cloud sync fires in
@@ -4427,12 +4452,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     onDebugConsumed?.();
   }, [debugAction]);
 
+  // v302: My Flourishes — fetch this player's ff_words the first time STATS opens this session
+  // (signed-in only). Fire-and-forget; a failure just leaves the local log on its own.
+  useEffect(() => {
+    if (tab !== "stats" || isGuest || !user?.id || myFFCloud !== null) return;
+    supabase.from("ff_words").select("date_key,level,word,score,created_at").eq("player_id", user.id).order("created_at", { ascending: false }).limit(400)
+      .then(({ data, error }) => { if (error) { if (DEBUG_MODE) console.warn("[FF_WORDS] fetch failed", error.message); setMyFFCloud([]); } else setMyFFCloud(data || []); })
+      .catch(() => setMyFFCloud([]));
+  }, [tab, isGuest, user, myFFCloud]);
+
   // GLOBAL GUARD: If user lands on the play tab with a completed game (or empty L5+ board),
   // force-show the Play Again screen instead of a dead board. Catches all entry paths
   // (tab clicks, modal closes, etc.), not just returnToGame().
   useEffect(() => {
     if (tab !== "play") return;
     if (showRepeatPerfect || perfectDayAchieved || levelComplete || showIntro || showReadyScreen) return;
+    // v301 (Item 1-A): on a Finishing Flourish the board empties immediately but the endgame is
+    // deferred behind the FF overlay (up to 10s). This guard used to see "empty L5 + PD acknowledged"
+    // in that window and route to Welcome; a Play tap there reset the game, and the deferred
+    // sequence then drew the repeat-PD modal over a 0-pt fresh board (Daryl, Aug 28). Hold.
+    if (finisherOverlay || pendingBoardClearRef.current) return;
+    if (showDaySummary) return; // v302: summary card is a modal in the same family
     try {
       // Stale Perfect Day on launch fix (May 15, 2026):
       // If the player has already acknowledged (dismissed) today's Perfect Day modal,
@@ -4463,7 +4503,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setShowRepeatPerfect(true);
       }
     } catch {}
-  }, [tab, tiles, level, showRepeatPerfect, perfectDayAchieved, levelComplete, showIntro, showReadyScreen]);
+  }, [tab, tiles, level, showRepeatPerfect, perfectDayAchieved, levelComplete, showIntro, showReadyScreen, finisherOverlay, showDaySummary]);
 
   useEffect(() => {
     if (tab === 'leaderboard' && !leaderboardData && !leaderboardLoading) {
@@ -5231,6 +5271,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (pending) pending();
   }, []);
 
+  // v301 (Item 1-B): called by every full-game reset. Drops a pending deferred board-clear
+  // sequence, closes a lingering FF overlay, and cancels a queued repeat-PD modal, so nothing
+  // from the finished game can fire over the fresh one.
+  const cancelDeferredEndgame = useCallback(() => {
+    pendingBoardClearRef.current = null;
+    setFinisherOverlay(null);
+    if (repeatPdTimerRef.current) { clearTimeout(repeatPdTimerRef.current); repeatPdTimerRef.current = null; }
+  }, []);
+
   // v163 (v1.2 #5): single entry point for the green/red flash popup. Marks the flash
   // active (which holds the badge queue), then on dismiss clears the flag and drains any
   // badges that were queued while it was up. Later calls cancel an earlier pending timer,
@@ -5321,6 +5370,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   }, [setPerfectDaySync]);
 
   const handleFullReset = useCallback((opts = {}) => {
+    cancelDeferredEndgame(); // v301 (Item 1-B)
     const skipWelcome = opts.skipWelcome === true;
     const skipReady = opts.skipReady === true; // v130: debug jump goes straight to target level's Welcome map, no Ready screen
     const rng = seededRandom(getDailySeed());
@@ -5390,7 +5440,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       setShowReadyScreen(false);
       setShowIntro(true);
     }
-  }, [startTimer, stopTimer, setPerfectDaySync, clearCelebrationQueue]);
+  }, [startTimer, stopTimer, setPerfectDaySync, clearCelebrationQueue, cancelDeferredEndgame]);
 
   const doLevelReset = useCallback(() => {
     if (ENABLE_BONUS_LEVELS && isBonusLevel(level)) {
@@ -5540,6 +5590,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     if (pdAlreadyBankedTodayRef.current) pdBanked = true;
     onFarewell({ totalScore: totalRef.current, bestWord: bestEntry?.word || "", bestWordScore: bestEntry?.score || 0, shareText: getDayResultsShareText(), perfectDay: pdBanked });
   }, [onFarewell, getDayResultsShareText]);
+
+  // v302: Continue on the Today's Summary card — carry out what the player already chose.
+  const closeDaySummary = useCallback((choice) => {
+    setShowDaySummary(false);
+    const next = choice || afterSummaryRef.current; afterSummaryRef.current = "farewell"; // v303: button passes its own choice
+    if (next === "now") { handleFullReset({ skipWelcome: true }); }
+    else { setLevelComplete(false); triggerFarewell(); }
+  }, [handleFullReset, triggerFarewell]);
 
   // Unified share helper (added May 25, 2026): opens the iOS native Share Sheet
   // via the Capacitor Share plugin (iMessage, Mail, Twitter/X, Notes, Copy, etc.).
@@ -5978,6 +6036,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           // pushed to submittedRef just above), so the "Share My Results" builders can list it.
           const _last = submittedRef.current[submittedRef.current.length - 1];
           if (_last && _last.word === currentWord) _last.finisher = finisher;
+          // v302: local FF log (30 days, guests included) + drop the STATS cloud cache so it refetches.
+          appendFFLog({ date: getTodayKey(), game: gameIndexRef.current || 0, level, word: currentWord, score: finisher, ts: Date.now() });
+          setMyFFCloud(null);
           // v285: Longest Flourish board feed. Signed-in players only (guests have no
           // player_id; board banner says "Registered players only"). Fire-and-forget —
           // a failed insert must never touch the game. Ties resolved on the board by
@@ -6138,7 +6199,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                   // still stand — only the once-per-day streak bonus is withheld.
                   setPerfectDayStreakBonus(0);
                   triggerHaptic("medium");
-                  setTimeout(() => setShowRepeatPerfect(true), 600);
+                  repeatPdTimerRef.current = setTimeout(() => setShowRepeatPerfect(true), 600); // v301: cancellable
                 }
                 // ── Check bonus level unlock ──
                 if (ENABLE_BONUS_LEVELS) {
@@ -6170,7 +6231,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             if (perfectDayRef.current && !wotdFoundRef.current) {
               setTimeout(() => setShowWotdMissedPD(true), 1200);
             } else {
-              setTimeout(() => triggerFarewell(), 1500);
+              setTimeout(() => openDaySummary("farewell"), 1500); // v302: summary first, then farewell
             }
           }
         }
@@ -6642,6 +6703,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           // and would misfire on a fresh in-progress L5. Mid-game (L1-4) untouched: level===5 required.
           const gameComplete = level === 5 && (allUsed || levelComplete === true || ssLocalFinished === true);
           if (gameComplete) {
+            cancelDeferredEndgame(); // v301 (Item 1-B)
             const rng = seededRandom(getDailySeed());
             const bp = getBonusPositions(42, getBonusCount(1), rng);
             setTiles(generateLevelTiles(1, 0, rng, bp));
@@ -7386,7 +7448,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{fontSize:ipadTour(14),color:"rgba(255,255,255,0.95)",lineHeight:1.6,marginBottom:20}}>
             Remember, finding the Word of the Day is part of accomplishing a LetterLoot Perfect Day.
           </div>
-          <button className="ll-btn" onClick={()=>{ setShowWotdMissedPD(false); triggerFarewell(); }} style={{width:"100%",padding:ipadTour(13),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(14),fontWeight:"bold",border:"none",cursor:"pointer"}}>
+          <button className="ll-btn" onClick={()=>{ setShowWotdMissedPD(false); openDaySummary("farewell"); }} style={{width:"100%",padding:ipadTour(13),borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(14),fontWeight:"bold",border:"none",cursor:"pointer"}}>
             See My Results →
           </button>
         </div>
@@ -7483,12 +7545,64 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{marginTop:14}}>
             <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.7)",marginBottom:6}}>Want to play again?</div>
             <div style={{display:"flex",gap:6}}>
-              <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
-              <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); setLevelComplete(false); triggerFarewell(); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#dbeafe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
+              <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); openDaySummary("now"); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
+              <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setPerfectDayAchieved(false); openDaySummary("later"); }} style={{flex:1,padding:ipadTour(10),borderRadius:10,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#dbeafe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
             </div>
           </div>
         </div>
       </div>}
+
+      {showDaySummary&&(()=>{
+        // v302 Today's Summary (Daryl, option C, Aug 29): PD / Great Game headline with the streak,
+        // this game's FF rows, WoD, total time. A repeat PD shows the bonus banked earlier today.
+        const isPD = perfectDayRef.current === true && wotdFoundRef.current === true;
+        const streakN = (()=>{ try { return getLocalStats().consecutivePerfectDays || 0; } catch { return 0; } })();
+        const bonusPaid = perfectDayStreakBonus > 0;
+        const bonusAmt = bonusPaid ? perfectDayStreakBonus : (1000 + streakN * 1000);
+        const ffs = submittedRef.current.filter(x => x.valid && x.finisher > 0).sort((a,b)=>a.level-b.level);
+        const gi = gameIndexRef.current || 0;
+        return <div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
+          <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(28)}px ${ipadTour(26)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(340),width:"90%",margin:"20px auto"}}>
+            <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.6)",letterSpacing:3}}>TODAY'S SUMMARY{gi>0?` · GAME ${gi+1}`:""}</div>
+            <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.8)",marginTop:4}}>🏆 {playerName||"You"} · {getShortDate()}</div>
+            {isPD
+              ? <div style={{marginTop:12}}>
+                  <div className="perfect-text" style={{fontSize:ipadTour(22),fontWeight:"bold"}}>🌈🏆 PERFECT DAY!</div>
+                  {!isGuest && streakN > 0 && <div style={{fontSize:ipadTour(13),color:"#f6d365",marginTop:4}}>{streakN} consecutive {streakN===1?"day":"days"} · +{bonusAmt.toLocaleString()} pts{bonusPaid?"":" banked earlier today"}</div>}
+                </div>
+              : <div style={{marginTop:12,fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365"}}>🏴‍☠️ GREAT GAME!</div>}
+            <div style={{marginTop:10,fontSize:ipadTour(14),color:"#f5f0e8"}}>Score: <strong>{totalRef.current.toLocaleString()}</strong> pts</div>
+            <div style={{marginTop:10,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px"}}>
+              <div style={{fontSize:ipadTour(11),color:"#fbbf24",letterSpacing:2,fontWeight:"bold",marginBottom:6}}>🏴‍☠️ FINISHING FLOURISHES</div>
+              {ffs.length
+                ? ffs.map(f => <div key={f.level} style={{display:"flex",justifyContent:"space-between",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.7}}><span>L{f.level} · {f.word}</span><span style={{color:"#fbbf24"}}>+{f.finisher.toLocaleString()}</span></div>)
+                : <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.6)",fontStyle:"italic"}}>Not today, but tomorrow offers great promise!</div>}
+            </div>
+            <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.5}}>
+              <span style={{fontSize:ipadTour(11),color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
+              {wotdFoundDetails ? <><strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts</> : <span style={{color:"rgba(255,255,255,0.6)"}}>Not found today</span>}
+            </div>
+            <div style={{marginTop:8,fontSize:ipadTour(12),color:"#60a5fa",fontWeight:"bold"}}>⏱️ Total time: {formatTime(totalTimeRef.current)}</div>
+            {/* v303 (option B): Leaderboard · Share · Play Now · Later */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:14}}>
+              <button className="ll-btn" onClick={()=>{
+                if (isGuest) { setShowDaySummary(false); setShowGuestUpsell(true); return; }
+                setShowDaySummary(false); setLeaderboardFromPerfectDay(true); setLevelComplete(false); setTab('leaderboard');
+              }} style={{padding:`${ipadTour(11)}px ${ipadTour(6)}px`,borderRadius:12,background:isGuest?"rgba(255,255,255,0.04)":"rgba(246,211,101,0.18)",border:isGuest?"1px solid rgba(255,255,255,0.15)":"1px solid rgba(246,211,101,0.6)",color:isGuest?"rgba(255,255,255,0.5)":"#fef3c7",fontSize:ipadTour(12),fontWeight:"bold",fontFamily:"Georgia,serif",cursor:"pointer"}}>
+                {isGuest?<span><span style={{filter:"grayscale(0.6)",opacity:0.55}}>🏆</span> Leaderboard <span style={{color:"rgba(167,139,250,0.85)"}}>🔒</span></span>:"🏆 Leaderboard"}
+              </button>
+              <button className="ll-btn" onClick={()=>{ if (isPD) sharePerfectDay(); else shareDayResults(); }} style={{padding:`${ipadTour(11)}px ${ipadTour(6)}px`,borderRadius:12,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(12),fontWeight:"bold",fontFamily:"Georgia,serif",border:"none",cursor:"pointer"}}>
+                {shareCopied?"✓ Copied!":"📋 Share"}
+              </button>
+            </div>
+            <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.75)",marginTop:12,marginBottom:6}}>Want to play again?</div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="ll-btn replay-btn" onClick={()=>closeDaySummary("now")} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
+              <button className="ll-btn" onClick={()=>closeDaySummary("later")} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
+            </div>
+          </div>
+        </div>;
+      })()}
 
       {showRepeatPerfect&&<div style={{position:"fixed",inset:0,zIndex:9500,background:"rgba(0,0,0,0.88)",display:"flex",alignItems:"center",justifyContent:"center",overflowY:"auto"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:28,padding:`${ipadTour(32)}px ${ipadTour(28)}px`,textAlign:"center",boxShadow:"0 16px 60px rgba(0,0,0,0.9)",border:"2px solid rgba(255,215,0,0.5)",maxWidth:ipadTour(340),width:"90%",margin:"20px auto"}}>
@@ -7529,8 +7643,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{fontSize:ipadTour(12),color:"rgba(255,255,255,0.65)",marginTop:14,marginBottom:8}}>Want to play again?</div>
           {/* v64 (May 26): Simplified — Now + Later only. Tomorrow removed. */}
           <div style={{display:"flex",flexDirection:"row",gap:6}}>
-            <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); handleFullReset({skipWelcome:true}); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
-            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); setLevelComplete(false); triggerFarewell(); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
+            <button className="ll-btn replay-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); openDaySummary("now"); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadTour(12),fontWeight:"bold",border:"none"}}>✏️ Now</button>
+            <button className="ll-btn" onClick={()=>{ markPDAcknowledged(); setShowRepeatPerfect(false); openDaySummary("later"); }} style={{flex:1,padding:`${ipadTour(11)}px ${ipadTour(4)}px`,borderRadius:12,background:"linear-gradient(135deg,rgba(96,165,250,0.3),rgba(59,130,246,0.2))",border:"1px solid rgba(96,165,250,0.6)",color:"#bfdbfe",fontSize:ipadTour(12),fontWeight:"bold"}}>🌅 Later</button>
           </div>
         </div>
       </div>}
@@ -7585,7 +7699,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           </button>
         </div>
       </div>}
-      {levelComplete&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      {levelComplete&&level<5&&<div style={{position:"fixed",inset:0,zIndex:9000,background:"rgba(0,0,0,0.82)",display:"flex",alignItems:"center",justifyContent:"center"}}>
         <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:24,padding:`${ipadTour(36)}px ${ipadTour(32)}px`,textAlign:"center",boxShadow:"0 12px 48px rgba(0,0,0,0.8)",border:"1px solid rgba(255,215,0,0.35)",maxWidth:ipadTour(320),width:"90%"}}>
           {/* v94: celebrating pirate with a per-level entrance animation + level-specific saying */}
           {/* v104: mascot image + saying gated behind showMascotCelebrations(); results below always show */}
@@ -7638,6 +7752,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           )}
           <div style={{fontSize:ipadTour(13),color:"#60a5fa",fontWeight:"bold",marginTop:6}}>⏱️ Time: {formatTime(levelTimeRef.current)}</div>
           {newBestTime&&<div style={{fontSize:ipadTour(12),color:"#6ee7b7",fontWeight:"bold",marginTop:4}}>⚡ New Best Time!</div>}
+          {(()=>{ const ffs = getTodayFFs(); if (!ffs.length) return null; return <div style={{fontSize:ipadTour(11),color:"#fbbf24",marginTop:6}}>🏴‍☠️ Today's Flourishes: {ffs.map(f=>`L${f.level} ${f.word}`).join(" · ")}</div>; })()}
           {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:ipadTour(11),color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
           {level < 5 && <div style={{fontSize:ipadTour(12),color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*7} tiles · {getBonusCount(level+1)} bonus tiles</div>}
           {level < 5
@@ -8064,6 +8179,36 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>All Time</div></div>
             </div>
           </div>
+          {(()=>{
+            // v302: My Flourishes — local 30-day log (guests too) merged with the cloud ff_words rows
+            // (signed-in), deduped on date|level|word. Local first so the Game 1/2 tag survives.
+            const seen = new Set(); const rows = [];
+            const push = (date, level, word, score, game) => { const w = String(word || "").toUpperCase(); const k = `${date}|${level}|${w}`; if (!date || seen.has(k)) return; seen.add(k); rows.push({ date, level, word: w, score: score || 0, game }); };
+            getFFLog().forEach(e => push(e.date, e.level, e.word, e.score, e.game));
+            (myFFCloud || []).forEach(r => push(r.date_key, r.level, r.word, r.score, null));
+            const byDay = {}; rows.forEach(r => { (byDay[r.date] = byDay[r.date] || []).push(r); });
+            const days = Object.keys(byDay).sort((a, b) => dateKeyToNum(b) - dateKeyToNum(a));
+            const total = rows.reduce((t, r) => t + r.score, 0);
+            const longest = rows.reduce((b, r) => (!b || r.word.length > b.word.length) ? r : b, null);
+            const fmtDay = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
+            return <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
+              <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>🏴‍☠️ MY FLOURISHES</div>
+              <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>
+                <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#fbbf24"}}>{rows.length}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Flourishes</div></div>
+                <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+                <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#f6d365"}}>{total.toLocaleString()}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Bonus pts</div></div>
+                <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
+                <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#c4b5fd"}}>{longest ? longest.word : "—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Longest{longest ? ` (${longest.word.length})` : ""}</div></div>
+              </div>
+              {!days.length
+                ? <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.5)",fontStyle:"italic",textAlign:"center"}}>No Flourishes logged yet — clear a board with a 5+ letter word!</div>
+                : days.slice(0, 30).map(k => <div key={k} style={{paddingTop:6,borderTop:"1px solid rgba(255,255,255,0.07)",marginTop:6}}>
+                    <div style={{fontSize:ipadDense(10),color:"#a78bfa",fontWeight:"bold",marginBottom:2}}>{fmtDay(k)}</div>
+                    {byDay[k].sort((a, b) => ((a.game || 0) - (b.game || 0)) || (a.level - b.level)).map((r, i) => <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:ipadDense(11),color:"#f5f0e8",lineHeight:1.6}}><span>L{r.level} · {r.word}{r.game > 0 ? <span style={{color:"rgba(255,255,255,0.45)",fontSize:ipadDense(9)}}> Game {r.game + 1}</span> : null}</span><span style={{color:"#fbbf24"}}>+{r.score.toLocaleString()}</span></div>)}
+                  </div>)}
+              {!isGuest && myFFCloud === null && <div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.4)",marginTop:6,textAlign:"center"}}>☁️ Loading cloud history…</div>}
+            </div>;
+          })()}
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>📈 DAILY SCORES</div>
             <div style={{display:"flex",justifyContent:"space-around",marginBottom:10}}>

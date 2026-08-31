@@ -11,7 +11,10 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = true; // v303 dev cycle OPEN — 1.8: WoD card XL text, grown-WoD sayings, SF WoD cards, foundBonus restore fix. Flip false pre-archive. (Aug 23)
+const DEBUG_MODE = false; // v306 dev cycle OPEN - leaderboard erasure guards + admin gate
+// v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
+// row, so it renders only for a DEBUG build or one of these signed-in accounts.
+const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
 
 // v95: per-level level-clear celebration. ODD levels (1,3,5) = female captain (her own voice),
 // EVEN levels (2,4) = male pirate (his goofy swagger). Each level has a distinct entrance animation.
@@ -2046,23 +2049,23 @@ function VisualTour({ onDone }) {
       <div style={{position:'fixed',inset:0,zIndex:99999,background:'linear-gradient(160deg,#0a0820 0%,#1e1a4a 50%,#0f0e28 100%)',fontFamily:'Georgia,serif',color:'#f5f0e8',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'flex-start',padding:`calc(var(--ll-safe-top, 0px) + ${ipadIntroPad(12)}px) ${ipadIntroPad(16)}px ${ipadIntroPad(40)}px`,overflowY:'auto',WebkitOverflowScrolling:'touch'}}>
         <div style={{width:'100%',maxWidth:ipadW(560),minHeight:'calc(100vh - var(--ll-safe-top, 0px) - '+ipadIntroPad(60)+'px)',display:'flex',flexDirection:'column'}}>
           <div style={{background:'linear-gradient(135deg,#1a1040,#2d1b69)',borderRadius:24,padding:ipadIntroPad(18),border:'2px solid rgba(167,139,250,0.5)',boxShadow:'0 16px 60px rgba(0,0,0,0.8)',flex:1,display:'flex',flexDirection:'column'}}>
-            <div style={{textAlign:'center',fontSize:uT(17),fontWeight:'bold',color:'#f6d365',marginBottom:uT(16)}}>📢 What's New in v1.7</div>
+            <div style={{textAlign:'center',fontSize:uT(17),fontWeight:'bold',color:'#f6d365',marginBottom:uT(16)}}>📢 What's New in v1.8</div>
 
-            {/* v293: FEATURED Spyglass (1.7). */}
+            {/* v304: FEATURED Malleable WoD (1.8). */}
             <div style={{background:"rgba(246,211,101,0.16)",border:"2.5px solid rgba(246,211,101,0.85)",borderRadius:14,padding:uT(18),boxShadow:"0 0 28px rgba(246,211,101,0.35)"}}>
               <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-                <span style={{fontSize:uT(24)}}>🔭</span>
-                <span style={{fontSize:uT(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>The Spyglass</span>
+                <span style={{fontSize:uT(24)}}>🎯</span>
+                <span style={{fontSize:uT(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>Malleable Word of the Day</span>
               </div>
-              <div style={{fontSize:uT(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Not sure a word's in the LL dictionary? Tap the blue <strong style={{color:'#7cc4ff'}}>🔭 SCOUT</strong> chip beside yer built word to check it — without committing yer tiles. The clock keeps runnin', so certainty costs time, matey!</div>
+              <div style={{fontSize:uT(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>The Word of the Day now bends to yer will. Any word that carries the WoD's root — SURPRISING, UNSURPRISED, SURPRISES for SURPRISED — counts as found, so long as it's at least as long as the listed word. Grow it and the bonus grows too: <strong style={{color:'#f6d365'}}>1,000 pts plus 200 for every extra letter</strong>.</div>
             </div>
-            {/* v293: Flourish Leaderboard card (1.7). */}
+            {/* v304: Today's Summary & My Flourishes card (1.8). */}
             <div style={{background:"rgba(167,139,250,0.14)",border:"2px solid rgba(167,139,250,0.7)",borderRadius:14,padding:uT(14),boxShadow:"0 0 18px rgba(167,139,250,0.25)",marginTop:uT(12)}}>
               <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
-                <span style={{fontSize:uT(20)}}>🏴‍☠️</span>
-                <span style={{fontSize:uT(18),color:"#c4b5fd",fontWeight:"bold"}}>Flourish Leaderboard</span>
+                <span style={{fontSize:uT(20)}}>📊</span>
+                <span style={{fontSize:uT(18),color:"#c4b5fd",fontWeight:"bold"}}>Today's Summary & My Flourishes</span>
               </div>
-              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.95)",lineHeight:1.55}}>New leaderboard tab: the longest board-clearing Finishing Flourish words, across all Looters. Registered players only — and the board starts fresh from 1.7, so get yer name up there first!</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.95)",lineHeight:1.55}}>Every game now ends with a <strong style={{color:'#c4b5fd'}}>Today's Summary</strong> card — Perfect Day and streak, yer Finishing Flourishes, Word of the Day, and total time — with Leaderboard, Share, and Play Again right there. And under Stats, a new <strong style={{color:'#c4b5fd'}}>My Flourishes</strong> log keeps every board-clearing word you've ever flourished, by day and level.</div>
             </div>
 
             {/* v209/v213: Tour note CENTERED in the gap — bigger font, STRONGER border. */}
@@ -2073,7 +2076,9 @@ function VisualTour({ onDone }) {
             {/* v204/v213: pared v1.1 recap — bigger font, STRONGER border. Keeps its live V/C demo. */}
             <div style={{background:"rgba(255,255,255,0.05)",border:"1.5px solid rgba(255,255,255,0.28)",borderRadius:12,padding:uT(16),marginBottom:uT(14)}}>
               <div style={{fontSize:uT(13),letterSpacing:1,color:"rgba(245,240,232,0.7)",fontWeight:"bold",marginBottom:uT(11),textTransform:"uppercase"}}>Still worth knowing</div>
-              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>🦜 <strong style={{color:"#ff4444"}}>Finishing Flourish Bonus</strong> — clear the board with a 5+ letter word for bonus treasure; longer = bigger haul.</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>🔭 <strong style={{color:"#7cc4ff"}}>The Spyglass</strong> — tap SCOUT beside yer built word to check it before committing; the clock keeps runnin'.</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Flourish Leaderboard</strong> — the longest board-clearing Flourish words across all Looters.</div>
+              <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>🦜 <strong style={{color:"#ff4444"}}>Finishing Flourish Bonus</strong> — clear the board with a 5+ letter word for bonus treasure; longer = bigger haul.</div>
               <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>✨ <strong style={{color:"#6ee7b7"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
               <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Pirate Celebrations</strong> — cheers for big moments (toggle on or off on the "Ready?" screen).</div>
               <div style={{fontSize:uT(15.5),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:uT(7)}}>⚠️ <strong style={{color:"#7cc4ff"}}>Vowel / Consonant Alert</strong> — the letter boxes pulse when your balance gets risky.</div>
@@ -3413,6 +3418,8 @@ export default function App() {
   }, []);
   const [showCelebrate, setShowCelebrate] = useState(() => window.location.hash === '#celebrate');
   const [showAdmin, setShowAdmin] = useState(() => new URLSearchParams(window.location.search).get('admin') === '1');
+  // v306: the URL param only REQUESTS the panel; this decides whether it opens.
+  const adminAllowed = DEBUG_MODE || ADMIN_EMAILS.includes(((user && user.email) || "").trim().toLowerCase());
   // Debug menu state — only meaningful when DEBUG_MODE = true
   const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [debugAction, setDebugAction] = useState(null);
@@ -3613,7 +3620,7 @@ export default function App() {
     <>{screen}<DebugBadge onClick={()=>setShowDebugMenu(true)}/></>
   ) : screen;
 
-  if (showAdmin) return withBadge(<AdminScreen onExit={()=>setShowAdmin(false)}/>);
+  if (showAdmin && adminAllowed) return withBadge(<AdminScreen onExit={()=>setShowAdmin(false)}/>);
   if (showCelebrate) return withBadge(
     <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',color:'#f5f0e8',padding:'30px 24px',position:'relative',overflow:'hidden'}} onClick={()=>setShowCelebrate(false)}>
       <Starfield/>
@@ -4216,10 +4223,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // v203: key bumped v11→v12 for the v1.2 What's New (Finishing Flourish Bonus). Returning players
     // who dismissed the v1.1 screen have ll_whatsnew_v11_seen set; the new key means they see the
     // v1.2 screen once, then it's marked seen. Each version release bumps this suffix.
-    try { return localStorage.getItem("ll_whatsnew_v17_seen") !== "1"; } catch { return false; }
+    try { return localStorage.getItem("ll_whatsnew_v18_seen") !== "1"; } catch { return false; } // v304: 1.8 key
   });
   const dismissWhatsNew = () => {
-    try { localStorage.setItem("ll_whatsnew_v17_seen", "1"); } catch {}
+    try { localStorage.setItem("ll_whatsnew_v18_seen", "1"); } catch {}
     setShowWhatsNew(false);
   };
   const [leaderboardFromPerfectDay, setLeaderboardFromPerfectDay] = useState(false);
@@ -4437,7 +4444,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       }
       else if (debugAction === "show-whatsnew") {
         // v205 DEBUG: jump straight to the one-time "What's New" popup. It normally only appears
-        // once (gated by the ll_whatsnew_v17_seen flag on the Ready screen), so force both gates:
+        // once (gated by the ll_whatsnew_v18_seen flag on the Ready screen), so force both gates:
         // showReadyScreen + showWhatsNew. Does NOT clear the seen-flag, so this is view-only and
         // doesn't change whether a real player would see it.
         setShowIntro(false);
@@ -4532,6 +4539,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const totalRef = useRef(ss?.totalScore || 0);
   const levelScoreRef = useRef(ss?.levelScore || 0);
   const lifetimeRef = useRef(lifetimeData.current.total || 0);
+  // v306: lifetime/name are only safe to WRITE once this session has PROVEN it can read
+  // the cloud row. An unread row is UNKNOWN, not zero — treating unknown as zero is what
+  // erased Mack's name and two lifetime totals on Aug 30.
+  const lifetimeHydratedRef = useRef(false);
+  const cloudLifetimeRef = useRef(0);
+  const cloudNameRef = useRef("");
   const audioCtxRef = useRef(null);
   const musicLoopRef = useRef(null);
   const nextLoopRef = useRef(0);
@@ -4655,6 +4668,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           const bestPts = Math.max(cloudPts, localPts);
           lifetimeRef.current = bestPts;
           setLifetimePoints(bestPts);
+          // v306: a real row came back — this session may now write game_state.
+          lifetimeHydratedRef.current = true;
+          cloudLifetimeRef.current = cloudPts;
+          if (gameState.player_name) cloudNameRef.current = gameState.player_name;
           // Filter stale badge IDs from cloud (handles legacy badge names)
           const validBadgeIds = new Set(BADGE_DEFS.map(b => b.id));
           const cloudBadges = (gameState.badges || []).filter(id => validBadgeIds.has(id));
@@ -4696,6 +4713,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             }
           } catch {}
           setTimeLeaderboard(prev => ({...prev, ...(gameState.time_records || {})}));
+        }
+        // v306: a null/empty gameState is AMBIGUOUS — brand-new player, or a failed read.
+        // Probe REST directly; only a confirmed 200 marks the session safe to write.
+        if (!lifetimeHydratedRef.current) {
+          try {
+            const probe = await fetch(
+              ADMIN_SUPABASE_URL + "/rest/v1/game_state?select=lifetime_points,player_name&player_id=eq." + user.id,
+              { headers: { apikey: ADMIN_ANON_KEY, Authorization: "Bearer " + ADMIN_ANON_KEY } }
+            );
+            if (probe.ok) {
+              const rows = await probe.json();
+              const row = Array.isArray(rows) ? rows[0] : null;
+              cloudLifetimeRef.current = (row && row.lifetime_points) || 0;
+              cloudNameRef.current = (row && row.player_name) || "";
+              if (cloudLifetimeRef.current > (lifetimeRef.current || 0)) {
+                lifetimeRef.current = cloudLifetimeRef.current;
+                setLifetimePoints(cloudLifetimeRef.current);
+              }
+              lifetimeHydratedRef.current = true;
+            }
+          } catch {}
         }
         // v249 DOUBLE-PAY FIX: today's cloud daily_sessions row is the most direct account-level
         // signal that a PD is already banked for today. Checked here, OUTSIDE/BEFORE the restore
@@ -4859,6 +4897,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       try { return localStorage.getItem("ll_completed_today") === todayKey; } catch { return false; }
     })();
     const cloudPerfectDay = gameIsComplete && perfectDayRef.current === true && wotdFoundRef.current === true;
+    // v306: game_state is written ONLY by a session that proved it could read the row.
+    // daily_sessions still saves either way — today's game is never lost by this guard.
+    const canWriteGameState = lifetimeHydratedRef.current === true;
+    if (!canWriteGameState && DEBUG_MODE) console.log("[SYNCGUARD v306] game_state write skipped - cloud never hydrated this session");
     await Promise.all([
       saveDailySession(user.id, todayKey, {
         level, totalScore: totalRef.current, levelScore: levelScoreRef.current,
@@ -4874,7 +4916,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         completed: gameIsComplete,
         topWord: topEntry?.word || "", topWordScore: topEntry?.score || 0,
       }),
-      saveGameState(user.id, (() => {
+      !canWriteGameState ? Promise.resolve(null) : saveGameState(user.id, (() => {
         // Read badges fresh from localStorage at save time to avoid syncing
         // stale React state (badgeStore could be 1-2 renders behind awardBadge writes)
         let liveBadges = badgeStore.lifetime;
@@ -4886,8 +4928,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           }
         } catch {}
         return {
-          playerName: playerNameRef.current || playerName || '',
-          lifetimePoints: lifetimeRef.current, lastPlayedDate: todayKey,
+          // v306: never write an empty name over a good one, and never write a lifetime
+          // lower than the last value actually READ from the cloud.
+          playerName: playerNameRef.current || playerName || cloudNameRef.current || '',
+          lifetimePoints: Math.max(lifetimeRef.current || 0, cloudLifetimeRef.current || 0), lastPlayedDate: todayKey,
           currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
           lastStreakDate: statsData.lastStreakDate, badges: liveBadges,
           stats: {...getLocalStats(), playerName: playerNameRef.current || playerName}, timeRecords: timeLeaderboard,
@@ -5474,7 +5518,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     totalRef.current -= (undoCost + score); setTotalScore(totalRef.current);
     levelScoreRef.current -= levelScoreDelta; setLevelScore(levelScoreRef.current);
     lifetimeRef.current -= score; setLifetimePoints(lifetimeRef.current);
-    if (isGuest) saveLifetimeData(lifetimeRef.current);
+    saveLifetimeData(lifetimeRef.current); // v306: mirror locally for ALL players
     setTiles(prev => prev.map(t => tileIds.includes(t.id) ? { ...t, used: false } : t));
     const newSubmitted = [...submittedRef.current];
     const lastIdx = [...newSubmitted].map(s=>s.word).lastIndexOf(word);
@@ -5919,7 +5963,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       levelScoreRef.current = newLevelScore; setLevelScore(newLevelScore);
       const newLifetime = lifetimeRef.current + score;
       lifetimeRef.current = newLifetime; setLifetimePoints(newLifetime);
-      if (isGuest) saveLifetimeData(newLifetime);
+      saveLifetimeData(newLifetime); // v306: mirror locally for ALL players
       // ── Word of the Day check (v299 Malleable WoD rule A) — root-stem match, once per day.
       // Bonus: 1,000 base + 200 per letter beyond the LISTED WoD's length (Daryl, Aug 23). ──
       if (wotd && !wotdFound && isWotdMatch(currentWord, wotd)) {
@@ -5929,7 +5973,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         markWordOfTheDayFound(level, score, bonus);
         totalRef.current += bonus; setTotalScore(totalRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
-        if (isGuest) saveLifetimeData(lifetimeRef.current);
+        saveLifetimeData(lifetimeRef.current); // v306: mirror locally for ALL players
         // Trigger celebration
         // v164: enqueued, not fired directly. enqueueCelebration() stops the clock now and
         // the drain runs it after the flash clears. Confetti + guarded resume live in the drain.
@@ -6017,7 +6061,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         totalRef.current += bonus; setTotalScore(totalRef.current);
         levelScoreRef.current += bonus; setLevelScore(levelScoreRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
-        if (isGuest) saveLifetimeData(lifetimeRef.current);
+        saveLifetimeData(lifetimeRef.current); // v306: mirror locally for ALL players
         // ── v186 Finisher SCORING (real) ──────────────────────────────────────────
         // The word that cleared the board earns a length-scaled finisher bonus that STACKS
         // on top of the level-clear bonus just applied (decision #2), and coexists with any
@@ -6031,7 +6075,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           totalRef.current += finisher; setTotalScore(totalRef.current);
           levelScoreRef.current += finisher; setLevelScore(levelScoreRef.current);
           lifetimeRef.current += finisher; setLifetimePoints(lifetimeRef.current);
-          if (isGuest) saveLifetimeData(lifetimeRef.current);
+          saveLifetimeData(lifetimeRef.current); // v306: mirror locally for ALL players
           // v202 (share step 3): back-fill the finisher onto THIS word's entry (the last one
           // pushed to submittedRef just above), so the "Share My Results" builders can list it.
           const _last = submittedRef.current[submittedRef.current.length - 1];
@@ -6818,26 +6862,26 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         {/* Header */}
         <div style={{textAlign:"center",marginBottom:ipadIntro(18)}}>
           <div style={{fontSize:ipadIntro(11),letterSpacing:2,color:"#a78bfa",fontWeight:"bold",marginBottom:ipadIntro(6)}}>WHAT'S NEW</div>
-          <div style={{fontSize:ipadIntro(22),color:"#f6d365",fontWeight:"bold"}}>Fresh treasure in v1.7</div>
+          <div style={{fontSize:ipadIntro(22),color:"#f6d365",fontWeight:"bold"}}>Fresh treasure in v1.8</div>
           <div style={{fontSize:ipadIntro(13),color:"rgba(245,240,232,0.75)",marginTop:ipadIntro(6),lineHeight:1.5}}>A few things have changed since you last played — here's what to look for.</div>
         </div>
         {/* FF featured card */}
         <div style={{display:"flex",flexDirection:"column",gap:ipadIntro(12)}}>
-          {/* v293: FEATURED Spyglass card (1.7) — gold box, bold red title, Daryl's ruling A. */}
+          {/* v304: FEATURED Malleable WoD card (1.8) — gold box, bold red title. */}
           <div style={{background:"rgba(246,211,101,0.16)",border:"2.5px solid rgba(246,211,101,0.85)",borderRadius:14,padding:`${ipadIntroPad(18)}px ${ipadIntroPad(18)}px`,boxShadow:"0 0 28px rgba(246,211,101,0.35)"}}>
             <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:10}}>
-              <span style={{fontSize:ipadIntro(24)}}>🔭</span>
-              <span style={{fontSize:ipadIntro(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>The Spyglass</span>
+              <span style={{fontSize:ipadIntro(24)}}>🎯</span>
+              <span style={{fontSize:ipadIntro(21),color:"#ff4444",fontWeight:"bold",textShadow:"0 0 10px rgba(255,68,68,0.45)"}}>Malleable Word of the Day</span>
             </div>
-            <div style={{fontSize:ipadIntro(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>Not sure a word's in the LL dictionary? Tap the blue <strong style={{color:'#7cc4ff'}}>🔭 SCOUT</strong> chip beside yer built word to check it — without committing yer tiles. The clock keeps runnin', so certainty costs time, matey!</div>
+            <div style={{fontSize:ipadIntro(17.5),color:"rgba(245,240,232,0.98)",lineHeight:1.6}}>The Word of the Day now bends to yer will. Any word that carries the WoD's root — SURPRISING, UNSURPRISED, SURPRISES for SURPRISED — counts as found, so long as it's at least as long as the listed word. Grow it and the bonus grows too: <strong style={{color:'#f6d365'}}>1,000 pts plus 200 for every extra letter</strong>.</div>
           </div>
-          {/* v293: second card — Flourish Leaderboard (1.7). Slightly smaller than the featured card. */}
+          {/* v304: second card — Today's Summary & My Flourishes (1.8). */}
           <div style={{background:"rgba(167,139,250,0.14)",border:"2px solid rgba(167,139,250,0.7)",borderRadius:14,padding:`${ipadIntroPad(14)}px ${ipadIntroPad(16)}px`,boxShadow:"0 0 18px rgba(167,139,250,0.25)"}}>
             <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:8}}>
-              <span style={{fontSize:ipadIntro(20)}}>🏴‍☠️</span>
-              <span style={{fontSize:ipadIntro(18),color:"#c4b5fd",fontWeight:"bold"}}>Flourish Leaderboard</span>
+              <span style={{fontSize:ipadIntro(20)}}>📊</span>
+              <span style={{fontSize:ipadIntro(18),color:"#c4b5fd",fontWeight:"bold"}}>Today's Summary & My Flourishes</span>
             </div>
-            <div style={{fontSize:ipadIntro(15.5),color:"rgba(245,240,232,0.95)",lineHeight:1.55}}>New leaderboard tab: the longest board-clearing Finishing Flourish words, across all Looters. Registered players only — and the board starts fresh from 1.7, so get yer name up there first!</div>
+            <div style={{fontSize:ipadIntro(15.5),color:"rgba(245,240,232,0.95)",lineHeight:1.55}}>Every game now ends with a <strong style={{color:'#c4b5fd'}}>Today's Summary</strong> card — Perfect Day and streak, yer Finishing Flourishes, Word of the Day, and total time — with Leaderboard, Share, and Play Again right there. And under Stats, a new <strong style={{color:'#c4b5fd'}}>My Flourishes</strong> log keeps every board-clearing word you've ever flourished, by day and level.</div>
           </div>
         </div>
         {/* v212: proportional spacer — content distributes down the screen to fill the space. */}
@@ -6849,7 +6893,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         {/* v203/v212: "still worth knowing" recap — bigger font, STRONGER border. */}
         <div style={{background:"rgba(255,255,255,0.05)",border:"1.5px solid rgba(255,255,255,0.28)",borderRadius:12,padding:`${ipadIntroPad(16)}px ${ipadIntroPad(18)}px`}}>
             <div style={{fontSize:ipadIntro(14),letterSpacing:1,color:"rgba(245,240,232,0.7)",fontWeight:"bold",marginBottom:ipadIntro(11),textTransform:"uppercase"}}>Still worth knowing</div>
-            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>🦜 <strong style={{color:"#ff4444"}}>Finishing Flourish Bonus</strong> — clear the board with a 5+ letter word for bonus treasure; longer = bigger haul.</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6}}>🔭 <strong style={{color:"#7cc4ff"}}>The Spyglass</strong> — tap SCOUT beside yer built word to check it before committing; the clock keeps runnin'.</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Flourish Leaderboard</strong> — the longest board-clearing Flourish words across all Looters.</div>
+            <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>🦜 <strong style={{color:"#ff4444"}}>Finishing Flourish Bonus</strong> — clear the board with a 5+ letter word for bonus treasure; longer = bigger haul.</div>
             <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>✨ <strong style={{color:"#f6d365"}}>Loot Letters</strong> — one hidden tile per level scores 5×.</div>
             <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>🏴‍☠️ <strong style={{color:"#c4b5fd"}}>Pirate Celebrations</strong> — cheers for big moments (toggle on or off on the "Ready?" screen).</div>
             <div style={{fontSize:ipadIntro(17),color:"rgba(245,240,232,0.92)",lineHeight:1.6,marginTop:ipadIntro(9)}}>⚠️ <strong style={{color:"#7cc4ff"}}>Vowel / Consonant Alert</strong> — the letter boxes pulse when your balance gets risky.</div>

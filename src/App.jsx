@@ -11,10 +11,10 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v308 dev cycle OPEN - in-app version line (1.9.1 ship patch)
+const DEBUG_MODE = false; // v309 dev cycle OPEN - version line on Welcome screen (1.9.1 ship patch)
 // v308: the string players read off Menu -> Account and quote back when reporting an
 // issue. Bump this in every ship patch; it is the app's only self-identification.
-const APP_VERSION = "1.9.1 (308)";
+const APP_VERSION = "1.9.1 (309)";
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
@@ -6696,6 +6696,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <span style={{fontSize:ipadIntro(28),fontWeight:"bold",letterSpacing:5,color:"#ffffff",textShadow:"0 0 16px rgba(167,139,250,0.85)"}}>LetterLoot</span>
         </div>
         <div style={{fontSize:ipadIntro(12),color:"rgba(255,255,255,0.6)",marginTop:6,letterSpacing:1}}>Daily word puzzle · Every letter has a value</div>
+        {/* v309: version line, Welcome screen placement A. Zero taps, first view on every
+            device, guests included. The in-game Menu line (v308) covers mid-game returns. */}
+        <div style={{fontSize:ipadIntro(10),color:"rgba(255,255,255,0.38)",marginTop:4,letterSpacing:0.5,fontFamily:"Georgia,serif"}}>LetterLoot {APP_VERSION}</div>
 
         {/* ── Profile section ── */}
         <div style={{marginTop:ipadIntro(16),width:"100%",background:"rgba(255,255,255,0.05)",borderRadius:16,padding:`${ipadIntroPad(16)}px`,border:"1px solid rgba(255,255,255,0.12)"}}>
@@ -6855,6 +6858,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             </div>
           </div>
         )}
+        {/* v309: version line, Welcome screen placement B (footer under the WoD card). */}
+        <div style={{marginTop:14,fontSize:ipadIntro(10),color:"rgba(255,255,255,0.38)",letterSpacing:0.5,fontFamily:"Georgia,serif"}}>LetterLoot {APP_VERSION}</div>
       </div>
       {/* v98 fix: delete-account modal duplicated into the Welcome (showIntro) branch.
           The original modal (in the final render branch) is unreachable from the Welcome

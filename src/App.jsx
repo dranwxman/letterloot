@@ -11,7 +11,10 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v307 dev cycle OPEN - leaderboard erasure guards + admin gate
+const DEBUG_MODE = false; // v308 dev cycle OPEN - in-app version line (1.9.1 ship patch)
+// v308: the string players read off Menu -> Account and quote back when reporting an
+// issue. Bump this in every ship patch; it is the app's only self-identification.
+const APP_VERSION = "1.9.1 (308)";
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
@@ -8047,6 +8050,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               </div>
             </div>
           )}
+
+          {/* v308: in-app version line. Shown to EVERY player, guests included — the entire
+              point is that a player can read their version off the screen instead of being
+              walked through the App Store product page. Deliberately quiet: small, dim,
+              bottom of the panel, no border box. APP_VERSION is bumped by each ship patch. */}
+          <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.08)",textAlign:"center",fontSize:ipadMenu(9),color:"rgba(255,255,255,0.38)",fontFamily:"Georgia,serif",letterSpacing:0.5}}>
+            LetterLoot {APP_VERSION}
+          </div>
         </div>
       )}
 

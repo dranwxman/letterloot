@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v306 dev cycle OPEN - leaderboard erasure guards + admin gate
+const DEBUG_MODE = false; // v307 dev cycle OPEN - leaderboard erasure guards + admin gate
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
@@ -1275,10 +1275,32 @@ function wotdRoot(w) {
   }
   return W;
 }
+// v307 (Malleable WoD rule B — Daryl, Sep 1): SILENT-E STEM, UNGATED.
+// wotdRoot() strips ONE ending off the WoD, which only helps when the WoD is already an
+// inflected form (SURPRISED -> SURPRIS). When the WoD is the plain form ending in a silent E
+// (STOCKPILE) nothing strips, the root stays whole, and English's E-drop before a vowel suffix
+// breaks containment: STOCKPILING has no "STOCKPILE" block. Player-reported Sep 1.
+// Fix: accept the root OR the root minus a trailing E (floor 5, same as wotdRoot).
+// DELIBERATELY LIBERAL per Daryl's ruling: admits some non-forms (WoD CREATE accepts CREATURE
+// via the CREAT stem). Errors run in the PLAYER'S favor, by design.
+// v307 also folds in server-supplied extra roots (see WOTD_EXTRA_ROOTS below) so the NEXT
+// edge case is a Supabase INSERT, not an App Store release.
+function wotdRootVariants(wotdWord) {
+  const W = (wotdWord || "").toUpperCase();
+  const root = wotdRoot(W);
+  const out = [root];
+  if (root.endsWith("E") && root.length - 1 >= 5) out.push(root.slice(0, -1));
+  for (const row of WOTD_EXTRA_ROOTS) {
+    // Global rows (no wotd_word) apply to every day; targeted rows only to their own WoD.
+    if (row.root && (!row.wotd || row.wotd === W)) out.push(row.root);
+  }
+  return out;
+}
 function isWotdMatch(playedWord, wotdWord) {
   if (!playedWord || !wotdWord) return false;
   const P = playedWord.toUpperCase(), W = wotdWord.toUpperCase();
-  return P.length >= W.length && P.includes(wotdRoot(W));
+  if (P.length < W.length) return false;
+  return wotdRootVariants(W).some(r => P.includes(r));
 }
 function saveCachedWordOfTheDay(word) {
   try { localStorage.setItem("ll_wotd", JSON.stringify({ date: getTodayKey(), word, found: false, version: WOTD_CACHE_VERSION })); } catch {}
@@ -1315,8 +1337,44 @@ async function loadApprovedWords() {
     }
   } catch(e) { console.warn("Failed to load approved words:", e); }
 }
+// ── WoD extra accepted roots (v307, Option 1) ──
+// Server-side safety net for WoD matching. Rows here add accepted roots WITHOUT a store
+// release: fix a wrongly-rejected word with one INSERT in the Supabase SQL editor and every
+// player — native and web — picks it up on next launch.
+//   wotd_word  = the WoD this applies to (uppercase), or NULL to apply to every day
+//   extra_root = the additional accepted root (uppercase)
+// Fails safe: any error leaves the list empty and the baked-in rule B still applies.
+// Guard: roots under 4 chars are dropped so a typo row can't make every word match.
+let WOTD_EXTRA_ROOTS = [];
+let wotdExtraRootsLoaded = false;
+async function loadWotdExtraRoots() {
+  if (wotdExtraRootsLoaded) return;
+  try {
+    const url = "https://zcevszxmoggmcmvyxjtn.supabase.co/rest/v1/wotd_extra_roots?select=wotd_word,extra_root&active=eq.true&limit=500";
+    // Same anon key literal already used by loadApprovedWords() above — kept inline for
+    // symmetry with that function rather than introducing a new shared constant.
+    const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM";
+    const r = await fetch(url, { headers: {
+      apikey: anonKey,
+      Authorization: "Bearer " + anonKey
+    }});
+    if (r.ok) {
+      const rows = await r.json();
+      WOTD_EXTRA_ROOTS = rows
+        .map(x => ({
+          wotd: (x.wotd_word || "").toUpperCase() || null,
+          root: (x.extra_root || "").toUpperCase()
+        }))
+        .filter(x => x.root.length >= 4);
+      wotdExtraRootsLoaded = true;
+      try { console.log(`[WoD] Loaded ${WOTD_EXTRA_ROOTS.length} extra root(s) from server.`); } catch {}
+    }
+  } catch (e) { console.warn("Failed to load WoD extra roots:", e); }
+}
+
 // Kick off load on module init
 loadApprovedWords();
+loadWotdExtraRoots();
 
 async function validateWord(word) {
   const key = word.toLowerCase();

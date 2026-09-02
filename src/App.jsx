@@ -11,10 +11,10 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v309 dev cycle OPEN - version line on Welcome screen (1.9.1 ship patch)
+const DEBUG_MODE = false; // v311 web-beta: Spyglass Open Search live for Beta-Looters (2.0 ship pending feedback)
 // v308: the string players read off Menu -> Account and quote back when reporting an
 // issue. Bump this in every ship patch; it is the app's only self-identification.
-const APP_VERSION = "1.9.1 (309)";
+const APP_VERSION = "1.9.1 (311)";
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
@@ -4664,11 +4664,32 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [spyglass, setSpyglass] = useState(null); // null | {word, status:'checking'|'valid'|'invalid'|'error', reported}
   // v295: double-tap route removed (ruling A) — the SCOUT 🔭 chip is the sole access.
   const [spyHint, setSpyHint] = useState(false);
+  // v310 OPEN SEARCH (Chelsea; spec claude_v308-spyglass-spec.md): same button, branches on
+  // context. Tiles spelled (3+) -> instant board verdict, exactly as before. NOTHING spelled ->
+  // typed mode: the modal opens with an input. Unlimited typed checks (Daryl overruled the
+  // Aug 27 cap of 3 — clock running is the only fee). Typed checks flip ll_spyglass_used too.
   const openSpyglass = async () => {
-    if (!currentWord || currentWord.length < 3 || validating || pausedRef.current) return;
+    if (validating || pausedRef.current) return;
+    if (!currentWord || currentWord.length < 3) {
+      if (selected.length === 0) setSpyglass({ word: "", status: "input", mode: "typed", reported: false });
+      return;
+    }
     const w = currentWord;
     localStorage.setItem("ll_spyglass_used", "1"); setSpyUsed(true); setSpyHint(false);
-    setSpyglass({ word: w, status: "checking", reported: false });
+    setSpyglass({ word: w, status: "checking", mode: "board", reported: false });
+    try {
+      const r = await validateWord(w);
+      setSpyglass(s => s && s.word === w ? { ...s, status: r.valid === true ? "valid" : (r.valid === null || r.source === "timeout") ? "error" : "invalid" } : s);
+    } catch { setSpyglass(s => s && s.word === w ? { ...s, status: "error" } : s); }
+  };
+  // v310: run the typed word through the SAME pipeline as the board verdict. No prefill from
+  // tiles (spec item 7), no score preview, binary verdict only. Retryable on error.
+  const spyglassTypedCheck = async () => {
+    if (!spyglass || spyglass.mode !== "typed" || pausedRef.current) return;
+    const w = (spyglass.word || "").trim().toUpperCase();
+    if (w.length < 3 || !/^[A-Z]+$/.test(w)) return;
+    localStorage.setItem("ll_spyglass_used", "1"); setSpyUsed(true); setSpyHint(false);
+    setSpyglass({ word: w, status: "checking", mode: "typed", reported: false });
     try {
       const r = await validateWord(w);
       setSpyglass(s => s && s.word === w ? { ...s, status: r.valid === true ? "valid" : (r.valid === null || r.source === "timeout") ? "error" : "invalid" } : s);
@@ -7765,10 +7786,28 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         <div onClick={(e)=>e.stopPropagation()} style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",borderRadius:22,padding:`${ipadTour(36)}px ${ipadTour(30)}px`,textAlign:"center",border:"1.5px solid rgba(246,211,101,0.6)",maxWidth:ipadTour(400),width:"94%",boxShadow:"0 12px 48px rgba(0,0,0,0.8)"}}>
           <div style={{fontSize:ipadTour(44),marginBottom:6,filter:"drop-shadow(0 0 8px rgba(124,196,255,0.6))"}}>🔭</div>
           <div style={{fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365",marginBottom:4}}>The Spyglass</div>
-          <div style={{fontSize:ipadTour(15),fontStyle:"italic",color:"#e8e0d0",marginBottom:14}}>Scout yer word before committin' the tiles</div>
-          <div style={{fontSize:ipadTour(24),fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:12}}>{spyglass.word}</div>
+          <div style={{fontSize:ipadTour(15),fontStyle:"italic",color:"#e8e0d0",marginBottom:14}}>{spyglass.mode==="typed" ? "Scout any word ye be wonderin' about" : "Scout yer word before committin' the tiles"}</div>
+          {spyglass.status==="input"
+            ? (<>{/* v310 typed mode: letters only, 3+ enables the check. Enter submits. */}
+              <input autoFocus value={spyglass.word} onChange={(e)=>{const v=e.target.value.toUpperCase().replace(/[^A-Z]/g,"").slice(0,20); setSpyglass(s=>s?{...s,word:v}:s);}} onKeyDown={(e)=>{if(e.key==="Enter")spyglassTypedCheck();}} placeholder="TYPE A WORD" style={{width:"100%",boxSizing:"border-box",padding:`${ipadTour(10)}px ${ipadTour(12)}px`,borderRadius:12,border:"1.5px solid rgba(124,196,255,0.65)",background:"rgba(255,255,255,0.08)",color:"#fff",fontSize:ipadTour(20),fontWeight:"bold",letterSpacing:2,textAlign:"center",fontFamily:"Georgia,serif",outline:"none",marginBottom:10}} />
+              <button className="ll-btn" onClick={spyglassTypedCheck} disabled={(spyglass.word||"").length<3} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:(spyglass.word||"").length<3?"rgba(255,255,255,0.12)":"linear-gradient(135deg,#7cc4ff,#60a5fa)",color:(spyglass.word||"").length<3?"rgba(255,255,255,0.4)":"#0a1a3a",fontSize:ipadTour(13),fontWeight:"bold",border:"none",marginBottom:12,cursor:(spyglass.word||"").length<3?"default":"pointer"}}>🔭 Scout It</button>
+            </>)
+            : <div style={{fontSize:ipadTour(24),fontWeight:"bold",color:"#fff",letterSpacing:2,marginBottom:12}}>{spyglass.word}</div>}
           {spyglass.status==="checking" && <div style={{fontSize:ipadTour(13),color:"rgba(255,255,255,0.75)",marginBottom:12}}>Scoutin' the word…</div>}
           {spyglass.status==="valid" && <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#6ee7b7",marginBottom:12}}>✓ Accepted in the LL dictionary!</div>}
+          {/* v310 WoD VERDICT (Daryl's rule C, wording ruled PLAIN Sep 1): only on a VALID
+              verdict, both modes. Hit -> confirm. Already claimed -> say so. Genuine near-miss
+              (contains a root variant but shorter than the listed WoD) -> "Not quite" line.
+              Anything else -> SILENT. NEVER show the bonus value (standing Spyglass rule). */}
+          {spyglass.status==="valid" && wotd && (()=>{
+            const P = spyglass.word.toUpperCase(), W = wotd.toUpperCase();
+            if (isWotdMatch(P, W)) return wotdFound
+              ? <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>Today's Word of the Day is already claimed.</div>
+              : <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>🎯 That's today's Word of the Day.</div>;
+            if (!wotdFound && P.length < W.length && wotdRootVariants(W).some(r => P.includes(r)))
+              return <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>Not quite — today's word is {W}, and it has to be at least that long.</div>;
+            return null;
+          })()}
           {spyglass.status==="invalid" && (<>
             <div style={{fontSize:ipadTour(15),fontWeight:"bold",color:"#fda4af",marginBottom:10}}>✗ Not in the LL dictionary</div>
             {!spyglass.reported
@@ -7777,8 +7816,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           </>)}
           {spyglass.status==="error" && (<>
             <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#fda4af",marginBottom:10}}>📡 Can't reach the dictionary — please check connection</div>
-            <button className="ll-btn" onClick={openSpyglass} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.35)",color:"#fff",fontSize:ipadTour(13),fontWeight:"bold",marginBottom:10}}>Scout Again</button>
+            <button className="ll-btn" onClick={spyglass.mode==="typed" ? spyglassTypedCheck : openSpyglass} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.1)",border:"1px solid rgba(255,255,255,0.35)",color:"#fff",fontSize:ipadTour(13),fontWeight:"bold",marginBottom:10}}>Scout Again</button>
           </>)}
+          {spyglass.mode==="typed" && (spyglass.status==="valid"||spyglass.status==="invalid") &&
+            <button className="ll-btn" onClick={()=>setSpyglass({ word: "", status: "input", mode: "typed", reported: false })} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(124,196,255,0.15)",border:"1px solid rgba(124,196,255,0.5)",color:"#7cc4ff",fontSize:ipadTour(13),fontWeight:"bold",marginBottom:10}}>🔭 Scout Another Word</button>}
           {!paused && tab==="play" && <div style={{fontSize:ipadTour(14),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>⏱️ The game clock be runnin'!</div>}
           <button className="ll-btn" onClick={()=>setSpyglass(null)} style={{width:"100%",padding:ipadTour(10),borderRadius:12,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.3)",color:"#f0e8d8",fontSize:ipadTour(13),fontWeight:"bold"}}>Back to the Hunt</button>
         </div>
@@ -8103,7 +8144,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 <div style={{fontSize:ipadWord(7),color:"rgba(255,255,255,0.4)"}}>{currentWord.length} ltrs</div>
               </div>
             )}
-            {currentWord.length>=3 && (
+            {/* v310: chip also shows with NOTHING staged — tapping opens typed mode. 1-2 staged: hidden as before. */}
+            {(currentWord.length>=3 || selected.length===0) && (
               <div onClick={(e)=>{e.stopPropagation(); openSpyglass();}} style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:1,marginLeft:ipadWord(5),flexShrink:0,background:"linear-gradient(135deg,rgba(124,196,255,0.18),rgba(96,165,250,0.12))",border:"1.5px solid rgba(124,196,255,0.65)",borderRadius:8,padding:`${ipadWord(3)}px ${ipadWord(6)}px`,cursor:"pointer",boxShadow:spyUsed?"none":"0 0 10px rgba(124,196,255,0.55)",animation:spyUsed?"none":"pulse 2.2s ease-in-out infinite"}} title="Spyglass-check this word">
                 <span style={{fontSize:ipadWord(6),color:"#7cc4ff",fontWeight:"bold",letterSpacing:0.5,whiteSpace:"nowrap"}}>SCOUT</span>
                 <span style={{fontSize:ipadWord(15),lineHeight:1}}>🔭</span>

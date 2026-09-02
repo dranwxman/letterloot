@@ -11,10 +11,10 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v311 web-beta: Spyglass Open Search live for Beta-Looters (2.0 ship pending feedback)
+const DEBUG_MODE = false; // v312 web-beta: Spyglass Open Search live for Beta-Looters; version line reads 2.0 (App Store ship pending feedback)
 // v308: the string players read off Menu -> Account and quote back when reporting an
 // issue. Bump this in every ship patch; it is the app's only self-identification.
-const APP_VERSION = "1.9.1 (311)";
+const APP_VERSION = "2.0 (312)";
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];

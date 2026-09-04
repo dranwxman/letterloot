@@ -11,10 +11,10 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v312 web-beta: Spyglass Open Search live for Beta-Looters; version line reads 2.0 (App Store ship pending feedback)
+const DEBUG_MODE = false; // v322 SHIP 2.0.1 - WoD arrow cluster + Y-stem rule + Spyglass hit callout (v313-v321)
 // v308: the string players read off Menu -> Account and quote back when reporting an
 // issue. Bump this in every ship patch; it is the app's only self-identification.
-const APP_VERSION = "2.0 (312)";
+const APP_VERSION = "2.0.1 (322)";
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
@@ -1293,6 +1293,10 @@ function wotdRootVariants(wotdWord) {
   const root = wotdRoot(W);
   const out = [root];
   if (root.endsWith("E") && root.length - 1 >= 5) out.push(root.slice(0, -1));
+  // v316 (Y-stem, Sep 3): consonant-Y words mutate Y->I before suffixes (RASPBERRY ->
+  // RASPBERRIES, MYSTERY -> MYSTERIOUS), breaking containment same as the silent E did.
+  // Accept the root minus trailing Y, same floor. 261 of 2,900 candidates in this class.
+  if (root.endsWith("Y") && root.length - 1 >= 5) out.push(root.slice(0, -1));
   for (const row of WOTD_EXTRA_ROOTS) {
     // Global rows (no wotd_word) apply to every day; targeted rows only to their own WoD.
     if (row.root && (!row.wotd || row.wotd === W)) out.push(row.root);
@@ -1308,7 +1312,7 @@ function isWotdMatch(playedWord, wotdWord) {
 function saveCachedWordOfTheDay(word) {
   try { localStorage.setItem("ll_wotd", JSON.stringify({ date: getTodayKey(), word, found: false, version: WOTD_CACHE_VERSION })); } catch {}
 }
-function markWordOfTheDayFound(level, score, bonus = 1000) {
+function markWordOfTheDayFound(level, score, bonus = 1000, foundWord = null) {
   try {
     const cached = getCachedWordOfTheDay();
     if (cached) {
@@ -1316,6 +1320,7 @@ function markWordOfTheDayFound(level, score, bonus = 1000) {
       cached.foundLevel = level;
       cached.foundScore = score;
       cached.foundBonus = bonus; // v299: varies with word length now
+      if (foundWord) cached.foundWord = foundWord; // v313: the ACTUAL word played (may be longer/prefixed form)
       cached.version = WOTD_CACHE_VERSION;
       localStorage.setItem("ll_wotd", JSON.stringify(cached));
     }
@@ -3881,7 +3886,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [wotdFoundDetails, setWotdFoundDetails] = useState(() => {
     try {
       const cached = getCachedWordOfTheDay();
-      return cached?.foundLevel ? { level: cached.foundLevel, score: cached.foundScore, bonus: cached.foundBonus || 1000 } : null;
+      return cached?.foundLevel ? { level: cached.foundLevel, score: cached.foundScore, bonus: cached.foundBonus || 1000, word: cached.foundWord || null } : null;
     } catch { return null; }
   });
   // If no cached WoD, compute it in background after mount so it doesn't block the UI
@@ -5534,7 +5539,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         setWotdFound(cachedWotd.found || false);
         if (cachedWotd.found && cachedWotd.foundLevel) {
           // v300: include foundBonus — without it a relaunch showed "+1,000" for a grown find.
-          setWotdFoundDetails({ level: cachedWotd.foundLevel, score: cachedWotd.foundScore, bonus: cachedWotd.foundBonus || 1000 });
+          // v317: include foundWord too — same bug, one field over. Without it a relaunch
+          // dropped the v313 arrow (card fell back to "You found it!").
+          setWotdFoundDetails({ level: cachedWotd.foundLevel, score: cachedWotd.foundScore, bonus: cachedWotd.foundBonus || 1000, word: cachedWotd.foundWord || null });
         } else {
           setWotdFoundDetails(null);
         }
@@ -5674,7 +5681,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const longestW = shareableWords.reduce((b, s) => !b || s.word.length > b.word.length ? s : b, null);
     const sharer = playerName ? `${playerName} had a 🌈🏆 Perfect Day on LetterLoot!` : "🌈🏆 PERFECT DAY on LetterLoot!";
     const bonusLine = perfectDayStreakBonus > 0 ? `\n🌈🏆 Streak Bonus: +${perfectDayStreakBonus.toLocaleString()} pts` : "";
-    const wotdLine = wotdFoundDetails ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts` : "";
+    const wotdArrow = wotdFoundDetails && wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() ? `→${wotdFoundDetails.word.toUpperCase()}` : ""; // v313
+    const wotdLine = wotdFoundDetails ? `\n🎯 WoD: ${wotd}${wotdArrow} — Found! Scored ${wotdFoundDetails.score} pts` : "";
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
     // v223: FF block (rule-bounded, header + one row per level). See buildFFBlock above.
     const ffLines = buildFFBlock();
@@ -5695,9 +5703,10 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     const sharer = playerName ? `${playerName} had a Great Day on LetterLoot today!` : "My LetterLoot results today!";
     const levelsLine = `\nSuccessfully completed ${Math.min(level, 5)} of 5 levels`;
     const timeLine = `\n⏱️ Total Time: ${formatTime(totalTimeRef.current)}`;
+    const wotdArrow2 = wotdFoundDetails && wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() ? `→${wotdFoundDetails.word.toUpperCase()}` : ""; // v313
     const wotdLine = wotdFoundDetails
-      ? `\n🎯 Word of the Day: ${wotd} — Found! Scored ${wotdFoundDetails.score} pts`
-      : `\n🎯 Word of the Day: not found today`;
+      ? `\n🎯 WoD: ${wotd}${wotdArrow2} — Found! Scored ${wotdFoundDetails.score} pts`
+      : `\n🎯 WoD: not found today`;
     // v223: FF block — SAME helper as the Perfect Day builder. Never inline this twice.
     const ffLines = buildFFBlock();
     return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
@@ -6051,8 +6060,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       if (wotd && !wotdFound && isWotdMatch(currentWord, wotd)) {
         const bonus = 1000 + 200 * Math.max(0, currentWord.length - wotd.length);
         setWotdFound(true);
-        setWotdFoundDetails({ level, score, bonus });
-        markWordOfTheDayFound(level, score, bonus);
+        setWotdFoundDetails({ level, score, bonus, word: currentWord }); // v313: remember what was actually played
+        markWordOfTheDayFound(level, score, bonus, currentWord);
         totalRef.current += bonus; setTotalScore(totalRef.current);
         lifetimeRef.current += bonus; setLifetimePoints(lifetimeRef.current);
         saveLifetimeData(lifetimeRef.current); // v306: mirror locally for ALL players
@@ -6875,7 +6884,14 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:16,color:"#d8ccfd",letterSpacing:3,fontWeight:"bold",marginBottom:6}}>🎯 WORD OF THE DAY</div>
             <div style={{fontSize:24,fontWeight:"bold",color:"#f6d365",letterSpacing:2,marginBottom:6,fontFamily:"Georgia,serif"}}>{wotd}</div>
             <div style={{fontSize:wotdFound?16:15.5,fontWeight:"bold",color:wotdFound?"#4ade80":"rgba(255,255,255,0.98)",lineHeight:1.5}}>
-              {wotdFound ? `✓ You found it! +${((wotdFoundDetails && wotdFoundDetails.bonus) || 1000).toLocaleString("en-US")} pts` : "Spell it — or any longer form of it! 1,000 pts, +200 per extra letter."}
+              {/* v313: extended/prefixed finds show full-word arrow (STRENUOUS→STRENUOUSLY).
+                  Exact finds keep the blessed line. Pre-v313 found-days have no stored word
+                  and fall back to the blessed line too. */}
+              {wotdFound
+                ? (wotdFoundDetails && wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase()
+                  ? `✓ ${wotd}→${wotdFoundDetails.word.toUpperCase()}! +${(wotdFoundDetails.bonus || 1000).toLocaleString("en-US")} pts`
+                  : `✓ You found it! +${((wotdFoundDetails && wotdFoundDetails.bonus) || 1000).toLocaleString("en-US")} pts`)
+                : "Spell it — or any longer form of it! 1,000 pts, +200 per extra letter."}
             </div>
           </div>
         )}
@@ -7159,6 +7175,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 fixed on the speech bubbles. Off-white on a 22% black scrim holds contrast wherever
                 the gradient lands. (Daryl chose the band over plain off-white.) */}
             <div style={{marginTop:ipadIntro(14),background:"rgba(0,0,0,0.22)",borderRadius:14,padding:`${ipadIntro(10)}px ${ipadIntro(12)}px`}}>
+              {/* v320 (Daryl ruled A, Sep 3 — amends his July 9 "nothing else" ruling for GROWN
+                  finds only): the malleable WoD means the played word can differ from the listed
+                  one, so the pair is information, not an echo. Exact finds render nothing here. */}
+              {wotd && wotdFoundDetails && wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() &&
+                <div style={{fontSize:ipadIntro(17),color:"#f6d365",fontWeight:"bold",letterSpacing:1.5,marginBottom:ipadIntro(6)}}>{wotd}→{wotdFoundDetails.word.toUpperCase()}</div>}
               <div style={{fontSize:ipadIntro(15),color:"#fdf6e3",fontStyle:"italic",fontWeight:"bold",lineHeight:1.45}}>{pickWotdSaying((typeof wotdCelebration === "object" && wotdCelebration && wotdCelebration.bonus) || 1000, !!(typeof wotdCelebration === "object" && wotdCelebration && wotdCelebration.grew))}</div>
             </div>
           </div>
@@ -7647,7 +7668,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {wotdFoundDetails && (
             <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
               <span style={{fontSize:ipadTour(11),color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
-              <strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
+              <strong style={{color:"#f6d365"}}>{wotd}{wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() ? "→" + wotdFoundDetails.word.toUpperCase() : ""}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
             </div>
           )}
           {/* Tracking note - brightened, no bold */}
@@ -7713,7 +7734,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             </div>
             <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.5}}>
               <span style={{fontSize:ipadTour(11),color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
-              {wotdFoundDetails ? <><strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts</> : <span style={{color:"rgba(255,255,255,0.6)"}}>Not found today</span>}
+              {wotdFoundDetails ? <><strong style={{color:"#f6d365"}}>{wotd}{wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() ? "→" + wotdFoundDetails.word.toUpperCase() : ""}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts</> : <span style={{color:"rgba(255,255,255,0.6)"}}>Not found today</span>}
             </div>
             <div style={{marginTop:8,fontSize:ipadTour(12),color:"#60a5fa",fontWeight:"bold"}}>⏱️ Total time: {formatTime(totalTimeRef.current)}</div>
             {/* v303 (option B): Leaderboard · Share · Play Now · Later */}
@@ -7755,7 +7776,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {wotdFoundDetails && (
             <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.5,textAlign:"center"}}>
               <span style={{fontSize:ipadTour(11),color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
-              <strong style={{color:"#f6d365"}}>{wotd}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
+              <strong style={{color:"#f6d365"}}>{wotd}{wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() ? "→" + wotdFoundDetails.word.toUpperCase() : ""}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts
             </div>
           )}
           <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.45)",marginTop:8,lineHeight:1.5}}>
@@ -7803,7 +7824,11 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             const P = spyglass.word.toUpperCase(), W = wotd.toUpperCase();
             if (isWotdMatch(P, W)) return wotdFound
               ? <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>Today's Word of the Day is already claimed.</div>
-              : <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>🎯 That's today's Word of the Day.</div>;
+              /* v321 (Daryl ruled A, Sep 3): the HIT gets the WoD visual identity — it was
+                 camouflaged next to the Accepted line. Claimed/near-miss stay quiet. */
+              : <div style={{background:"linear-gradient(135deg,rgba(167,139,250,0.35),rgba(124,58,237,0.28))",border:"2px solid #f6d365",borderRadius:14,padding:`${ipadTour(12)}px ${ipadTour(14)}px`,marginBottom:12,boxShadow:"0 0 24px rgba(246,211,101,0.45)"}}>
+                  <div style={{fontSize:ipadTour(16),fontWeight:"bold",color:"#f6d365",letterSpacing:1.5,lineHeight:1.4}}>🎯 THAT'S TODAY'S WORD OF THE DAY!</div>
+                </div>;
             if (!wotdFound && P.length < W.length && wotdRootVariants(W).some(r => P.includes(r)))
               return <div style={{fontSize:ipadTour(13),fontWeight:"bold",color:"#f6d365",marginBottom:12}}>Not quite — today's word is {W}, and it has to be at least that long.</div>;
             return null;

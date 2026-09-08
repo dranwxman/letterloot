@@ -11,7 +11,7 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v322 SHIP 2.0.1 - WoD arrow cluster + Y-stem rule + Spyglass hit callout (v313-v321)
+const DEBUG_MODE = true; // v331 DEV Galleon stage: streak chain redefinition (absence/Barque never break; failed Galleon day does) + Barque PD = tally + flat 2000, no chain + Barque best-times off cloud boards
 // v308: the string players read off Menu -> Account and quote back when reporting an
 // issue. Bump this in every ship patch; it is the app's only self-identification.
 const APP_VERSION = "2.0.1 (322)";
@@ -654,6 +654,12 @@ function getTodayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
 }
+
+// v329: Island Hunt level names RETIRED from the UI (Daryl, Sep 6). The names ("The
+// Shallows"…"The Treasure Chamber") were tried in v328 and pulled the same day: too long
+// for compact rows and impossible to apply consistently (tables, times, FF logs are all
+// engineered around 2-char labels). Levels are "Level N" in prose and "Lx" in rows,
+// BOTH lanes, everywhere. Do not re-introduce names without a fresh Daryl ruling.
 
 // ── Haptic feedback helper (May 15, 2026) ─────────────────────
 // Fires iOS native vibration feedback when running inside Capacitor. Silent
@@ -2346,6 +2352,13 @@ function updateLocalStats(updates) {
   const stats = getLocalStats();
   const todayKey = getTodayKey(); const weekKey = getWeekKey();
   const yesterdayKey = getYesterdayKey();
+  // v331 (Galleon stage, ruled Sep 6): track the last day a GALLEON game was played.
+  // The competitive PD chain continues across absences and Barque days; it breaks only
+  // when a Galleon day is played WITHOUT earning the PD. prevGalleonDate ("the Galleon
+  // day before today") is the witness: chain intact iff it equals lastPerfectDate.
+  // Lane read from localStorage because this is a module-scope function.
+  const laneNow = (() => { try { return localStorage.getItem("ll_lane") === "barque" ? "barque" : "galleon"; } catch { return "galleon"; } })();
+  if (laneNow === "galleon" && stats.lastGalleonDate !== todayKey) { stats.prevGalleonDate = stats.lastGalleonDate || null; stats.lastGalleonDate = todayKey; }
   if (stats.lastPlayedDate !== todayKey) {
     stats.daysPlayed += 1;
     if (stats.lastStreakDate === yesterdayKey) stats.currentStreak += 1; else stats.currentStreak = 1;
@@ -2389,15 +2402,23 @@ function updateLocalStats(updates) {
       || stats.lastPerfectDate === todayKey;
     stats.perfectDaysWeek[todayKey] = (stats.perfectDaysWeek[todayKey]||0) + 1;
     if (!pdAlreadyToday) {
-      stats.perfectDaysAllTime += 1;
-      // Track consecutive perfect days
-      if (stats.lastPerfectDate === yesterdayKey) {
-        stats.consecutivePerfectDays = (stats.consecutivePerfectDays || 0) + 1;
-      } else {
-        stats.consecutivePerfectDays = 1;
-      }
+      stats.perfectDaysAllTime += 1; // v331: the TALLY is lane-neutral, once per day (ruled Sep 6)
     }
-    stats.lastPerfectDate = todayKey;
+    // v331 (ruled Sep 6): the CHAIN is Galleon-only. lastPerfectDate becomes a
+    // Galleon-only signal — a Barque PD never sets it, so it can neither extend nor
+    // block the competitive chain. Chain rule: intact iff yesterday was the last PD
+    // (classic + carry-forward migration) OR the last Galleon day before today was the
+    // last PD (absences and Barque days in between are invisible). A Galleon day played
+    // without a PD leaves prevGalleonDate ≠ lastPerfectDate at the next PD — the break.
+    if (laneNow === "galleon") {
+      if (stats.lastPerfectDate !== todayKey) {
+        const chainIntact = stats.lastPerfectDate === yesterdayKey
+          || (stats.prevGalleonDate && stats.prevGalleonDate === stats.lastPerfectDate);
+        stats.consecutivePerfectDays = chainIntact ? (stats.consecutivePerfectDays || 0) + 1 : 1;
+      }
+      stats.lastPerfectDate = todayKey;
+    }
+    // Barque PD: celebration + tally only — never touches the chain (ruled Sep 6).
   }
   if (updates.levelTime !== undefined && updates.levelNum !== undefined) {
     const lvl = String(updates.levelNum);
@@ -2915,6 +2936,11 @@ function AdminScreen({ onExit }) {
       const recentSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= twoWeeksAgoNum);
       const weekSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= weekAgoNum);
       const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
+      // v332: TRUE new registrations. `players.created_at` is a real timestamptz, so a
+      // server-side gte filter is safe here — none of the lexicographic trouble that forces
+      // client-side filtering on the text date_key columns above.
+      const weekAgoIso = new Date(Date.now()-7*86400000).toISOString();
+      const newPlayers = await adminQuery('players', 'id,created_at', `&created_at=gte.${weekAgoIso}&order=created_at.desc&limit=2000`).catch(()=>[]);
       const wordReports = await adminQuery('word_reports', '*', '&order=reported_at.desc&limit=200').catch(()=>[]); // v273: widened so the pending view can't be crowded out by decided rows (split client-side)
       // Build top 25 longest words and top word scores from ALL daily sessions
       // (one entry per player per day they had a record-worthy word — multi-entry per player allowed)
@@ -2936,7 +2962,7 @@ function AdminScreen({ onExit }) {
         .slice(0, 25);
       const top25Longest = longestEntries;
       const top25Score = scoreEntries;
-      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0, wordReports: wordReports || [] });
+      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0, wordReports: wordReports || [], newPlayers: newPlayers || [] });
       setLastUpdated(new Date().toLocaleTimeString());
     } catch(e) { console.error(e); }
     setLoading(false);
@@ -2978,7 +3004,13 @@ function AdminScreen({ onExit }) {
   const gs = data?.gameStates || [];
   const total = gs.length;
   const playedToday = data?.todaySessions?.length || 0;
-  const newThisWeek = new Set((data?.weekSessions||[]).map(s=>s.player_id)).size;
+  // v332: this Set counts distinct players with a session in the last 7 days — that is
+  // ACTIVE this week, not new. It was mislabeled "NEW THIS WEEK" through v331.
+  const activeThisWeek = new Set((data?.weekSessions||[]).map(s=>s.player_id)).size;
+  // v332: real signups in the last 7 days, from players.created_at. If this reads 0 while
+  // accounts are clearly being created, check RLS on `players` — an anon-key SELECT with no
+  // read policy returns 200 [] (not an error), which renders as a silent zero.
+  const newThisWeek = data?.newPlayers?.length || 0;
   const perfectTotal = gs.reduce((a,g)=>a+(g.stats?.perfectDaysAllTime||0),0);
   const guestPlays = data?.guestPlays || 0;
   const longestStreak = gs.reduce((a,g)=>Math.max(a,g.longest_streak||0),0);
@@ -3012,11 +3044,12 @@ function AdminScreen({ onExit }) {
         </div>
 
         {/* Stat cards */}
-        <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:8,marginBottom:8}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:8}}>
           {[
             {label:'REGISTERED PLAYERS',val:total,color:'246,211,101',vc:'#f6d365'},
             {label:'PLAYED TODAY',val:playedToday,color:'34,211,238',vc:'#22d3ee'},
-            {label:'NEW THIS WEEK',val:newThisWeek,color:'167,139,250',vc:'#a78bfa'},
+            {label:'ACTIVE THIS WEEK',val:activeThisWeek,color:'167,139,250',vc:'#a78bfa'},
+            {label:'NEW THIS WEEK',val:newThisWeek,color:'52,211,153',vc:'#34d399'},
           ].map((c,i)=>(
             <div key={i} style={cardStyle(c.color)}>
               <div style={{fontSize:28,fontWeight:'bold',color:c.vc}}>{c.val}</div>
@@ -4097,6 +4130,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const [showDaySummary, setShowDaySummary] = useState(false);
   const afterSummaryRef = useRef("farewell");
   const openDaySummary = useCallback((next) => { afterSummaryRef.current = next || "farewell"; setShowDaySummary(true); }, []);
+  // v325 (2b): anchored-day flag for the summary blessing. Set by dropAnchor, cleared on
+  // summary close. Forces the non-PD headline ("A FINE DAY'S SAIL") so a clean partial is
+  // NEVER called a Perfect Day (ruled) and the streak line (PD-branch-only) never renders
+  // on a Barque anchor (streak invisible on all Barque surfaces - ruled).
+  const [anchoredSummary, setAnchoredSummary] = useState(false);
+  // v328 (2c): stale-closure-proof marker that TODAY's ended-day shares should use the
+  // anchored composition (base + achievements only, absences don't exist). Set at the
+  // anchor tap; cleared when a fresh game starts (Play Again "now" + PLAY NOW reset).
+  const anchoredDayRef = useRef(false);
   // v302: My Flourishes (STATS) — this player's cloud ff_words rows; null = not fetched yet.
   const [myFFCloud, setMyFFCloud] = useState(null);
   const [longestWordToday, setLongestWordToday] = useState(ss?.longestWordToday || "");
@@ -4273,6 +4315,68 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   const repeatPdMsg = "Another flawless voyage, Cap'n! Today's Perfect Day streak treasure be already in yer hold — but keep plunderin'!";
   const [playAgainChoice, setPlayAgainChoice] = useState(null);
   const [perfectDayStreakBonus, setPerfectDayStreakBonus] = useState(0);
+  // v323 TWO-CHANNEL SCAFFOLDING (spec v3): daily lane choice. 'galleon' = competitive
+  // (DEFAULT — today's game IS Galleon, ruled Sep 3), 'barque' = relaxed. Persisted in
+  // localStorage ll_lane + game_state.lane for signed-in (survives reinstall, syncs).
+  // NO LOCK — switching any time is allowed (ruled; never re-raise a lock). Scaffolding
+  // only: the choice is stored and tagged onto daily_sessions rows; lane-specific
+  // behavior (Ship's Comforts, Drop Anchor, streak redefinition) comes in later stages.
+  const [lane, setLane] = useState(() => { try { return localStorage.getItem("ll_lane") === "barque" ? "barque" : "galleon"; } catch { return "galleon"; } });
+  const laneRef = useRef("galleon");
+  useEffect(() => { laneRef.current = lane; }, [lane]);
+  const pickLane = useCallback((l) => {
+    if (l !== "barque" && l !== "galleon") return;
+    setLane(l); laneRef.current = l;
+    try { localStorage.setItem("ll_lane", l); } catch {}
+    // Fire-and-forget cloud persist (signed-in only). UPDATE not upsert: if the
+    // game_state row doesn't exist yet (brand-new player pre-first-sync) this no-ops
+    // and the column default 'galleon' rules until their next pick — self-healing,
+    // and it can never create a skeleton game_state row.
+    try { if (user && !isGuest) supabase.from("game_state").update({ lane: l }).eq("player_id", user.id).then(() => {}); } catch {}
+  }, [user, isGuest]);
+  // v324 SHIP'S COMFORTS (stage 2a, ruled A Sep 4): Barque-only comfort toggles. Defaults
+  // "calm where it counts" - Timer HIDDEN, Pulsing V/C OFF, WoD SHOWN, Mascots ON: the
+  // pressure signals start quiet, the delight features stay. HIDE != DISABLE: timer off is
+  // hidden-not-stopped (clocks run, times still record for the wall); WoD off hides the
+  // welcome card + in-game reminder but the found-it celebration STILL fires (surprise =
+  // delight). Galleon ignores every comfort (spec: no toggles) except Mascots, which keeps
+  // its existing behavior on both lanes.
+  const [comfortTimer, setComfortTimer] = useState(() => { try { return localStorage.getItem("ll_comfort_timer") === "1"; } catch { return false; } });
+  const [comfortWod, setComfortWod] = useState(() => { try { return localStorage.getItem("ll_comfort_wod") !== "0"; } catch { return true; } });
+  const [comfortPulse, setComfortPulse] = useState(() => { try { return localStorage.getItem("ll_comfort_pulse") === "1"; } catch { return false; } });
+  const mkComfortSetter = (key, setter) => (on) => { setter(on); try { localStorage.setItem(key, on ? "1" : "0"); } catch {} };
+  const setComfortTimerPref = mkComfortSetter("ll_comfort_timer", setComfortTimer);
+  const setComfortWodPref = mkComfortSetter("ll_comfort_wod", setComfortWod);
+  const setComfortPulsePref = mkComfortSetter("ll_comfort_pulse", setComfortPulse);
+  const timerVisible = lane !== "barque" || comfortTimer;
+  const wodPromosVisible = lane !== "barque" || comfortWod;
+  const vcPulseEnabled = lane !== "barque" || comfortPulse;
+  // v327 (2b remainder, ruled A Sep 6): morning blessing for a quietly-rolled partial
+  // Barque day. A tiny local record (ll_barque_day) is merged at each genuine level
+  // clear and at Drop Anchor; on Welcome, if YESTERDAY's record is a partial (1-4
+  // clears), un-anchored (anchored days got their blessing at the anchor - never twice)
+  // and un-blessed, a once-only card shows between the greeting and the lane picker.
+  // Older partials pass with no blessing and no mention (absences don't exist); full
+  // days are excluded via the existing ll_completed_today marker. Galleon days never
+  // write the record. Copy is PLACEHOLDER for Kim ("YESTERDAY'S SAIL", "levels clean",
+  // "pts of loot").
+  const mergeBarqueDay = (patch) => { try { const k = "ll_barque_day"; const t = getTodayKey(); let cur = {}; try { cur = JSON.parse(localStorage.getItem(k) || "{}") || {}; } catch {} if (cur.dateKey !== t) cur = { dateKey: t }; localStorage.setItem(k, JSON.stringify({ ...cur, ...patch })); } catch {} };
+  const [rolloverBlessing, setRolloverBlessing] = useState(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("ll_barque_day"); if (!raw) return;
+      const rec = JSON.parse(raw); if (!rec || !rec.dateKey) return;
+      const yd = new Date(Date.now() - 86400000);
+      const ydKey = `${yd.getFullYear()}-${yd.getMonth() + 1}-${yd.getDate()}`;
+      if (rec.dateKey !== ydKey) return;
+      if (rec.anchored || rec.blessed) return;
+      const lc = rec.levelsCleared || 0;
+      if (lc < 1 || lc > 4) return;
+      if (localStorage.getItem("ll_completed_today") === rec.dateKey) return;
+      setRolloverBlessing({ levelsCleared: lc, score: rec.score || 0 });
+      localStorage.setItem("ll_barque_day", JSON.stringify({ ...rec, blessed: true }));
+    } catch {}
+  }, []);
   const [showStreakBonus, setShowStreakBonus] = useState(false);
   // v57: New popup shown to Guests after PD modal — Guests don't accumulate
   // streak bonuses, so we tell them what they're missing and offer a sign-up.
@@ -4912,7 +5016,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           }
         }
         const { data: playerData } = await supabase.from("players").select("name").eq("id", user.id).single();
-        if (playerData?.name) { setPlayerName(playerData.name); playerNameRef.current = playerData.name; }
+        // v323: hydrate the daily lane choice from the cloud (signed-in source of truth).
+        try {
+          const { data: laneRow } = await supabase.from("game_state").select("lane").eq("player_id", user.id).maybeSingle();
+          if (laneRow && (laneRow.lane === "barque" || laneRow.lane === "galleon")) {
+            laneRef.current = laneRow.lane; setLane(laneRow.lane);
+            try { localStorage.setItem("ll_lane", laneRow.lane); } catch {}
+          }
+        } catch {}
+        if (playerData?.name) { const tn = playerData.name.trim(); setPlayerName(tn); playerNameRef.current = tn; } // v324: trim on read (trailing-space class)
         // Load photo from Supabase — always try when signed in
         const cloudPhoto = await loadPlayerPhoto(user.id);
         if (cloudPhoto) { setProfilePhoto(cloudPhoto); localStorage.setItem('ll_photo', cloudPhoto); }
@@ -4995,6 +5107,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         tileCount: tileCountRef.current, levelTime: levelTimeRef.current,
         totalTime: totalTimeRef.current, longestWordToday: longestWordTodayRef.current, levelComplete, newBestTime, undoUsed,
         gameIndex: gameIndexRef.current, wotdFound: wotdFound,
+        lane: laneRef.current, // v323: lane tagging (two-channel scaffolding)
         // v255 Fix A: the cloud `completed` column was NEVER written — supabase.js line 144
         // does `session.completed || false` and App.jsx never passed the field, so every row
         // ever written has completed:false (this also explains the July23d "completed=false
@@ -5017,7 +5130,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         return {
           // v306: never write an empty name over a good one, and never write a lifetime
           // lower than the last value actually READ from the cloud.
-          playerName: playerNameRef.current || playerName || cloudNameRef.current || '',
+          playerName: (playerNameRef.current || playerName || cloudNameRef.current || '').trim(), // v324: trim at the sync boundary
           lifetimePoints: Math.max(lifetimeRef.current || 0, cloudLifetimeRef.current || 0), lastPlayedDate: todayKey,
           currentStreak: statsData.currentStreak, longestStreak: statsData.longestStreak,
           lastStreakDate: statsData.lastStreakDate, badges: liveBadges,
@@ -5663,7 +5776,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       // Trailing "~" is INTENTIONAL. Do not "fix" it.
       return `\n${RULE}\n🏴‍☠️ Finishing Flourish Bonus — Not today, but tomorrow offers great promise!~\n${RULE}`;
     }
-    const rows = ffEntries.map(s => `\nL${s.level} · ${s.word} · ${s.finisher.toLocaleString()}pts`).join("");
+    const rows = ffEntries.map(s => `\nL${s.level} · ${s.word} · ${s.finisher.toLocaleString()}pts`).join(""); // v329: back to Lx (names retired)
     return `\n${RULE}\n🏴‍☠️ FINISHING FLOURISH BONUS${rows}\n${RULE}`;
   }, []);
 
@@ -5695,7 +5808,25 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // total time, WoD status, best-scoring word, longest word. v222: loot words are INCLUDED
   // (see the note in getPerfectDayShareText — the loot letter is revealed on every level now,
   // so including a loot word leaks nothing). Both builders MUST stay identical here.
+  // v328 (2c): the ruled anchored-day share — base line + achievements ONLY. Level names
+  // per Island Hunt; WoD line only if found (arrow form per 2.0.1 conventions); one FF
+  // line per Flourish earned; NOTHING for absences (no not-found line, no empty FF block,
+  // no levels-completed count, no time). Sharer/date/URL lines follow house share
+  // conventions — PLACEHOLDER framing for Kim's pass.
+  const getAnchoredShareText = useCallback(() => {
+    let rec = {}; try { rec = JSON.parse(localStorage.getItem("ll_barque_day") || "{}") || {}; } catch {}
+    const lc = Math.min(4, Math.max(1, rec.levelsCleared || Math.max(1, level - 1)));
+    const sharer = playerName ? `${playerName} sailed the Barque on LetterLoot!` : "My LetterLoot sail today!";
+    const base = `⚓ Dropped anchor — ${lc} level${lc === 1 ? "" : "s"} clean, ${totalRef.current.toLocaleString()} pts of loot! 🏴‍☠️`; // v329: names retired ("at Level N — N levels clean" would be redundant)
+    const arrow = wotdFoundDetails && wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() ? ` ${wotd}→${wotdFoundDetails.word.toUpperCase()}` : "";
+    const wodLine = wotdFoundDetails ? `\n🎯 Found the Word of the Day!${arrow}` : "";
+    const ffEntries = submittedRef.current.filter(x => x.valid && x.finisher > 0).sort((a, b) => a.level - b.level);
+    const ffLines = ffEntries.map(x => `\n💥 Finishing Flourish: ${x.word} (L${x.level})!`).join(""); // v329: names retired
+    return `${sharer}\n${getShortDate()}\n${base}${wodLine}${ffLines}\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
+  }, [playerName, level, wotd, wotdFoundDetails]);
+
   const getDayResultsShareText = useCallback(() => {
+    if (anchoredDayRef.current) return getAnchoredShareText(); // v328: anchored days share the anchored composition everywhere (summary + farewell)
     const allValid = submittedRef.current.filter(s => s.valid);
     const shareableWords = allValid;
     const bestWord = shareableWords.reduce((b, s) => !b || s.score > b.score ? s : b, null);
@@ -5710,7 +5841,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     // v223: FF block — SAME helper as the Perfect Day builder. Never inline this twice.
     const ffLines = buildFFBlock();
     return `${sharer}\n${getShortDate()} · Score: ${totalRef.current} pts${levelsLine}${timeLine}${wotdLine}\n📏 Longest Word: ${longestW?.word || "—"} — ${longestW?.word?.length || 0} letters\n🏆 Best Scoring Word: ${bestWord?.word || "—"} — ${bestWord?.score || 0} pts${ffLines}\nGive it a try! 😊 — ${getShareUrlLabel()}\n${getShareUrl()}`;
-  }, [playerName, level, wotd, wotdFoundDetails, buildFFBlock]);
+  }, [playerName, level, wotd, wotdFoundDetails, buildFFBlock, getAnchoredShareText]);
 
   // v74 (Option A): triggerFarewell passes the precomputed day-results share text up to
   // the App-level Farewell screen, so it can offer Text/Email/Copy without needing
@@ -5729,8 +5860,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // v302: Continue on the Today's Summary card — carry out what the player already chose.
   const closeDaySummary = useCallback((choice) => {
     setShowDaySummary(false);
+    setAnchoredSummary(false); // v325: blessing variant is one-shot
     const next = choice || afterSummaryRef.current; afterSummaryRef.current = "farewell"; // v303: button passes its own choice
-    if (next === "now") { handleFullReset({ skipWelcome: true }); }
+    if (next === "now") { anchoredDayRef.current = false; handleFullReset({ skipWelcome: true }); } // v328: fresh game ends the anchored-share window
     else { setLevelComplete(false); triggerFarewell(); }
   }, [handleFullReset, triggerFarewell]);
 
@@ -6044,7 +6176,17 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
     setDailyHistory(getDailyHistory());
     // Track guest games — fire once per session (when first word is submitted)
     if (isGuest && submittedRef.current.length === 1) {
-      try { supabase.rpc('increment_guest_plays').catch(()=>{}); } catch(e) {}
+      // v332 FIX: supabase.rpc() returns a LAZY PostgREST builder that implements only
+      // .then() — it has no .catch(). The old `.rpc(...).catch(()=>{})` threw a TypeError
+      // (swallowed by this try/catch) BEFORE .then() was ever called, so the request was
+      // never dispatched: the guest counter had never incremented for anyone. Two-arg
+      // .then(onOk, onErr) fires the request and handles rejection without touching .catch.
+      try {
+        supabase.rpc('increment_guest_plays').then(
+          ({ error }) => { if (error && DEBUG_MODE) console.warn('[GUEST] increment failed', error.message); },
+          (e) => { if (DEBUG_MODE) console.warn('[GUEST] increment threw', e?.message); }
+        );
+      } catch(e) {}
     }
 
     if (valid) {
@@ -6237,7 +6379,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         // #18b: Cloud Time Leaderboard — registered-only, clean-clear only (no reset/re-do/buy
         // on this level; UNDO is OK). saveBestTime upserts-on-improve, so it's safe to call every
         // clean clear. Fire-and-forget; failures never block gameplay.
-        if (!isGuest && user && levelCleanRef.current) {
+        if (!isGuest && user && levelCleanRef.current && laneRef.current !== "barque") { // v331: timed boards are Galleon-only (ruled) — Barque times stay local for the wall
           saveBestTime(user.id, playerName || "", String(level), clearedTime).catch(() => {});
         }
         if (isNewTimeRecord) setTimeout(() => flashNewRecord("time", clearedTime, level), 1500);
@@ -6246,6 +6388,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           // the line to show (captured here so re-renders/re-shows don't advance it).
           clearSayingIdxRef.current = clearSayingIdxRef.current + 1;
           setClearSayingText(pickClearSaying(level, clearSayingIdxRef.current));
+          if (laneRef.current === "barque") mergeBarqueDay({ levelsCleared: level, score: totalRef.current }); // v327: rollover-blessing record
           setTimeout(() => setLevelComplete(true), 1200);
         } else {
           localStorage.setItem("ll_completed_today", getTodayKey());
@@ -6295,13 +6438,21 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 const freshStats = getLocalStats();
                 const yKey = getYesterdayKey();
                 const wasPDYesterday = freshStats.lastPerfectDate === yKey;
+                const isBarquePD = laneRef.current === "barque"; // v331
+                const anyPDTallyToday = ((freshStats.perfectDaysWeek || {})[getTodayKey()] || 0) > 0; // v331: lane-neutral once/day tally signal
+                // v331: lastPerfectDate is now GALLEON-ONLY, so this guard blocks a second
+                // GALLEON payout while a Barque PD earlier today does NOT block the Galleon
+                // chain (ruled Sep 6). KNOWN EDGE (PK'd): pdAlreadyBankedTodayRef is raised at
+                // init from the lane-blind cloud perfect_day flag, so a Barque PD on ANOTHER
+                // device can suppress a same-day Galleon bonus on this one — rare; revisit if it bites.
                 const alreadyPDToday = freshStats.lastPerfectDate === getTodayKey() || pdAlreadyBankedTodayRef.current === true;
                 // If already PD today (replay): keep existing streak. Else if yesterday: increment. Else: reset to 1.
+                const chainIntact = wasPDYesterday || (freshStats.prevGalleonDate && freshStats.prevGalleonDate === freshStats.lastPerfectDate); // v331 chain rule (mirrors updateLocalStats)
                 const newStreakCount = alreadyPDToday
                   ? (freshStats.consecutivePerfectDays || 1)
-                  : (wasPDYesterday ? (freshStats.consecutivePerfectDays || 0) + 1 : 1);
-                const perfStreak = newStreakCount;
-                const streakBonus = 1000 + (perfStreak * 1000);
+                  : (chainIntact ? (freshStats.consecutivePerfectDays || 0) + 1 : 1);
+                const perfStreak = isBarquePD ? 1 : newStreakCount;
+                const streakBonus = isBarquePD ? 2000 : (1000 + (perfStreak * 1000)); // v331: Barque clean day = FLAT 2,000 (ruled); modal reads "Perfect Day Bonus!" via perfStreak 1
                 // v249 DOUBLE-PAY FIX (supersedes v248's local-only guard): a Perfect Day is a
                 // once-per-day, per-ACCOUNT achievement. v248 guarded on alreadyPDToday alone —
                 // local stats only — which failed across devices: PD on the phone, then a same-day
@@ -6313,7 +6464,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 // player is signed in. (This whole block is already !isGuest.) On a repeat we skip
                 // the payout AND the streak modal — showing "+15,000" while awarding 0 would be
                 // its own bug. The Perfect Day celebration itself still shows.
-                const pdRepeatToday = alreadyPDToday || pdAlreadyBankedTodayRef.current === true;
+                const pdRepeatToday = isBarquePD ? (anyPDTallyToday || alreadyPDToday) : (alreadyPDToday || pdAlreadyBankedTodayRef.current === true); // v331: any PD today blocks a Barque repeat; only a GALLEON PD blocks the Galleon payout
                 if (!pdRepeatToday) {
                   setPerfectDayStreakBonus(streakBonus);
                   setStreakBonusCount(perfStreak);
@@ -6324,7 +6475,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                   setTimeout(() => setShowStreakBonus(true), 1200);
                   // Bank it immediately so any further PD this session is treated as a repeat,
                   // without waiting for a stats/cloud round-trip.
-                  pdAlreadyBankedTodayRef.current = true;
+                  if (!isBarquePD) pdAlreadyBankedTodayRef.current = true; // v331: the banked-ref is a GALLEON signal — a Barque 2,000 must not block today's Galleon chain (ruled Sep 6)
                 } else {
                   // v250: SAME-DAY REPEAT Perfect Day — acknowledge it (Daryl's decision) but award
                   // NO streak bonus. Force the bonus to 0 so the repeat modal's bonus block (gated
@@ -6353,7 +6504,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               // #18b: Cloud Time Leaderboard — Perfect Day time. A Perfect Day is clean by
               // definition (no resets/re-dos/buys all day), so no clean-flag check needed.
               // Registered-only; upsert-on-improve; fire-and-forget.
-              if (!isGuest && user) {
+              if (!isGuest && user && laneRef.current !== "barque") { // v331: PD time board is Galleon-only (ruled)
                 saveBestTime(user.id, playerName || "", "perfect", totalTimeRef.current).catch(() => {});
               }
           } else {
@@ -6442,6 +6593,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
   // Non-blocking: never touches the timer / pause / gameplay — pure visual.
   const fireVcPulse = (state) => {
     if (!state) return;
+    if (!vcPulseEnabled) return; // v324: Ship's Comforts - pulse quiet on the Barque unless invited
     if (vcPulseTimerRef.current) clearTimeout(vcPulseTimerRef.current);
     // v120: bump the nonce (remounts the boxes → animation restarts cleanly) and set
     // the active state in the same commit. No rAF, no null-blip needed.
@@ -6823,6 +6975,29 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         <div style={{marginTop:ipadIntro(12),fontSize:ipadIntro(17),fontWeight:"bold",color:"#22d3ee"}}>
           {(profileNickname||playerName) ? `Welcome back, ${profileNickname||playerName}! 👋` : "Welcome! 👋"}
         </div>
+        {/* v327 ROLLOVER BLESSING CARD (2b remainder, ruled A Sep 6) — once per rolled
+            partial day, then gone. */}
+        {rolloverBlessing && (
+          <div style={{width:"100%",boxSizing:"border-box",border:"1.5px solid rgba(79,195,247,0.55)",background:"rgba(79,195,247,0.10)",borderRadius:12,padding:`${ipadIntro(10)}px ${ipadIntro(12)}px`,marginTop:ipadIntro(12),textAlign:"center"}}>
+            <div style={{fontSize:ipadIntro(11),letterSpacing:2,color:"#4fc3f7",fontWeight:"bold"}}>⚓ YESTERDAY'S SAIL</div>
+            <div style={{fontSize:ipadIntro(13),color:"#f5f0e8",marginTop:4}}>{rolloverBlessing.levelsCleared} level{rolloverBlessing.levelsCleared===1?"":"s"} clean · <span style={{color:"#f6d365",fontWeight:"bold"}}>{(rolloverBlessing.score||0).toLocaleString()} pts</span> of loot 🏴‍☠️</div>
+          </div>
+        )}
+        {/* v323 LANE PICKER (Option A, ruled Sep 4) — the first choice of the day.
+            Galleon pre-selected (default); tap to switch; NO LOCK. Taglines do the
+            teaching. Barque tagline per Daryl Sep 4: "Relax & Enjoy the Ride". */}
+        <div style={{display:"flex",gap:ipadIntro(8),marginTop:ipadIntro(14),width:"100%"}}>
+          <button onClick={()=>pickLane("barque")} style={{flex:1,padding:`${ipadIntro(10)}px ${ipadIntro(6)}px`,borderRadius:12,cursor:"pointer",fontFamily:"Georgia,serif",textAlign:"center",background:lane==="barque"?"rgba(246,211,101,0.12)":"rgba(255,255,255,0.04)",border:lane==="barque"?"2px solid #f6d365":"1.5px solid rgba(255,255,255,0.22)"}}>
+            <div style={{fontSize:ipadIntro(20)}}>⛵</div>
+            <div style={{fontSize:ipadIntro(13),fontWeight:"bold",letterSpacing:1,marginTop:2,color:lane==="barque"?"#f6d365":"#b9e8f2"}}>BARQUE</div>
+            <div style={{fontSize:ipadIntro(10.5),fontStyle:"italic",marginTop:3,color:lane==="barque"?"rgba(246,211,101,0.75)":"rgba(255,255,255,0.55)"}}>Relax & Enjoy the Ride</div>
+          </button>
+          <button onClick={()=>pickLane("galleon")} style={{flex:1,padding:`${ipadIntro(10)}px ${ipadIntro(6)}px`,borderRadius:12,cursor:"pointer",fontFamily:"Georgia,serif",textAlign:"center",background:lane==="galleon"?"rgba(246,211,101,0.12)":"rgba(255,255,255,0.04)",border:lane==="galleon"?"2px solid #f6d365":"1.5px solid rgba(255,255,255,0.22)"}}>
+            <div style={{fontSize:ipadIntro(20)}}>🏴‍☠️</div>
+            <div style={{fontSize:ipadIntro(13),fontWeight:"bold",letterSpacing:1,marginTop:2,color:lane==="galleon"?"#f6d365":"#b9e8f2"}}>GALLEON</div>
+            <div style={{fontSize:ipadIntro(10.5),fontStyle:"italic",marginTop:3,color:lane==="galleon"?"rgba(246,211,101,0.75)":"rgba(255,255,255,0.55)"}}>max hold fer yer riches</div>
+          </button>
+        </div>
 
 
 
@@ -6858,6 +7033,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             setPerfectDaySync(!pdForfeitedToday2); longestWordTodayRef.current = ""; setLongestWordToday("");
             setUndoUsed(false); setLastValidEntry(null);
             TPROBE("FULL RESET (PLAY NOW replay): BOTH clocks -> 0");
+            anchoredDayRef.current = false; // v328: fresh game ends the anchored-share window
             stopTimer(); levelTimeRef.current = 0; totalTimeRef.current = 0;
             setLevelTime(0); setTotalTime(0);
             // v77 FIX: no startTimer() here — routes to Ready prompt; clock stays frozen
@@ -6875,8 +7051,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         }} style={{marginTop:20,width:"100%",padding:"16px",borderRadius:16,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:18,fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 28px rgba(246,211,101,0.4)"}}>
           PLAY NOW
         </button>
-        {/* Word of the Day card */}
-        {wotd && (
+        {/* Word of the Day card. v324: hidden when the Barque's WoD comfort is off -
+            the found-it celebration is NOT gated (accidental finds still celebrate). */}
+        {wotd && wodPromosVisible && (
           <div style={{marginTop:18,width:"100%",background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:14,padding:"14px 16px",textAlign:"center"}}>
             {/* v299: label 10->13 and brighter, bottom line 11->13.5 and 0.6->0.92 white (Daryl:
                 "far too light and small for humans with any visual limitations"), copy updated
@@ -7033,12 +7210,29 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{marginTop:ipadIntro(6)}}>✦ Toggle <strong style={{color:"#c4b5fd"}}>Show Mascot Celebrations</strong> below on or off anytime — your choice, every game</div>
         </div>
         {/* v104: Show Mascot Celebrations toggle — plain iOS-style switch, backed by ll_show_mascots (default ON) */}
+        {/* v324 (2a): SHIP'S COMFORTS on the Barque - four toggles under one anchor, the
+            classic single Mascots toggle folded in. Galleon keeps the original single
+            toggle exactly as it always was (spec: no Galleon toggles except Mascots). */}
+        {lane === "barque" ? (
+          <div style={{width:"100%",boxSizing:"border-box",padding:`${ipadIntroPad(12)}px ${ipadIntroPad(16)}px`,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,marginBottom:ipadIntro(22)}}>
+            <div style={{fontSize:ipadIntro(13),fontWeight:"bold",color:"#b9e8f2",letterSpacing:1,marginBottom:ipadIntro(8)}}>⚓ Ship's Comforts</div>
+            {[["Game Timer", comfortTimer, setComfortTimerPref],["Word of the Day", comfortWod, setComfortWodPref],["Vowel/Consonant Alerts", comfortPulse, setComfortPulsePref],["Mascot Celebrations", showMascotsPref, setMascotsPref]].map(([label, on, set]) => (
+              <div key={label} onClick={()=>set(!on)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:`${ipadIntroPad(6)}px 0`,cursor:"pointer"}}>
+                <span style={{fontSize:ipadIntro(12.5),color:"rgba(255,255,255,0.85)"}}>{label}</span>
+                <div style={{width:ipadIntro(44),height:ipadIntro(26),borderRadius:ipadIntro(13),background:on?"#00c853":"rgba(255,255,255,0.2)",position:"relative",flexShrink:0,transition:"background 0.2s",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.15)"}}>
+                  <div style={{position:"absolute",top:ipadIntro(3),left:on?ipadIntro(21):ipadIntro(3),width:ipadIntro(20),height:ipadIntro(20),borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
         <div onClick={()=>setMascotsPref(!showMascotsPref)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",boxSizing:"border-box",padding:`${ipadIntroPad(12)}px ${ipadIntroPad(16)}px`,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:14,marginBottom:ipadIntro(22),cursor:"pointer"}}>
           <span style={{fontSize:ipadIntro(13),color:"rgba(255,255,255,0.85)"}}>Show Mascot Celebrations</span>
           <div style={{width:ipadIntro(48),height:ipadIntro(28),borderRadius:ipadIntro(14),background:showMascotsPref?"#00c853":"rgba(255,255,255,0.2)",position:"relative",flexShrink:0,transition:"background 0.2s",boxShadow:"inset 0 0 0 1px rgba(255,255,255,0.15)"}}>
             <div style={{position:"absolute",top:ipadIntro(3),left:showMascotsPref?ipadIntro(23):ipadIntro(3),width:ipadIntro(22),height:ipadIntro(22),borderRadius:"50%",background:"#fff",transition:"left 0.2s"}}/>
           </div>
         </div>
+        )}
         <button onClick={()=>{ setShowReadyScreen(false); stopTimer(); setAwaitingFirstTap(true); awaitingFirstTapRef.current = true; fireLevelStartSequence(level); /* v263 #4: announce the ACTUAL level — hardcoded 1 mislabeled resumed games */ }} style={{width:"100%",padding:`${ipadIntroPad(20)}px`,borderRadius:16,background:"linear-gradient(135deg,#00c853,#00e676)",color:"#003300",fontSize:ipadIntro(20),fontWeight:"bold",letterSpacing:2,border:"none",cursor:"pointer",fontFamily:"Georgia,serif",boxShadow:"0 0 32px rgba(0,200,83,0.5)"}}>
           Let's Go! 🎯
         </button>
@@ -7144,7 +7338,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {showTour&&<VisualTour onDone={completeTour}/>}
 
       {/* Word of the Day reminder toast — shows at level start until found */}
-      {showWotdReminder && wotd && !wotdFound && (
+      {showWotdReminder && wotd && !wotdFound && wodPromosVisible && (
         <div style={{position:"fixed",bottom:0,left:0,right:0,zIndex:9500,display:"flex",alignItems:"flex-end",justifyContent:"center",paddingBottom:"12vh",paddingLeft:"20px",paddingRight:"20px",pointerEvents:"none"}}>
           {/* v130: anchored to LOWER area (bottom + 12vh) instead of center±90px. Now clearly below Loot. */}
           <div style={{background:"linear-gradient(135deg,#1a1040,#2d1b69)",border:"2px solid rgba(167,139,250,0.6)",borderRadius:18,padding:`${ipadTour(18)}px ${ipadTour(22)}px`,boxShadow:"0 10px 36px rgba(0,0,0,0.7)",fontFamily:"Georgia,serif",color:"#f5f0e8",maxWidth:ipadTour(300),width:"100%",textAlign:"center",pointerEvents:"auto"}}>
@@ -7709,7 +7903,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
       {showDaySummary&&(()=>{
         // v302 Today's Summary (Daryl, option C, Aug 29): PD / Great Game headline with the streak,
         // this game's FF rows, WoD, total time. A repeat PD shows the bonus banked earlier today.
-        const isPD = perfectDayRef.current === true && wotdFoundRef.current === true;
+        const isPD = !anchoredSummary && perfectDayRef.current === true && wotdFoundRef.current === true; // v325: anchored partial is never a PD (ruled)
         const streakN = (()=>{ try { return getLocalStats().consecutivePerfectDays || 0; } catch { return 0; } })();
         const bonusPaid = perfectDayStreakBonus > 0;
         const bonusAmt = bonusPaid ? perfectDayStreakBonus : (1000 + streakN * 1000);
@@ -7722,16 +7916,22 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             {isPD
               ? <div style={{marginTop:12}}>
                   <div className="perfect-text" style={{fontSize:ipadTour(22),fontWeight:"bold"}}>🌈🏆 PERFECT DAY!</div>
-                  {!isGuest && streakN > 0 && <div style={{fontSize:ipadTour(13),color:"#f6d365",marginTop:4}}>{streakN} consecutive {streakN===1?"day":"days"} · +{bonusAmt.toLocaleString()} pts{bonusPaid?"":" banked earlier today"}</div>}
+                  {!isGuest && streakN > 0 && lane !== "barque" && <div style={{fontSize:ipadTour(13),color:"#f6d365",marginTop:4}}>{streakN} consecutive {streakN===1?"day":"days"} · +{bonusAmt.toLocaleString()} pts{bonusPaid?"":" banked earlier today"}</div>}
                 </div>
-              : <div style={{marginTop:12,fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365"}}>🏴‍☠️ GREAT GAME!</div>}
+              : <div style={{marginTop:12,fontSize:ipadTour(22),fontWeight:"bold",color:"#f6d365"}}>{anchoredSummary ? "⚓ A FINE DAY'S SAIL!" : "🏴‍☠️ GREAT GAME!"}</div>}
             <div style={{marginTop:10,fontSize:ipadTour(14),color:"#f5f0e8"}}>Score: <strong>{totalRef.current.toLocaleString()}</strong> pts</div>
+            {/* v326 (2b, ruled B Sep 6): on an ANCHORED card the FF block appears only when
+                Flourishes were earned - the empty-state line never shows there (Barque share
+                principle: achievements appear, absences don't exist). Galleon summary keeps
+                its empty state exactly as today. */}
+            {(!anchoredSummary || ffs.length > 0) && (
             <div style={{marginTop:10,background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"10px"}}>
               <div style={{fontSize:ipadTour(11),color:"#fbbf24",letterSpacing:2,fontWeight:"bold",marginBottom:6}}>🏴‍☠️ FINISHING FLOURISHES</div>
               {ffs.length
                 ? ffs.map(f => <div key={f.level} style={{display:"flex",justifyContent:"space-between",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.7}}><span>L{f.level} · {f.word}</span><span style={{color:"#fbbf24"}}>+{f.finisher.toLocaleString()}</span></div>)
                 : <div style={{fontSize:ipadTour(11),color:"rgba(255,255,255,0.6)",fontStyle:"italic"}}>Not today, but tomorrow offers great promise!</div>}
             </div>
+            )}
             <div style={{marginTop:8,background:"linear-gradient(135deg,rgba(167,139,250,0.18),rgba(167,139,250,0.06))",border:"1.5px solid rgba(167,139,250,0.5)",borderRadius:12,padding:"10px",fontSize:ipadTour(12),color:"#f5f0e8",lineHeight:1.5}}>
               <span style={{fontSize:ipadTour(11),color:"#a78bfa",letterSpacing:2,fontWeight:"bold"}}>🎯 WORD OF THE DAY</span><br/>
               {wotdFoundDetails ? <><strong style={{color:"#f6d365"}}>{wotd}{wotdFoundDetails.word && wotdFoundDetails.word.toUpperCase() !== wotd.toUpperCase() ? "→" + wotdFoundDetails.word.toUpperCase() : ""}</strong> — L{wotdFoundDetails.level}, {wotdFoundDetails.score} pts</> : <span style={{color:"rgba(255,255,255,0.6)"}}>Not found today</span>}
@@ -7934,7 +8134,18 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           {timeLeaderboard.levels?.[level]?.length>0&&<div style={{marginTop:8,background:"rgba(255,255,255,0.06)",borderRadius:10,padding:"8px",fontSize:ipadTour(11),color:"#aaa"}}>Best: {formatTime(timeLeaderboard.levels[level][0].seconds)} by {timeLeaderboard.levels[level][0].name}</div>}
           {level < 5 && <div style={{fontSize:ipadTour(12),color:"#aaa",marginTop:6}}>Level {level+1}: {42+level*7} tiles · {getBonusCount(level+1)} bonus tiles</div>}
           {level < 5
-            ? <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(15),fontWeight:"bold"}}>Play Level {level+1} →</button>
+            ? (lane === "barque"
+              ? <>
+                  {/* v325 (2b, ruled B Sep 6): Barque level-clear - Sail On primary (Barque blue),
+                      Drop Anchor as the quiet always-there link beneath. Galleon branch below is
+                      byte-identical to the pre-v325 button. Anchor = blessing now: Today's Summary
+                      opens with the anchored headline, then the normal farewell flow. Copy is
+                      PLACEHOLDER for Kim ("Sail On", "Drop Anchor - end the day here", "A FINE
+                      DAY'S SAIL"). */}
+                  <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#4fc3f7,#0ea5e9)",color:"#06283a",fontSize:ipadTour(15),fontWeight:"bold"}}>Sail On ⛵</button>
+                  <div onClick={()=>{ anchoredDayRef.current = true; mergeBarqueDay({ anchored: true, levelsCleared: level, score: totalRef.current }); setAnchoredSummary(true); setLevelComplete(false); openDaySummary("farewell"); }} style={{marginTop:12,fontSize:ipadTour(13),color:"rgba(185,232,242,0.85)",textDecoration:"underline",textUnderlineOffset:3,cursor:"pointer"}}>⚓ Drop Anchor — end the day here</div>
+                </>
+              : <button className="ll-btn" onClick={()=>handleNextLevel(false)} style={{marginTop:20,width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#f6d365,#fda085)",color:"#1a1a2e",fontSize:ipadTour(15),fontWeight:"bold"}}>Play Level {level+1} →</button>)
             : <button className="ll-btn" onClick={()=>{ setLevelComplete(false); triggerFarewell(); }} style={{marginTop:20,width:"100%",padding:ipadTour(14),borderRadius:14,background:"linear-gradient(135deg,#a78bfa,#7c3aed)",color:"#fff",fontSize:ipadTour(15),fontWeight:"bold"}}>📊 See Today's Summary</button>
           }
         </div>
@@ -7993,11 +8204,15 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               (were tiny 0.5-opacity, barely visible); clock VALUES recolored to the Loot-box gold (#f6d365,
               top stop of the LOOT tile's gradient) so the running times stand clear of the blue/green/purple
               letter-counter boxes on the line below. */}
+          {timerVisible ? (<>
           <span style={{fontSize:ipadChrome(11),color:"#ff4444",fontWeight:"bold",letterSpacing:1,flexShrink:0}}>TIME</span>
           <span style={{fontSize:ipadChrome(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",flexShrink:0}}>Level</span>
           <span className={pulseTime?"pulse-big":""} style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#f6d365",fontFamily:"monospace",flexShrink:0}}>{formatTime(levelTime)}</span>
           <span style={{fontSize:ipadChrome(11),color:"rgba(255,255,255,0.95)",fontWeight:"bold",flexShrink:0}}>Total</span>
           <span style={{fontSize:ipadChrome(12),fontWeight:"bold",color:"#f6d365",fontFamily:"monospace",flexShrink:0}}>{formatTime(totalTime)}</span>
+          </>) : (
+          <span style={{fontSize:ipadChrome(11),color:"rgba(255,255,255,0.5)",fontStyle:"italic",flexShrink:0}}>⛵ Sailing easy</span>
+          )}
           <button className="ll-btn" onClick={handlePause} style={{background:paused?"linear-gradient(135deg,#00c853,#00e676)":"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.4)",borderRadius:10,padding:`${ipadChrome(2)}px ${ipadChrome(8)}px`,fontSize:ipadChrome(9),color:paused?"#003300":"#ffffff",fontWeight:"bold",flexShrink:0}}>
             {paused?"▶️ Resume":"⏸️ Pause"}
           </button>
@@ -8348,16 +8563,27 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",marginTop:3}}>Lifetime points</div>
             {!isGuest&&<div style={{marginTop:6,fontSize:ipadDense(10),color:"#a78bfa"}}>☁️ Saved to your account</div>}
           </div>
+          {/* v330 (ruled B Sep 6): the whole Days card is Galleon-only — a lone "Total Days"
+              box on the Barque carried no meaning (Daryl). Spec amendment: "Total Days
+              sailed" comes OFF the ruled Barque wall list. */}
+          {lane !== "barque" && (
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>📅 DAYS & STREAKS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
               <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#60a5fa"}}>{statsData.daysPlayed}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Total Days</div></div>
+              {/* v328 (2c): streak cells are competitive surfaces — hidden on the Barque
+                  (streak invisible on ALL Barque surfaces, ruled). */}
+              {lane !== "barque" && <>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#fda085"}}>🔥 {statsData.currentStreak}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Current Streak</div>{statsData.currentStreak>0&&statsData.currentStreak===statsData.longestStreak&&<div style={{fontSize:ipadDense(8),color:"#6ee7b7"}}>Personal Best!</div>}</div>
               <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
               <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#f6d365"}}>🏆 {statsData.longestStreak}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Longest Streak</div></div>
+              </>}
             </div>
           </div>
+          )}
+          {/* v328 (2c): PD counts are competitive — the whole card hides on the Barque (ruled). */}
+          {lane !== "barque" && (
           <div style={{background:"rgba(255,255,255,0.05)",borderRadius:13,padding:ipadDense(12),marginBottom:7,border:"1px solid rgba(255,255,255,0.14)"}}>
             <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.9)",letterSpacing:3,marginBottom:10}}>🌈🏆 PERFECT DAYS</div>
             <div style={{display:"flex",justifyContent:"space-around"}}>
@@ -8366,6 +8592,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(26),fontWeight:"bold",color:"#f6d365"}}>{statsData.perfectDaysAllTime}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>All Time</div></div>
             </div>
           </div>
+          )}
           {(()=>{
             // v302: My Flourishes — local 30-day log (guests too) merged with the cloud ff_words rows
             // (signed-in), deduped on date|level|word. Local first so the Game 1/2 tag survives.
@@ -8374,7 +8601,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
             getFFLog().forEach(e => push(e.date, e.level, e.word, e.score, e.game));
             (myFFCloud || []).forEach(r => push(r.date_key, r.level, r.word, r.score, null));
             const byDay = {}; rows.forEach(r => { (byDay[r.date] = byDay[r.date] || []).push(r); });
-            const days = Object.keys(byDay).sort((a, b) => dateKeyToNum(b) - dateKeyToNum(a));
+            // v329 (Daryl, Sep 6): the visible LOG shows the past 7 days only — the full
+            // history was rendering unbounded and will only grow. The headline numbers
+            // (Flourishes / Bonus pts / Longest) stay ALL-TIME: they're the wall stats;
+            // only the row list below is windowed.
+            const sevenAgo = Date.now() - 7 * 86400000;
+            const days = Object.keys(byDay).sort((a, b) => dateKeyToNum(b) - dateKeyToNum(a)).filter(k => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d).getTime() >= sevenAgo; });
             const total = rows.reduce((t, r) => t + r.score, 0);
             const longest = rows.reduce((b, r) => (!b || r.word.length > b.word.length) ? r : b, null);
             const fmtDay = (k) => { const [y, m, d] = k.split("-").map(Number); return new Date(y, m - 1, d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }); };
@@ -8387,6 +8619,9 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
                 <div style={{width:1,background:"rgba(255,255,255,0.1)"}}/>
                 <div style={{textAlign:"center"}}><div style={{fontSize:ipadDense(17),fontWeight:"bold",color:"#c4b5fd"}}>{longest ? longest.word : "—"}</div><div style={{fontSize:ipadDense(9),color:"rgba(255,255,255,0.9)"}}>Longest{longest ? ` (${longest.word.length})` : ""}</div></div>
               </div>
+              {/* v330 (ruled B): the range of the 7-day log shown below — headline numbers
+                  above stay ALL-TIME (ruled Call 1). */}
+              {days.length > 0 && <div style={{fontSize:ipadDense(8.5),color:"rgba(255,255,255,0.55)",textAlign:"center",marginBottom:8}}>Log: {fmtDay(days[days.length - 1])} – {fmtDay(days[0])}</div>}
               {!days.length
                 ? <div style={{fontSize:ipadDense(10),color:"rgba(255,255,255,0.5)",fontStyle:"italic",textAlign:"center"}}>No Flourishes logged yet — clear a board with a 5+ letter word!</div>
                 : days.slice(0, 30).map(k => <div key={k} style={{paddingTop:6,borderTop:"1px solid rgba(255,255,255,0.07)",marginTop:6}}>

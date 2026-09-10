@@ -142,6 +142,7 @@ export async function saveDailySession(playerId, dateKey, session) {
     top_word: bestTopWord,            // highest-scoring word of the day
     top_word_score: bestTopScore,     // its score
     completed: session.completed || false,
+    lane: session.lane || "galleon", // v323: two-channel lane tag (matches column default)
     updated_at: new Date().toISOString(),
   }, { onConflict: "player_id, date_key" });
   return { error };

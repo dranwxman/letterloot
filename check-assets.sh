@@ -10,6 +10,7 @@
 # Created July 3, 2026 (Option B — full public/ coverage, not just mascot art).
 # Updated July 6, 2026 — added Trail of Loot assets (level-map-bg.jpg, trail-coin.png); manifest 14 → 16.
 # Updated July 10, 2026 — WoD redesign (v171): +wotd-pirate.png, -wotd-pirate-chest.png, -wotd-coin.png; manifest 16 → 15.
+# Updated Oct 15, 2026 — v338 built-in dictionary: +ll-words-v1.txt; manifest +1.
 # When you add a NEW required file to public/, add its name to REQUIRED below.
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -43,6 +44,8 @@ REQUIRED=(
   # Trail of Loot (Level Welcome map page)
   "level-map-bg.jpg"
   "trail-coin.png"
+  # Built-in dictionary (v338) — without it every word check falls back to Merriam-Webster
+  "ll-words-v1.txt"
   # Required HTML pages (privacy is an App Store review requirement)
   "privacy.html"
   "reset-password.html"

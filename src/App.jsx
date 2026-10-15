@@ -10,6 +10,21 @@ import { Clipboard } from "@capacitor/clipboard";
 // verbatim Sep 10. See PK Sep10 series.
 // v335 (Sep 10, 2026): glance spotlight converted from inline card to acknowledge POPUP —
 // the inline card pushed Play Now + the WoD card below the fold on iPad (Daryl, sim).
+// v338 (Oct 15, 2026): BUILT-IN DICTIONARY — public/ll-words-v1.txt (ENABLE + every word
+// ever accepted) is checked before Merriam-Webster; MW is now only the fallback for unknown
+// words. Stuck-check answers from the list (zero MW lookups). MW-error "accept everything"
+// fallback hole closed. Dev build: DEBUG on.
+// v339 (Oct 15, 2026): Daryl's word cleanup — of the flagged accepted words only ALOT stays;
+// DONT, IBEEN, DRINKED, GREIF removed from ll-words-v1.txt; JAP removed AND blocked outright
+// (WORD_BLOCKLIST) so the MW fallback can't re-admit it.
+// v340 (Oct 15, 2026): second cleanup — ADAY, ATUNE, ATOY, ATOE, AONE, ALAW, DOIN discarded;
+// list file renamed ll-words-v2.txt (version-stamped, so no stale v1 copy can be picked up).
+// v341 (Oct 15, 2026): WORD_BLOCKLIST expanded — all discarded words, TEH, and every
+// apostrophe-less contraction (DIDNT, ISNT, IM, YOURE...) blocked so MW can't re-admit them.
+// Word list unchanged (still ll-words-v2.txt).
+// v342 (Oct 15, 2026): CANT/WONT + other contraction spellings blocked (Daryl: all contractions out);
+// level-clarity wording A+B — stuck popup says "You're on Level X of 5...", level-clear title "Level X of 5 Complete!".
+// v343 (Oct 15, 2026): RELEASE FLIP — v342 with DEBUG_MODE false. App Store Version 2.1.1, Build 1.
 
 // ═══════════════════════════════════════════════════════════════════
 // 🛠 DEBUG MODE — set false before App Store submission!
@@ -19,10 +34,10 @@ import { Clipboard } from "@capacitor/clipboard";
 // v66 (May 26, 2026): FLIPPED to false for App Store submission build 1.0(6).
 // Flip back to true for local development if needed.
 // ═══════════════════════════════════════════════════════════════════
-const DEBUG_MODE = false; // v336/v337 (Sep 10, 2026): RELEASE FLIP for the 2.1.0 App Store submission — the two-lane update ships. (v337 = v336 re-send, download card failed to render.)
+const DEBUG_MODE = false; // v343 (Oct 15, 2026): RELEASE FLIP for the 2.1.1 App Store submission — built-in dictionary, word cleanup + blocklist, level-clarity wording. (v336/v337 was the 2.1.0 release flip.)
 // v308: the string players read off Menu -> Account and quote back when reporting an
 // issue. Bump this in every ship patch; it is the app's only self-identification.
-const APP_VERSION = "2.1.0 (337)";
+const APP_VERSION = "2.1.1 (343)";
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
@@ -1174,8 +1189,34 @@ function isProfaneWord(text) {
   if (!text) return false;
   const canon = canonicalize(text);
   if (!canon) return false;
-  return PROFANITY_SET.has(canon);
+  return PROFANITY_SET.has(canon) || WORD_BLOCKLIST.has(canon);
 }
+// v339 (Daryl, Oct 15): game-word-only blocklist — exact match, checked by isProfaneWord(), so it
+// blocks these as PLAYED WORDS (before the built-in list AND before the MW fallback, which would
+// otherwise still accept them) without touching display-name screening (containsProfanity uses
+// substring matching, where "jap" would wrongly block names like Japheth).
+// v341 (Daryl, Oct 15): every discarded word is blocked here too (removing it from the list alone
+// isn't enough — the MW fallback re-admitted DONT/TEH in the v340 sim), plus TEH and every
+// apostrophe-less contraction. Contraction spellings that are also real words (CANT, WONT, WELL,
+// WERE, ILL, SHED, ITS, LETS, HES, WHATS...) are deliberately NOT here — they stay playable.
+// v342 (Daryl, Oct 15): "If we're not accepting contractions — they should all be eliminated." CANT and
+// WONT are now blocked too, along with the other contraction-only spellings (HES, SHES, WHATS, HERES,
+// THERES, WHERES, HOWS, WHENS, WHYS). Kept as ordinary everyday words: WELL, WERE, ILL, SHED, ITS, LETS, WED.
+const WORD_BLOCKLIST = new Set([
+  "jap", "japs",
+  // discarded in the v339/v340 cleanup
+  "dont", "ibeen", "drinked", "greif", "aday", "atune", "atoy", "atoe", "aone", "alaw", "doin",
+  // typo
+  "teh",
+  // apostrophe-less contractions
+  "didnt", "doesnt", "isnt", "wasnt", "arent", "werent", "hasnt", "havent", "hadnt",
+  "couldnt", "wouldnt", "shouldnt", "mustnt", "neednt", "mightnt", "oughtnt", "shant", "aint",
+  "im", "ive", "youre", "youve", "youll", "youd", "theyre", "theyve", "theyll", "theyd",
+  "weve", "hed", "thats", "whos", "whod", "wholl", "whove", "itll", "itd", "thatll", "thatd",
+  "whatll", "whatd", "howd", "yall", "wouldve", "couldve", "shouldve", "mightve", "mustve",
+  // v342: contraction spellings that dictionaries also list — Daryl ruled them out
+  "cant", "wont", "hes", "shes", "whats", "heres", "theres", "wheres", "hows", "whens", "whys",
+]);
 
 // ── Word of the Day candidate pool ──
 // Spans 4 to 12+ letters. Longer words are preferred (more impressive WoD),
@@ -1405,9 +1446,51 @@ async function loadWotdExtraRoots() {
   } catch (e) { console.warn("Failed to load WoD extra roots:", e); }
 }
 
+// ── v338 BUILT-IN WORD LIST (dictionary ruling, Daryl Oct 15, 2026) ──
+// public/ll-words-v2.txt ships INSIDE the app (and on the web build): the ENABLE public-domain
+// list (172,823 words) + every word LetterLoot ever accepted from Merriam-Webster (7,627 pulled
+// from daily_sessions Oct 15 — 638 of them not in ENABLE; v339 removed DONT/IBEEN/DRINKED/GREIF/JAP: III/EIA/AAA/EEE, names, newer words).
+// Ruling: "keep all previously used words" — nothing that ever counted stops counting.
+// Why: the free MW keys allow 1,000 lookups/day each and the old stuck-check alone could burn
+// 100+ per player per day. With the list checked first, MW is asked only about words the list
+// doesn't know (mostly misspellings + brand-new words) — a handful a day instead of hundreds.
+// Fails safe: if the file can't load, everything falls through to MW exactly as in v337.
+// To add words later, prefer an admin approval (APPROVED_WORDS, no release needed); bump the
+// filename (-v2) only when replacing the file itself, so no device keeps a stale cached copy.
+const WORD_LIST_URL = "/ll-words-v2.txt"; // v340: v2 = v1 minus Daryl's Oct 15 discards
+let WORD_LIST = null;          // Set of lowercase words once loaded
+let wordListPromise = null;
+function loadWordList() {
+  if (WORD_LIST) return Promise.resolve(WORD_LIST);
+  if (wordListPromise) return wordListPromise;
+  wordListPromise = (async () => {
+    try {
+      const r = await fetch(WORD_LIST_URL);
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const txt = await r.text();
+      const s = new Set(txt.split(/\r?\n/).map(w => w.trim().toLowerCase()).filter(Boolean));
+      // Guard: a wrong file (e.g. an index.html served in its place) must never become "the dictionary".
+      if (s.size < 100000) throw new Error("word list too small: " + s.size);
+      WORD_LIST = s;
+      try { console.log(`[Dict] Built-in word list loaded: ${s.size.toLocaleString()} words.`); } catch {}
+    } catch (e) {
+      console.warn("[Dict] Built-in word list unavailable — falling back to Merriam-Webster:", e);
+      wordListPromise = null; // allow a later retry
+    }
+    return WORD_LIST;
+  })();
+  return wordListPromise;
+}
+// Waits briefly for the list on a cold start; never blocks play longer than `ms`.
+async function getWordList(ms = 3000) {
+  if (WORD_LIST) return WORD_LIST;
+  return Promise.race([loadWordList(), new Promise(res => setTimeout(() => res(null), ms))]);
+}
+
 // Kick off load on module init
 loadApprovedWords();
 loadWotdExtraRoots();
+loadWordList();
 
 async function validateWord(word) {
   const key = word.toLowerCase();
@@ -1423,6 +1506,15 @@ async function validateWord(word) {
     return wordCache[key];
   }
   if (wordCache[key] !== undefined) return wordCache[key];
+  // v338: built-in list next — instant, no network, no MW quota. A hit keeps source
+  // "collegiate" on purpose so the History label, the 📖 flash and the Collegiate stat count
+  // behave exactly as before. A MISS is not a rejection: it falls through to MW below, so
+  // medical-only words and brand-new MW words still count.
+  const list = await getWordList();
+  if (list && list.has(key)) {
+    wordCache[key] = { valid: true, source: "collegiate" };
+    return wordCache[key];
+  }
   if (!navigator.onLine) { return { valid: false, source: "offline" }; } // v261 #6: NOT cached — an offline moment must not condemn a word for the whole day
   const fetchWithTimeout = (url, ms = 6000) => {
     const controller = new AbortController();
@@ -1433,11 +1525,13 @@ async function validateWord(word) {
   const tryMW = async () => {
     try {
       const collRes = await fetchWithTimeout(`https://www.dictionaryapi.com/api/v3/references/collegiate/json/${encodeURIComponent(key)}?key=${MW_COLLEGIATE_KEY}`);
+      if (!collRes.ok) throw new Error("MW collegiate HTTP " + collRes.status);
       const collData = await collRes.json();
       if (Array.isArray(collData) && collData.length > 0 && typeof collData[0] === "object" && collData[0].shortdef) {
         return { valid: true, source: "collegiate" };
       }
       const medRes = await fetchWithTimeout(`https://www.dictionaryapi.com/api/v3/references/medical/json/${encodeURIComponent(key)}?key=${MW_MEDICAL_KEY}`);
+      if (!medRes.ok) throw new Error("MW medical HTTP " + medRes.status);
       const medData = await medRes.json();
       if (Array.isArray(medData) && medData.length > 0 && typeof medData[0] === "object" && medData[0].shortdef) {
         return { valid: true, source: "medical" };
@@ -1445,7 +1539,13 @@ async function validateWord(word) {
       return { valid: false, source: null };
     } catch (err) {
       if (err.name === "AbortError") return { valid: null, source: "timeout" };
-      return { valid: word.length >= 3, source: "fallback" };
+      // v338 FALLBACK HOLE CLOSED: this used to return { valid: word.length >= 3 } — so ANY MW
+      // error that wasn't a timeout (key over its daily quota, key revoked, non-JSON reply) made
+      // EVERY 3+ letter string valid, gibberish included, and cached it for the session. An MW
+      // failure is our failure, not a verdict: route it through the same honest lookup-failure
+      // path as a timeout (common words still pass; everything else gets "can't reach the
+      // dictionary", uncached, and the attempt is not consumed).
+      return { valid: null, source: "lookup_error" };
     }
   };
   let result = await tryMW();
@@ -1459,7 +1559,7 @@ async function validateWord(word) {
   // degraded wifi turned VOLT/MANY/GLAZE into "Not a valid word!" and CACHED the lie for
   // the rest of the day). Unknown-under-timeout returns an honest lookup-failure verdict,
   // deliberately UNCACHED so the very next submit retries for real.
-  if (result.source === "timeout") {
+  if (result.source === "timeout" || result.source === "lookup_error") {
     if (COMMON_WORDS.has(key)) {
       result = { valid: true, source: "fallback" };
     } else {
@@ -1490,6 +1590,29 @@ async function hasValidWordsRemaining(tiles) {
   const available = tiles.filter(t => !t.used).map(t => t.letter);
   if (available.length < 3) return false;
   if (available.length > 10) return true; // skip check for large boards — false positives impossible
+  // v338: answer from the built-in list — zero MW lookups (the old scan below could spend 100+
+  // per stuck moment) and MORE accurate: it checks every word 3+ letters long the remaining
+  // tiles can spell, where the old scan tried only up to 60 three-letter combos and could
+  // wrongly call a board stuck. Whitelists count too; profane words never count.
+  const list = await getWordList();
+  if (list) {
+    const base = new Int8Array(26);
+    for (const ch of available) { const c = ch.toLowerCase().charCodeAt(0) - 97; if (c >= 0 && c < 26) base[c]++; }
+    const tmp = new Int8Array(26);
+    const max = available.length;
+    const fits = (w) => {
+      const n = w.length;
+      if (n < 3 || n > max) return false;
+      tmp.set(base);
+      for (let i = 0; i < n; i++) { const c = w.charCodeAt(i) - 97; if (c < 0 || c > 25 || --tmp[c] < 0) return false; }
+      return !isProfaneWord(w);
+    };
+    for (const w of CUSTOM_WHITELIST) if (fits(w)) return true;
+    for (const w of APPROVED_WORDS) if (fits(w)) return true;
+    for (const w of list) if (fits(w)) return true;
+    return false;
+  }
+  // List unavailable (should be rare): the v337 MW-based scan, unchanged.
   const letters = [...available];
   const combos = new Set();
   // Lower cap for speed — fewer API calls
@@ -7809,6 +7932,8 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
           <div style={{fontSize:ipadTour(52)}}>😬</div>
           <div style={{fontSize:ipadTour(20),fontWeight:"bold",color:"#f5f0e8",marginTop:8}}>No More Valid Words!</div>
           <div style={{fontSize:ipadTour(13),color:"#bbb",marginTop:8,lineHeight:1.6}}>No valid words can be formed from the remaining tiles.</div>
+          {/* v342 (Daryl, Oct 15 — level-clarity wording A): new players didn't know there were 5 levels */}
+          {level<5&&<div style={{fontSize:ipadTour(13),color:"#e9d5ff",marginTop:6,lineHeight:1.6,fontWeight:"bold"}}>You're on Level {level} of 5. Try again, or buy your way to Level {level+1}.</div>}
           <div style={{fontSize:ipadTour(22),color:"#f6d365",fontWeight:"bold",marginTop:10}}>{totalScore} pts so far</div>
           {/* UNDO option if still available — full width */}
           {!undoUsed&&lastValidEntry&&totalRef.current>=1000&&(
@@ -8210,7 +8335,7 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
               </div>
             );
           })()}
-          <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} Complete!</div>
+          <div style={{fontSize:ipadTour(26),fontWeight:"bold",color:"#f6d365",marginTop:8}}>Level {level} of 5 Complete!</div>
           <div style={{fontSize:ipadTour(13),color:"#ccc",marginTop:8}}>You used every tile!</div>
           <div style={{fontSize:ipadTour(22),color:"#fda085",fontWeight:"bold",marginTop:10}}>+{100*level} Bonus Points!</div>
           {finisherBonusEarned > 0 && (

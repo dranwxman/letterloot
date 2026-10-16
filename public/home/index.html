@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>LetterLoot — Daily Word Treasure Hunt</title>
 <meta name="description" content="LetterLoot is a free daily word puzzle where every letter has a value. Same board for every player worldwide, five levels, and a pirate's haul of bonus loot.">
-<meta name="theme-color" content="#e2e4e9">
+<meta name="theme-color" content="#eaf5ff">
 <link rel="icon" href="/icon-192.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <meta property="og:title" content="LetterLoot — Daily Word Treasure Hunt">
@@ -16,18 +16,18 @@
 <meta name="apple-itunes-app" content="app-id=6769522298">
 <style>
   :root {
-    --bg1:#c8cad1; --bg2:#e2e4e9; --bg3:#cdd0d6;
+    --bg1:#eaf5ff; --bg2:#d3e9fc; --bg3:#a8d2f5;
     --text:#1f1b3a; --muted:#3f3b58; --faint:#5e5a74;
     --purple:#6d28d9; --purple-deep:#5b21b6;
     --gold:#f6d365; --peach:#fda085; --green:#047857;
-    --card:#C2A6FF; --card-line:rgba(76,29,149,0.35); --on-card:#1a1433;
+    --card:#ebe3ff; --card-line:rgba(124,92,230,0.45); --on-card:#1a1433;
   }
   * { box-sizing:border-box; }
   html { scroll-behavior:smooth; }
   body { margin:0; font-family:Georgia,'Times New Roman',serif; color:var(--text); line-height:1.6;
     background:var(--bg2); min-height:100vh; overflow-x:hidden; }
   .sky { position:fixed; inset:0; z-index:0; pointer-events:none;
-    background:linear-gradient(160deg,var(--bg1) 0%,var(--bg2) 50%,var(--bg3) 100%); }
+    background:linear-gradient(180deg,var(--bg1) 0%,var(--bg2) 55%,var(--bg3) 100%); }
   .stars { display:none; }
   .wrap { position:relative; z-index:1; max-width:1000px; margin:0 auto; padding:0 20px; }
   a { color:var(--purple); }
@@ -46,10 +46,10 @@
   .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; padding:14px 26px; border-radius:14px;
     font-family:inherit; font-size:16px; font-weight:bold; text-decoration:none; border:none; cursor:pointer; transition:transform .12s, box-shadow .2s; }
   .btn:active { transform:scale(.97); }
-  .btn-gold { background:linear-gradient(135deg,var(--gold),var(--peach)); color:#1a1a2e; box-shadow:0 6px 20px rgba(214,140,40,.35); }
-  .btn-gold:hover { box-shadow:0 8px 28px rgba(214,140,40,.5); }
-  .btn-ghost { background:var(--card); color:#2e1065; border:1px solid var(--card-line); box-shadow:0 4px 14px rgba(76,29,149,.25); }
-  .btn-ghost:hover { background:#b393ff; }
+  .btn-gold { background:linear-gradient(90deg,#14c4d6,#4f6ff0 55%,#8b3cf0); color:#fff; box-shadow:0 6px 20px rgba(99,72,230,.35); }
+  .btn-gold:hover { box-shadow:0 8px 28px rgba(99,72,230,.5); }
+  .btn-ghost { background:#e6dcff; color:#2e1065; border:1.5px solid #a78bfa; box-shadow:0 4px 14px rgba(124,92,230,.2); }
+  .btn-ghost:hover { background:#dccfff; }
   .free { margin-top:14px; font-size:13px; color:var(--faint); letter-spacing:1px; }
 
   .voyage { display:inline-flex; align-items:center; gap:10px; padding:10px 22px 10px 12px; border-radius:40px;
@@ -95,7 +95,7 @@
   .chips input { position:absolute; opacity:0; pointer-events:none; }
   .chips span { display:inline-block; padding:8px 18px; border-radius:20px; border:1px solid rgba(76,29,149,.35);
     background:#efe7ff; color:var(--text); font-size:15px; transition:all .15s; }
-  .chips input:checked + span { background:linear-gradient(135deg,var(--gold),var(--peach)); color:#1a1a2e; border-color:transparent; font-weight:bold; }
+  .chips input:checked + span { background:linear-gradient(90deg,#14c4d6,#4f6ff0 55%,#8b3cf0); color:#fff; border-color:transparent; font-weight:bold; }
   .chips input:focus-visible + span { outline:2px solid var(--purple); outline-offset:2px; }
   .field { margin-bottom:12px; }
   .field label { display:block; font-size:13px; color:var(--on-card); font-weight:bold; margin-bottom:4px; letter-spacing:.5px; }

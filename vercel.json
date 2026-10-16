@@ -1,0 +1,16 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "letterloot.net" }],
+      "destination": "/home/",
+      "permanent": false
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.letterloot.net" }],
+      "destination": "https://letterloot.net/home/",
+      "permanent": false
+    }
+  ]
+}

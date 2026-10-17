@@ -37,7 +37,7 @@ import { Clipboard } from "@capacitor/clipboard";
 const DEBUG_MODE = false; // v343 (Oct 15, 2026): RELEASE FLIP for the 2.1.1 App Store submission — built-in dictionary, word cleanup + blocklist, level-clarity wording. (v336/v337 was the 2.1.0 release flip.)
 // v308: the string players read off Menu -> Account and quote back when reporting an
 // issue. Bump this in every ship patch; it is the app's only self-identification.
-const APP_VERSION = "2.1.1 (343)";
+const APP_VERSION = "2.1.1 (344)"; // v344 (Oct 17): web-only admin update + anonymous guest-device counting (iOS picks it up at the 2.2.0 build)
 // v306: ?admin=1 is NOT authorization. The admin panel reads every player's game_state
 // row, so it renders only for a DEBUG build or one of these signed-in accounts.
 const ADMIN_EMAILS = ["dranwxman@letterloot.net", "dranwxman@gmail.com"];
@@ -3057,6 +3057,21 @@ function AuthScreen({ onGuest, onLogin }) {
 
 
 // ── ADMIN DASHBOARD ──────────────────────────────────────────
+// v344 (Daryl, Oct 17): anonymous guest-device ID. A random id saved ONLY on this device the
+// first time a guest plays — no name, no email, nothing personal. Sent once per game alongside
+// increment_guest_plays so Supabase can count distinct guest DEVICES (record_guest RPC upserts
+// one row per id). Same guest playing 10 times = 1 guest.
+function getGuestDeviceId() {
+  try {
+    let id = localStorage.getItem("ll_guest_id");
+    if (id && /^[0-9a-f-]{36}$/i.test(id)) return id;
+    id = (typeof crypto !== "undefined" && crypto.randomUUID) ? crypto.randomUUID()
+      : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, c => { const r = Math.random()*16|0; return (c === "x" ? r : (r & 0x3 | 0x8)).toString(16); });
+    localStorage.setItem("ll_guest_id", id);
+    return id;
+  } catch (e) { return null; }
+}
+
 const ADMIN_SUPABASE_URL = "https://zcevszxmoggmcmvyxjtn.supabase.co";
 const ADMIN_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpjZXZzenhtb2dnbWNtdnl4anRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2MDExNDIsImV4cCI6MjA5MTE3NzE0Mn0.nZhiDxv5ssCrkHXxaboZ5ziH-M4NqNqPMop2s_gA6NM";
 const ADMIN_PASSWORD = "!!Wxmanone2!!";
@@ -3070,6 +3085,11 @@ function AdminScreen({ onExit }) {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState("");
   const [selectedTab, setSelectedTab] = useState("overview");
+  // v344 (Daryl, Oct 17): collapsible leaderboards — every section opens CLOSED on each load.
+  const [openTop, setOpenTop] = useState(false);
+  const [openPerfect, setOpenPerfect] = useState(false);
+  const [openLongest, setOpenLongest] = useState(false);
+  const [openWordScores, setOpenWordScores] = useState(false);
 
   const adminQuery = async (table, select='*', extra='') => {
     let url = `${ADMIN_SUPABASE_URL}/rest/v1/${table}?select=${encodeURIComponent(select)}${extra}`;
@@ -3081,7 +3101,7 @@ function AdminScreen({ onExit }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const gameStates = await adminQuery('game_state', 'player_id,player_name,lifetime_points,last_played_date,current_streak,longest_streak,stats,badges', '&order=lifetime_points.desc');
+      const gameStates = await adminQuery('game_state', 'player_id,player_name,lifetime_points,last_played_date,current_streak,longest_streak,stats,badges', '&order=lifetime_points.desc&limit=1000'); // v344: first 1,000
       const td = new Date(); const today = td.getFullYear()+'-'+(td.getMonth()+1)+'-'+td.getDate();
       const tdAgo7 = new Date(Date.now()-7*86400000); const weekAgo = tdAgo7.getFullYear()+'-'+(tdAgo7.getMonth()+1)+'-'+tdAgo7.getDate();
       const tdAgo14 = new Date(Date.now()-14*86400000); const twoWeeksAgo = tdAgo14.getFullYear()+'-'+(tdAgo14.getMonth()+1)+'-'+tdAgo14.getDate();
@@ -3094,6 +3114,12 @@ function AdminScreen({ onExit }) {
       const recentSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= twoWeeksAgoNum);
       const weekSessions = allRecentForFilter.filter(s => dateKeyToNum(s.date_key) >= weekAgoNum);
       const guestStats = await adminQuery('guest_stats', 'guest_plays').catch(()=>[{guest_plays:0}]);
+      // v344: distinct guest DEVICES via the guest_device_count() RPC (counts only — the table itself is not readable).
+      let guestDevices = null;
+      try {
+        const gr = await fetch(`${ADMIN_SUPABASE_URL}/rest/v1/rpc/guest_device_count`, { method:'POST', headers:{ apikey:ADMIN_ANON_KEY, Authorization:`Bearer ${ADMIN_ANON_KEY}`, 'Content-Type':'application/json' }, body:'{}' });
+        if (gr.ok) { const gj = await gr.json(); guestDevices = typeof gj === 'number' ? gj : (Array.isArray(gj) ? Number(gj[0]?.guest_device_count ?? gj[0]) : Number(gj)); if (!Number.isFinite(guestDevices)) guestDevices = null; }
+      } catch(e) {}
       // v332: TRUE new registrations. `players.created_at` is a real timestamptz, so a
       // server-side gte filter is safe here — none of the lexicographic trouble that forces
       // client-side filtering on the text date_key columns above.
@@ -3120,7 +3146,7 @@ function AdminScreen({ onExit }) {
         .slice(0, 25);
       const top25Longest = longestEntries;
       const top25Score = scoreEntries;
-      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0, wordReports: wordReports || [], newPlayers: newPlayers || [] });
+      setData({ gameStates, todaySessions, recentSessions, weekSessions, today, top25Longest, top25Score, guestPlays: guestStats?.[0]?.guest_plays || 0, guestDevices, wordReports: wordReports || [], newPlayers: newPlayers || [] });
       setLastUpdated(new Date().toLocaleTimeString());
     } catch(e) { console.error(e); }
     setLoading(false);
@@ -3144,6 +3170,11 @@ function AdminScreen({ onExit }) {
   const tbl = { width:'100%', borderCollapse:'collapse', fontSize:11 };
   const th = { textAlign:'left', color:'rgba(255,255,255,0.4)', fontSize:9, letterSpacing:2, padding:'4px 8px', borderBottom:'1px solid rgba(255,255,255,0.08)', fontWeight:'normal' };
   const td = { padding:'7px 8px', borderBottom:'1px solid rgba(255,255,255,0.05)', color:'#f5f0e8' };
+  // v344: words wrap instead of pushing the number columns off the right edge on a phone.
+  const wordTd = { wordBreak:'break-word', overflowWrap:'anywhere' };
+  const toggleBtn = (open, setOpen, closedLabel) => (
+    <button onClick={()=>setOpen(v=>!v)} style={{marginTop:8,padding:'4px 10px',borderRadius:8,border:'1px solid rgba(255,255,255,0.2)',background:'rgba(255,255,255,0.06)',color:'rgba(255,255,255,0.6)',fontSize:10,cursor:'pointer',fontFamily:'Georgia,serif'}}>{open?'▾ Show less':closedLabel}</button>
+  );
 
   if (!authed) return (
     <div style={{minHeight:'100vh',background:'#0a0820',display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'Georgia,serif',position:'relative'}}>
@@ -3251,20 +3282,22 @@ function AdminScreen({ onExit }) {
             <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>🏆 TOP LIFETIME SCORES</div>
             {gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
             <table style={tbl}><thead><tr><th style={th}></th><th style={th}>Player</th><th style={th}>Pts</th><th style={th}>Last Active</th></tr></thead><tbody>
-              {gs.slice(0,8).map((g,i)=>(
+              {gs.slice(0, openTop ? 8 : 1).map((g,i)=>(
                 <tr key={i}><td style={td}>{medal(i)}</td><td style={td}>{g.player_name||'Guest'}</td><td style={{...td,color:'#f6d365',fontWeight:'bold'}}>{(g.lifetime_points||0).toLocaleString()}</td><td style={{...td,color:'rgba(255,255,255,0.4)',fontSize:10}}>{timeAgo(g.last_played_date)}</td></tr>
               ))}
             </tbody></table>}
+            {gs.length>1 && toggleBtn(openTop, setOpenTop, `▸ Show top ${Math.min(8, gs.length)}`)}
           </div>
           {/* Perfect day leaders */}
           <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
-            <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>🌈 PERFECT DAY LEADERS</div>
-            {gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
+            <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:openPerfect?10:0}}>🌈 PERFECT DAY LEADERS</div>
+            {!openPerfect ? toggleBtn(false, setOpenPerfect, '▸ Show') : gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
             <table style={tbl}><thead><tr><th style={th}></th><th style={th}>Player</th><th style={th}>Perfect Days</th><th style={th}>Streak</th></tr></thead><tbody>
               {[...gs].sort((a,b)=>(b.stats?.perfectDaysAllTime||0)-(a.stats?.perfectDaysAllTime||0)).slice(0,8).map((g,i)=>(
                 <tr key={i}><td style={td}>{medal(i)}</td><td style={td}>{g.player_name||'Guest'}</td><td style={{...td,color:'#6ee7b7',fontWeight:'bold'}}>🌈🏆 {g.stats?.perfectDaysAllTime||0}</td><td style={{...td,color:'#fda085',fontSize:10}}>🔥 {g.current_streak||0}d</td></tr>
               ))}
             </tbody></table>}
+            {openPerfect && toggleBtn(true, setOpenPerfect, '')}
           </div>
         </div>
 
@@ -3273,30 +3306,32 @@ function AdminScreen({ onExit }) {
           <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
             <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📏 TOP 25 LONGEST WORDS</div>
             {!(data?.top25Longest?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
-            <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Word</th><th style={th}>Letters</th><th style={th}>Player</th></tr></thead><tbody>
-              {(data.top25Longest||[]).map((w,i)=>(
+            <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Letters</th><th style={th}>Word</th><th style={th}>Player</th></tr></thead><tbody>
+              {(data.top25Longest||[]).slice(0, openLongest ? 25 : 1).map((w,i)=>(
                 <tr key={i}>
                   <td style={{...td,color:'rgba(255,255,255,0.3)',fontSize:10}}>{medal(i)}</td>
-                  <td style={{...td,color:'#a78bfa',fontWeight:'bold',letterSpacing:2}}>{w.word}</td>
-                  <td style={{...td,color:'#22d3ee',fontWeight:'bold'}}>{w.letters}</td>
+                  <td style={{...td,color:'#22d3ee',fontWeight:'bold',whiteSpace:'nowrap'}}>{w.letters}</td>
+                  <td style={{...td,...wordTd,color:'#a78bfa',fontWeight:'bold',letterSpacing:1}}>{w.word}</td>
                   <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{w.player}</td>
                 </tr>
               ))}
             </tbody></table>}
+            {(data?.top25Longest?.length||0)>1 && toggleBtn(openLongest, setOpenLongest, `▸ Show all ${data.top25Longest.length}`)}
           </div>
           <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
             <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>💎 TOP 25 WORD SCORES</div>
             {!(data?.top25Score?.length)?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No data yet</div>:
-            <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Word</th><th style={th}>Score</th><th style={th}>Player</th></tr></thead><tbody>
-              {(data.top25Score||[]).map((w,i)=>(
+            <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Score</th><th style={th}>Word</th><th style={th}>Player</th></tr></thead><tbody>
+              {(data.top25Score||[]).slice(0, openWordScores ? 25 : 1).map((w,i)=>(
                 <tr key={i}>
                   <td style={{...td,color:'rgba(255,255,255,0.3)',fontSize:10}}>{medal(i)}</td>
-                  <td style={{...td,color:'#f093fb',fontWeight:'bold',letterSpacing:2}}>{w.word}</td>
-                  <td style={{...td,color:'#f6d365',fontWeight:'bold'}}>{w.score} pts</td>
+                  <td style={{...td,color:'#f6d365',fontWeight:'bold',whiteSpace:'nowrap'}}>{w.score} pts</td>
+                  <td style={{...td,...wordTd,color:'#f093fb',fontWeight:'bold',letterSpacing:1}}>{w.word}</td>
                   <td style={{...td,color:'rgba(255,255,255,0.5)',fontSize:10}}>{w.player}</td>
                 </tr>
               ))}
             </tbody></table>}
+            {(data?.top25Score?.length||0)>1 && toggleBtn(openWordScores, setOpenWordScores, `▸ Show all ${data.top25Score.length}`)}
           </div>
         </div>
 
@@ -3394,7 +3429,13 @@ function AdminScreen({ onExit }) {
 
         {/* All players table */}
         <div style={{background:'rgba(255,255,255,0.04)',borderRadius:14,padding:14,border:'1px solid rgba(255,255,255,0.08)'}}>
-          <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3,marginBottom:10}}>📋 ALL PLAYERS ({total})</div>
+          {/* v344 (Daryl, Oct 17): X = registered players + distinct guest devices (anonymous id, counted
+              from Oct 17 on the web and from 2.2.0 on iOS). Guest games stays as a reference line. */}
+          {(() => { const gd = data?.guestDevices; const all = total + (gd||0); return (
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:9,color:'rgba(255,255,255,0.5)',letterSpacing:3}}>📋 ALL PLAYERS ({all.toLocaleString()})</div>
+              <div style={{fontSize:9,color:'rgba(255,255,255,0.35)',marginTop:3}}>{total.toLocaleString()} registered + {gd==null?'— (guest counter not set up)':gd.toLocaleString()} guests · {guestPlays.toLocaleString()} guest games · list shows registered players (first 1,000)</div>
+            </div>); })()}
           {gs.length===0?<div style={{textAlign:'center',color:'rgba(255,255,255,0.25)',fontSize:11,padding:10}}>No players yet</div>:
           <table style={tbl}><thead><tr><th style={th}>#</th><th style={th}>Player</th><th style={th}>Lifetime Pts</th><th style={th}>Current Streak</th><th style={th}>Best Streak</th><th style={th}>Perfect Days</th><th style={th}>Badges</th><th style={th}>Last Played</th></tr></thead><tbody>
             {gs.map((g,i)=>(
@@ -6364,6 +6405,12 @@ function GameScreen({ user, onSignOut, onFarewell, initialTab, onTabConsumed, on
         supabase.rpc('increment_guest_plays').then(
           ({ error }) => { if (error && DEBUG_MODE) console.warn('[GUEST] increment failed', error.message); },
           (e) => { if (DEBUG_MODE) console.warn('[GUEST] increment threw', e?.message); }
+        );
+        // v344: count distinct guest devices (anonymous id). Same .then(ok, err) pattern — never .catch().
+        const gid = getGuestDeviceId();
+        if (gid) supabase.rpc('record_guest', { gid }).then(
+          ({ error }) => { if (error && DEBUG_MODE) console.warn('[GUEST] record_guest failed', error.message); },
+          (e) => { if (DEBUG_MODE) console.warn('[GUEST] record_guest threw', e?.message); }
         );
       } catch(e) {}
     }
